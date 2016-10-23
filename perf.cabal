@@ -36,6 +36,7 @@ library
   build-depends:
     base >= 4.7 && < 5,
     rdtsc,
+    foldl,
     protolude
   default-extensions:
     NoImplicitPrelude,
@@ -91,10 +92,14 @@ executable readme
     perf,
     chart-unit,
     online,
+    lens,
+    data-default,
+    linear,
     formatting,
     foldl,
     exact-combinatorics,
-    text
+    text,
+    tower
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,

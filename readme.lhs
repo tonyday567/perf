@@ -16,6 +16,13 @@ If you want to make stuff very fast in haskell, you need to dig down below the c
 > import qualified Control.Foldl as L
 > import Math.Combinatorics.Exact.Primes
 > import Perf.Cycles
+> import Chart.Unit hiding ((<>))
+> import Chart.Types
+> import Control.Lens
+> import Data.Default
+> import Data.List
+> import Linear
+> import qualified Tower as T
 
 main
 ---
@@ -48,7 +55,7 @@ A pattern I see on my machine are shifts by multiples of 4, which correspond to 
 
 It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:
 
-> 
+>   _ <- warmup 100
 >   xs' <- replicateM 10000 tick_
 >   let xs = fromIntegral <$> xs' :: [Double]
 >   let qs = L.fold (quantiles' 11) xs
@@ -70,36 +77,79 @@ For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s
 tickn
 ===
 
+Let's measure something.  The simplest something I could think of was summing.
 
-Let's measure something.  The simplest something I could think of was ().
+`tickn` takes n measurements
 
-> 
->   _ <- replicateM 10 tick_
->   (xs, _) <- tickn 10000 ()
->   (xs', _) <- tickn 10000 (pure () :: IO ())
->   let qs = L.fold (quantiles' 11) (fromIntegral <$> xs)
->   let qs' = L.fold (quantiles' 11) (fromIntegral <$> xs')
->   writeFile "other/tickn.md" $ code
->       [ mconcat (sformat (" " % prec 3) <$> qs)
->       , mconcat (sformat (" " % prec 3) <$> qs')
->       ]
+>   _ <- warmup 100
+>   let f x = foldl' (+) 0 [1..x]
+>   let ms = [1, 10, 100, 1000, 10000, 100000]
+>   let n = 100
+>   res <- sequence $ (tickn n f) <$> ms
+>   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
+>   let qss = L.fold (quantiles' 11) <$> xs
+>   let showxs :: [Double] -> Double -> Text
+>       showxs qs m =
+>           (show m) <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
+>   Text.writeFile "other/tickn.md" $ code $
+>       zipWith showxs qss ms
 
-quantiles for () and IO ()
 
 ```include
 other/tickn.md
 ```
 
->   let expSum n m = do
->         let s x = foldl' (+) 0 [1..x]
->         (cs,_) <- tickn n (s m)
->         code $ "summing " ++ sci' m ++ " Ints " ++ sci' n ++ " times " ++
->           sci' (average $ cycles <$> cs) ++ " cycles"
->
->   mapM_ (expSum 10000 . (\x -> 10^x)) [0..3]
+time series
+---
+
+>   fileSvg "other/raw1k.svg" (300,300) $
+>       rect'
+>       def
+>       [ rectBorderColor .~ Color 0 0 0 0
+>       $ rectColor .~ Color 0.333 0.333 0.333 0.5
+>       $ def]
+>       [zipWith4 V4 [0..] (cycle [0]) [1..] (xs !! 3)]
+>       
+>   fileSvg "other/raw100.svg" (300,300) $
+>       rect'
+>       def
+>       [ rectBorderColor .~ Color 0 0 0 0
+>       $ rectColor .~ Color 0.333 0.333 0.333 0.5
+>       $ def]
+>       [zipWith4 V4 [0..] (cycle [0]) [1..] (xs !! 2)]
+
+Individual measurements for m=100
+
+![](other/raw100.svg)
+
+Individual measurements for m=1000
+
+![](other/raw1k.svg)
+
+On my run, a 3e5 cycle process comes along every 3e6 or so and smashes the loop.
 
 
+Tower
+---
 
+>   _ <- warmup 100
+>   let f x = foldl' (T.+) 0 [1..x]
+>   let ms = [1, 10, 100, 1000, 10000, 100000]
+>   let n = 100
+>   res <- sequence $ (tickn n f) <$> ms
+>   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
+>   let qss = L.fold (quantiles' 11) <$> xs
+>   let showxs :: [Double] -> Double -> Text
+>       showxs qs m =
+>           (show m) <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
+>   Text.writeFile "other/ticktower.md" $ code $
+>       zipWith showxs qss ms
+
+```include
+other/ticktower.md
+```
 
 helpers
 ---
@@ -108,51 +158,10 @@ helpers
 > code cs = mconcat $ (<> "\n") <$> ("    " <>) <$> cs
 >
 
-
-> {-
-
->   h2 "summing"
-
-Now we try a sum experiment using foldl'.  We're looking for results that are linear in the list size.  Confusingly, this is often referred to as constant time.
-
-I'm cautious of throwing away the results of the computation.  My bangs might be in the right place, but would be great to get some strong guarantees.  I'm also leaving the conceptual door open to lazy evaluation
-
-tickn' tricks the memoisation into letting us rerun the harnessed function using function application. Maybe - I tend to let the numbers tell me what is going on and abstract away the why for now.
-
-The experiment tends to show a nice linear scale, with a typical improvement as the list size grows.  The computer gets better at the computation as it repeats - better GC and data placement I presume.
-
->   let expSum n m = do
->         let s x = foldl' (+) 0 [1..x]
->         (cs,_) <- tickn n (s m)
->         code $ "summing " ++ sci' m ++ " Ints " ++ sci' n ++ " times " ++
->           sci' (average $ cycles <$> cs) ++ " cycles"
->
->   mapM_ (expSum 10000 . (\x -> 10^x)) [0..3]
->
-
-
-Next, some prime number adding up.
-
-
->   h2 "prime experiment: "
->   let expPrime m = do
->         (c, res) <- do
->           let s !x = average $ fromIntegral <$> take x primes
->           tick $ s m
->         code $ "prime!!" ++ sci' m ++ " = " ++ sci' res ++ ": " ++ sci' c ++ " cycles"
->   mapM_ (expPrime . (\x -> 10^x)) [2..5]
-
-
-
-
->
-> -}
+rdpmc
+---
 
 A first-cousin of rdtsc, [rdpmc](https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214), offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.
-
-[formatting](http://hackage.haskell.org/package/formatting)
-[foldl](https://hackage.haskell.org/package/foldl)
-
 
 workflow
 ---

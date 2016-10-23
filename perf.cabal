@@ -1,0 +1,136 @@
+name:
+  perf
+version:
+  0.1.0.0
+synopsis:
+  See readme.lhs
+description:
+  See readme.lhs
+category:
+  project
+homepage:
+  https://github.com/tonyday567/perf
+license:
+  BSD3
+license-file:
+  LICENSE
+author:
+  Tony Day
+maintainer:
+  tonyday567@gmail.com
+copyright:
+  Tony Day
+build-type:
+  Simple
+cabal-version:
+  >=1.14
+
+library
+  default-language:
+    Haskell2010
+  ghc-options:
+  hs-source-dirs:      
+    src
+  exposed-modules:
+    Perf.Cycles
+  build-depends:
+    base >= 4.7 && < 5,
+    rdtsc,
+    protolude
+  default-extensions:
+    NoImplicitPrelude,
+    UnicodeSyntax,
+    BangPatterns,
+    BinaryLiterals,
+    DeriveFoldable,
+    DeriveFunctor,
+    DeriveGeneric,
+    DeriveTraversable,
+    DisambiguateRecordFields,
+    EmptyCase,
+    FlexibleContexts,
+    FlexibleInstances,
+    FunctionalDependencies,
+    GADTSyntax,
+    InstanceSigs,
+    KindSignatures,
+    LambdaCase,
+    MonadComprehensions,
+    MultiParamTypeClasses,
+    MultiWayIf,
+    NegativeLiterals,
+    OverloadedStrings,
+    ParallelListComp,
+    PartialTypeSignatures,
+    PatternSynonyms,
+    RankNTypes,
+    RecordWildCards,
+    RecursiveDo,
+    ScopedTypeVariables,
+    TupleSections,
+    TypeFamilies,
+    TypeOperators
+
+executable readme
+  default-language:
+    Haskell2010
+  ghc-options:
+    -funbox-strict-fields
+    -fforce-recomp
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+  hs-source-dirs:
+    ./
+  main-is:
+    readme.lhs
+  build-depends:
+    base >= 4.7 && < 5,
+    protolude,
+    rdtsc,
+    perf,
+    chart-unit,
+    online,
+    formatting,
+    foldl,
+    exact-combinatorics,
+    text
+  default-extensions:
+    NoImplicitPrelude,
+    UnicodeSyntax,
+    BangPatterns,
+    BinaryLiterals,
+    DeriveFoldable,
+    DeriveFunctor,
+    DeriveGeneric,
+    DeriveTraversable,
+    DisambiguateRecordFields,
+    EmptyCase,
+    FlexibleContexts,
+    FlexibleInstances,
+    FunctionalDependencies,
+    GADTSyntax,
+    InstanceSigs,
+    KindSignatures,
+    LambdaCase,
+    MonadComprehensions,
+    MultiParamTypeClasses,
+    MultiWayIf,
+    NegativeLiterals,
+    OverloadedStrings,
+    ParallelListComp,
+    PartialTypeSignatures,
+    PatternSynonyms,
+    RankNTypes,
+    RecordWildCards,
+    RecursiveDo,
+    ScopedTypeVariables,
+    TupleSections,
+    TypeFamilies,
+    TypeOperators
+
+source-repository head
+  type:
+    git
+  location:
+    https://github.com/tonyday567/perf

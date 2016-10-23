@@ -1,0 +1,92 @@
+<meta charset="utf-8"> <link rel="stylesheet" href="other/lhs.css">
+<script type="text/javascript" async
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<h1 id="perf-build-status"><a href="https://tonyday567.github.io/perf/index.html">perf</a> <a href="https://travis-ci.org/tonyday567/perf"><img src="https://travis-ci.org/tonyday567/perf.png" alt="Build Status" /></a></h1>
+<p>If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+<span class="kw">import </span><span class="dt">Protolude</span> <span class="kw">hiding</span> ((%))
+<span class="kw">import qualified</span> <span class="dt">Data.Text.IO</span> <span class="kw">as</span> <span class="dt">Text</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">Text</span>
+<span class="kw">import </span><span class="dt">Formatting</span>
+<span class="kw">import </span><span class="dt">Online</span>
+<span class="kw">import qualified</span> <span class="dt">Control.Foldl</span> <span class="kw">as</span> <span class="dt">L</span>
+<span class="kw">import </span><span class="dt">Math.Combinatorics.Exact.Primes</span>
+<span class="kw">import </span><span class="dt">Perf.Cycles</span></code></pre></div>
+<h2 id="main">main</h2>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> <span class="kw">do</span></code></pre></div>
+<p><code>tick_</code> taps the register twice to get a sense of the cost.</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  onetick <span class="ot">&lt;-</span> tick_
+  ticks <span class="ot">&lt;-</span> replicateM <span class="dv">10</span> tick_
+  avtick <span class="ot">&lt;-</span> replicateM <span class="dv">1000000</span> tick_
+  <span class="kw">let</span> average cs <span class="fu">=</span> L.fold ((<span class="fu">/</span>) <span class="fu">&lt;$&gt;</span> L.sum <span class="fu">&lt;*&gt;</span> L.genericLength) cs
+  Text.writeFile <span class="st">&quot;other/onetick.md&quot;</span> <span class="fu">$</span> code
+    [ <span class="st">&quot;one tick_: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show onetick) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
+    , <span class="st">&quot;next 10: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show ticks)
+    , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
+      (Text.pack <span class="fu">$</span> show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
+    ]
+</code></pre></div>
+<pre><code>one tick_: 46 cycles
+next 10: [26,23,23,23,21,20,23,23,23,23]
+average over 1m: 21.58374 cycles</code></pre>
+<p>It often makes sense to give tick_ a few spins before measuring something, to warm everything up.</p>
+<p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
+<p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
+  xs&#39; <span class="ot">&lt;-</span> replicateM <span class="dv">10000</span> tick_
+  <span class="kw">let</span> xs <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span><span class="ot"> xs&#39; ::</span> [<span class="dt">Double</span>]
+  <span class="kw">let</span> qs <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) xs
+  writeFile <span class="st">&quot;other/quantiles.md&quot;</span> <span class="fu">$</span>
+        <span class="st">&quot;\n    [min, 10th, 20th, .. 90th, max]:&quot;</span> <span class="fu">&lt;&gt;</span>
+        mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs)</code></pre></div>
+<pre><code>[min, 10th, 20th, .. 90th, max]: 18.0 18.1 19.4 21.0 21.0 21.2 21.5 22.1 22.3 23.8 639</code></pre>
+<p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of cache missing.</p>
+<p>The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large brain farts at around 2k cycles.</p>
+<p>For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s</p>
+<h1 id="tickn">tickn</h1>
+<p>Let's measure something. The simplest something I could think of was ().</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
+  _ <span class="ot">&lt;-</span> replicateM <span class="dv">10</span> tick_
+  (xs, _) <span class="ot">&lt;-</span> tickn <span class="dv">10000</span> ()
+  (xs&#39;, _) <span class="ot">&lt;-</span> tickn <span class="dv">10000</span> (pure<span class="ot"> () ::</span> <span class="dt">IO</span> ())
+  <span class="kw">let</span> qs <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) (fromIntegral <span class="fu">&lt;$&gt;</span> xs)
+  <span class="kw">let</span> qs&#39; <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) (fromIntegral <span class="fu">&lt;$&gt;</span> xs&#39;)
+  writeFile <span class="st">&quot;other/tickn.md&quot;</span> <span class="fu">$</span> code
+      [ mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs)
+      , mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs&#39;)
+      ]</code></pre></div>
+<p>quantiles for () and IO ()</p>
+<pre><code> 12.0 21.0 21.0 21.0 21.0 22.2 22.4 24.2 32.0 32.0 230
+ 12.0 21.0 21.0 21.0 21.0 21.6 22.4 24.0 24.2 48.0 343</code></pre>
+<h2 id="helpers">helpers</h2>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
+code cs <span class="fu">=</span> mconcat <span class="fu">$</span> (<span class="fu">&lt;&gt;</span> <span class="st">&quot;\n&quot;</span>) <span class="fu">&lt;$&gt;</span> (<span class="st">&quot;    &quot;</span> <span class="fu">&lt;&gt;</span>) <span class="fu">&lt;$&gt;</span> cs</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="co">{-</span></code></pre></div>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  h2 <span class="st">&quot;summing&quot;</span></code></pre></div>
+<p>Now we try a sum experiment using foldl'. We're looking for results that are linear in the list size. Confusingly, this is often referred to as constant time.</p>
+<p>I'm cautious of throwing away the results of the computation. My bangs might be in the right place, but would be great to get some strong guarantees. I'm also leaving the conceptual door open to lazy evaluation</p>
+<p>tickn' tricks the memoisation into letting us rerun the harnessed function using function application. Maybe - I tend to let the numbers tell me what is going on and abstract away the why for now.</p>
+<p>The experiment tends to show a nice linear scale, with a typical improvement as the list size grows. The computer gets better at the computation as it repeats - better GC and data placement I presume.</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> expSum n m <span class="fu">=</span> <span class="kw">do</span>
+        <span class="kw">let</span> s x <span class="fu">=</span> foldl&#39; (<span class="fu">+</span>) <span class="dv">0</span> [<span class="dv">1</span><span class="fu">..</span>x]
+        (cs,_) <span class="ot">&lt;-</span> tickn n (s m)
+        code <span class="fu">$</span> <span class="st">&quot;summing &quot;</span> <span class="fu">++</span> sci&#39; m <span class="fu">++</span> <span class="st">&quot; Ints &quot;</span> <span class="fu">++</span> sci&#39; n <span class="fu">++</span> <span class="st">&quot; times &quot;</span> <span class="fu">++</span>
+          sci&#39; (average <span class="fu">$</span> cycles <span class="fu">&lt;$&gt;</span> cs) <span class="fu">++</span> <span class="st">&quot; cycles&quot;</span>
+
+  mapM_ (expSum <span class="dv">10000</span> <span class="fu">.</span> (\x <span class="ot">-&gt;</span> <span class="dv">10</span><span class="fu">^</span>x)) [<span class="dv">0</span><span class="fu">..</span><span class="dv">3</span>]</code></pre></div>
+<p>Next, some prime number adding up.</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  h2 <span class="st">&quot;prime experiment: &quot;</span>
+  <span class="kw">let</span> expPrime m <span class="fu">=</span> <span class="kw">do</span>
+        (c, res) <span class="ot">&lt;-</span> <span class="kw">do</span>
+          <span class="kw">let</span> s <span class="fu">!</span>x <span class="fu">=</span> average <span class="fu">$</span> fromIntegral <span class="fu">&lt;$&gt;</span> take x primes
+          tick <span class="fu">$</span> s m
+        code <span class="fu">$</span> <span class="st">&quot;prime!!&quot;</span> <span class="fu">++</span> sci&#39; m <span class="fu">++</span> <span class="st">&quot; = &quot;</span> <span class="fu">++</span> sci&#39; res <span class="fu">++</span> <span class="st">&quot;: &quot;</span> <span class="fu">++</span> sci&#39; c <span class="fu">++</span> <span class="st">&quot; cycles&quot;</span>
+  mapM_ (expPrime <span class="fu">.</span> (\x <span class="ot">-&gt;</span> <span class="dv">10</span><span class="fu">^</span>x)) [<span class="dv">2</span><span class="fu">..</span><span class="dv">5</span>]</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
+<span class="fu">-</span>}</code></pre></div>
+<p>A first-cousin of rdtsc, <a href="https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214">rdpmc</a>, offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.</p>
+<p><a href="http://hackage.haskell.org/package/formatting">formatting</a> <a href="https://hackage.haskell.org/package/foldl">foldl</a></p>
+<h2 id="workflow">workflow</h2>
+<pre><code>stack install &amp;&amp; readme &amp;&amp; pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include</code></pre>

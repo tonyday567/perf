@@ -20,6 +20,7 @@ If you want to make stuff very fast in haskell, you need to dig down below the c
 > import Chart.Types
 > import Control.Lens
 > import Data.Default
+> import qualified Data.Vector as V
 > import Data.List
 > import Linear
 > import qualified Tower as T
@@ -150,6 +151,33 @@ Tower
 ```include
 other/ticktower.md
 ```
+
+vector
+---
+
+Using vector to sum:
+
+>   _ <- warmup 100
+>   let f x = V.foldl (+) 0 $ V.replicate x 1
+>   let ms = [1, 10, 100, 1000, 10000, 100000]
+>   let n = 100
+>   res <- sequence $ (tickn n f) <$> ms
+>   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
+>   let qss = L.fold (quantiles' 11) <$> xs
+>   let showxs :: [Double] -> Double -> Text
+>       showxs qs m =
+>           (show m) <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
+>   Text.writeFile "other/vector1.md" $ code $
+>       zipWith showxs qss (fromIntegral <$> ms)
+
+
+```include
+other/vector1.md
+```
+
+
+
 
 helpers
 ---

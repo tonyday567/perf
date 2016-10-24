@@ -17,6 +17,7 @@
 <span class="kw">import </span><span class="dt">Chart.Types</span>
 <span class="kw">import </span><span class="dt">Control.Lens</span>
 <span class="kw">import </span><span class="dt">Data.Default</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Vector</span> <span class="kw">as</span> <span class="dt">V</span>
 <span class="kw">import </span><span class="dt">Data.List</span>
 <span class="kw">import </span><span class="dt">Linear</span>
 <span class="kw">import qualified</span> <span class="dt">Tower</span> <span class="kw">as</span> <span class="dt">T</span></code></pre></div>
@@ -28,16 +29,16 @@ main <span class="fu">=</span> <span class="kw">do</span></code></pre></div>
   ticks <span class="ot">&lt;-</span> replicateM <span class="dv">10</span> tick_
   avtick <span class="ot">&lt;-</span> replicateM <span class="dv">1000000</span> tick_
   <span class="kw">let</span> average cs <span class="fu">=</span> L.fold ((<span class="fu">/</span>) <span class="fu">&lt;$&gt;</span> L.sum <span class="fu">&lt;*&gt;</span> L.genericLength) cs
-  Text.writeFile <span class="st">&quot;other/onetick.md&quot;</span> <span class="fu">$</span> code&#39;
+  Text.writeFile <span class="st">&quot;other/onetick.md&quot;</span> <span class="fu">$</span> code
     [ <span class="st">&quot;one tick_: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show onetick) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
     , <span class="st">&quot;next 10: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show ticks)
     , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
       (Text.pack <span class="fu">$</span> show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
     ]
 </code></pre></div>
-<pre><code>one tick_: 63 cycles
-next 10: [26,20,21,23,23,20,23,23,23,21]
-average over 1m: 25.995545 cycles</code></pre>
+<pre><code>one tick_: 61 cycles
+next 10: [25,21,19,22,21,18,24,21,22,22]
+average over 1m: 29.131246 cycles</code></pre>
 <p>It often makes sense to give tick_ a few spins before measuring something, to warm everything up.</p>
 <p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
 <p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
@@ -48,7 +49,7 @@ average over 1m: 25.995545 cycles</code></pre>
   writeFile <span class="st">&quot;other/quantiles.md&quot;</span> <span class="fu">$</span>
         <span class="st">&quot;\n    [min, 10th, 20th, .. 90th, max]:&quot;</span> <span class="fu">&lt;&gt;</span>
         mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs)</code></pre></div>
-<pre><code>[min, 10th, 20th, .. 90th, max]: 18.0 19.0 19.7 21.0 21.0 21.0 21.0 22.0 22.0 22.0 272</code></pre>
+<pre><code>[min, 10th, 20th, .. 90th, max]: 12.0 12.0 12.3 14.0 14.0 14.1 14.3 15.9 19.7 50.0 1.25e3</code></pre>
 <p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of cache missing.</p>
 <p>The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large brain farts at around 2k cycles.</p>
 <p>For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s</p>
@@ -66,14 +67,14 @@ average over 1m: 25.995545 cycles</code></pre>
       showxs qs m <span class="fu">=</span>
           (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
           mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/tickn.md&quot;</span> <span class="fu">$</span> code&#39; <span class="fu">$</span>
+  Text.writeFile <span class="st">&quot;other/tickn.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qss ms</code></pre></div>
-<pre><code>1.0:  538 550 551 564 583 589 609 675 811 978 4.45e4
-10.0:  220 224 224 224 226 242 244 247 250 258 292
-100.0:  164 188 188 189 189 193 225 244 274 300 1.84e4
-1000.0:  157 163 170 184 191 205 237 327 419 443 552
-10000.0:  204 206 208 210 212 213 214 218 228 230 246
-100000.0:  204 213 213 214 215 215 216 216 218 222 247</code></pre>
+<pre><code>1.0:  452 469 469 470 473 475 484 570 674 1.06e3 4.23e4
+10.0:  164 168 168 169 170 172 177 178 187 196 328
+100.0:  136 144 156 156 161 180 205 283 572 984 5.20e3
+1000.0:  132 175 176 176 178 198 233 446 489 545 619
+10000.0:  204 220 231 245 247 248 273 275 285 292 345
+100000.0:  238 248 250 252 256 263 275 286 287 302 365</code></pre>
 <h2 id="time-series">time series</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  fileSvg <span class="st">&quot;other/raw1k.svg&quot;</span> (<span class="dv">300</span>,<span class="dv">300</span>) <span class="fu">$</span>
       rect&#39;
@@ -113,36 +114,39 @@ average over 1m: 25.995545 cycles</code></pre>
       showxs qs m <span class="fu">=</span>
           (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
           mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/ticktower.md&quot;</span> <span class="fu">$</span> code&#39; <span class="fu">$</span>
+  Text.writeFile <span class="st">&quot;other/ticktower.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qss ms</code></pre></div>
-<pre><code>1.0:  547 556 556 559 567 573 576 656 799 838 7.01e3
-10.0:  219 222 223 225 225 232 235 237 243 252 308
-100.0:  186 281 285 286 287 291 291 297 300 304 6.36e3
-1000.0:  161 167 186 201 221 238 276 329 486 547 674
-10000.0:  193 201 208 209 214 219 232 247 254 281 325
-100000.0:  205 209 209 209 210 210 210 211 212 213 216</code></pre>
-<h2 id="primes">Primes</h2>
+<pre><code>1.0:  604 619 620 620 624 624 662 668 904 936 9.12e3
+10.0:  188 222 225 235 255 285 319 537 1.69e3 1.18e4 5.81e4
+100.0:  154 155 155 156 158 160 163 172 290 690 3.94e3
+1000.0:  132 137 153 160 176 196 280 358 413 477 550
+10000.0:  204 219 228 237 243 251 261 268 284 303 350
+100000.0:  245 248 248 250 254 256 261 264 269 285 310</code></pre>
+<h2 id="vector">vector</h2>
+<p>Using vector to sum:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  <span class="kw">let</span> f x <span class="fu">=</span> take x primes
-  <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">10000000</span>, <span class="dv">1000000</span>, <span class="dv">1</span>]
+  <span class="kw">let</span> f x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> <span class="fu">$</span> V.replicate x <span class="dv">1</span>
+  <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
   <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (tick f) <span class="fu">&lt;$&gt;</span> ms
-  <span class="kw">let</span> xs <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [<span class="dt">Double</span>]
-  <span class="kw">let</span><span class="ot"> showxs ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-      showxs q m <span class="fu">=</span>
+  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (tickn n f) <span class="fu">&lt;$&gt;</span> ms
+  <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
+  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
+  <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
+      showxs qs m <span class="fu">=</span>
           (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) q)
-  Text.writeFile <span class="st">&quot;other/tickprimes.md&quot;</span> <span class="fu">$</span> code&#39; <span class="fu">$</span>
-      zipWith showxs xs (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
-<p>A test finding the xth prime.</p>
-<pre><code>1.0e7:  3.93e3
-1000000.0:  244
-1.0:  120</code></pre>
+          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
+  Text.writeFile <span class="st">&quot;other/vector1.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
+      zipWith showxs qss (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
+<pre><code>1.0:  68.0 68.1 70.1 70.2 71.1 76.7 78.0 100 104 278 2.16e3
+10.0:  42.0 45.4 45.6 45.6 45.7 46.0 46.0 47.6 48.4 58.0 116
+100.0:  38.3 38.5 38.5 38.5 38.6 39.0 39.6 39.9 50.4 156 1.27e4
+1000.0:  34.1 38.4 38.5 38.5 38.6 38.9 39.5 42.8 48.2 57.7 483
+10000.0:  27.0 34.0 34.2 34.2 36.5 38.9 43.6 46.5 55.2 71.1 90.9
+100000.0:  35.2 36.9 39.1 40.8 41.6 43.6 44.8 46.0 47.6 49.4 52.5</code></pre>
 <h2 id="helpers">helpers</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
-code&#39; cs <span class="fu">=</span> mconcat <span class="fu">$</span> (<span class="fu">&lt;&gt;</span> <span class="st">&quot;\n&quot;</span>) <span class="fu">&lt;$&gt;</span> (<span class="st">&quot;    &quot;</span> <span class="fu">&lt;&gt;</span>) <span class="fu">&lt;$&gt;</span> cs</code></pre></div>
-<h2 id="notes">notes</h2>
+code cs <span class="fu">=</span> mconcat <span class="fu">$</span> (<span class="fu">&lt;&gt;</span> <span class="st">&quot;\n&quot;</span>) <span class="fu">&lt;$&gt;</span> (<span class="st">&quot;    &quot;</span> <span class="fu">&lt;&gt;</span>) <span class="fu">&lt;$&gt;</span> cs</code></pre></div>
+<h2 id="rdpmc">rdpmc</h2>
 <p>A first-cousin of rdtsc, <a href="https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214">rdpmc</a>, offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.</p>
-<p><a href="http://hackage.haskell.org/package/formatting">formatting</a> <a href="https://hackage.haskell.org/package/foldl">foldl</a></p>
 <h2 id="workflow">workflow</h2>
 <pre><code>stack install &amp;&amp; readme &amp;&amp; pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include</code></pre>

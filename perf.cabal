@@ -99,7 +99,8 @@ executable readme
     foldl,
     exact-combinatorics,
     text,
-    tower
+    tower,
+    vector
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,

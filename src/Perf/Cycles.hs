@@ -42,9 +42,54 @@ tick_ = do
   t' <- rdtsc
   return (t' - t)
 
--- | n measurements
-tickn :: Int -> (a -> b) -> a -> IO ([Cycles], b)
-tickn n f a = do
+-- | `tickf f a` applies a to f, and strictly returns a (number of cycles, application result) tuple, measuring just the f effect
+tickf :: (a -> b) -> a -> IO (Cycles, b)
+tickf f a = do
+  !a' <- pure a
+  t <- rdtsc
+  !a'' <- return (f a')
+  t' <- rdtsc
+  return (t' - t, a'')
+
+-- | monadic version
+tickfM :: (a -> IO b) -> a -> IO (Cycles, b)
+tickfM f a = do
+  !a' <- pure a
+  t <- rdtsc
+  !a'' <- f a'
+  t' <- rdtsc
+  return (t' - t, a'')
+
+-- | `ticka f a` applies a to f, and strictly returns a (number of cycles, application result) tuple, measuring just the a effect
+ticka :: (a -> b) -> a -> IO (Cycles, b)
+ticka f a = do
+  t <- rdtsc
+  !a' <- pure a
+  t' <- rdtsc
+  !a'' <- return (f a')
+  return (t' - t, a'')
+
+-- | `tickfa f a` applies a to f, and strictly returns a (number of cycles, application result) tuple, measuring both the f and the a effects separately.
+tickfa :: (a -> b) -> a -> IO ((Cycles, Cycles), b)
+tickfa f a = do
+  t_a <- rdtsc
+  !a' <- pure a
+  t_a' <- rdtsc
+  !a'' <- return (f a')
+  t_f <- rdtsc
+  return ((t_f - t_a', t_a' - t_a), a'')
+
+-- | n measurements of whatever tick engine
+spin :: Int -> ((a -> b) -> a -> IO (c, b)) ->
+    (a -> b) -> a -> IO ([c], b)
+spin n tick f a = do
+    ticks <- replicateM n (tick f a)
+    pure (fst <$> ticks, snd $ last ticks)
+
+-- | n measurements of whatever tick engine
+spinM :: Int -> ((a -> IO b) -> a -> IO (c, b)) ->
+    (a -> IO b) -> a -> IO ([c], b)
+spinM n tick f a = do
     ticks <- replicateM n (tick f a)
     pure (fst <$> ticks, snd $ last ticks)
 

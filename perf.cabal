@@ -100,7 +100,8 @@ executable readme
     exact-combinatorics,
     text,
     tower,
-    vector
+    vector,
+    primitive
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,

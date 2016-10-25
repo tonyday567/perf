@@ -1,3 +1,3 @@
-    one tick_: 61 cycles
-    next 10: [25,21,19,22,21,18,24,21,22,22]
-    average over 1m: 29.131246 cycles
+    one tick_: 46 cycles
+    next 10: [37,22,22908,28,40,36,500,28,28,32]
+    average over 1m: 22.679462 cycles

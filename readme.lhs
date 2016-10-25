@@ -290,7 +290,9 @@ Mutable summer of Ints:
 other/mutable.md
 ```
 
+I had to rewrite the code to actually use the eventual values, or else it's a noop in IO.
 
+No major difference between mutability and immutablility. Something else is happening...
 
 
 helpers

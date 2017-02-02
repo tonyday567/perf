@@ -1,4 +1,4 @@
-```include
+```
 other/header.md
 ```
 
@@ -12,21 +12,18 @@ If you want to make stuff very fast in haskell, you need to dig down below the c
 > import qualified Data.Text.IO as Text
 > import qualified Data.Text as Text
 > import Formatting
-> import Online
 > import qualified Control.Foldl as L
 > import Math.Combinatorics.Exact.Primes
 > import Perf.Cycles
-> import Chart.Unit hiding ((<>))
-> import Chart.Types
+> import Perf.Quantiles
 > import Control.Lens
 > import Data.Default
 > import qualified Data.Vector as V
 > import qualified Data.Vector.Unboxed as U
 > import Data.List
 > import Linear
-> import qualified Tower as T
 > import Data.Primitive.MutVar
-> 
+>
 
 main
 ---
@@ -41,13 +38,13 @@ main
 >   avtick <- replicateM 1000000 tick_
 >   let average cs = L.fold ((/) <$> L.sum <*> L.genericLength) cs
 >   Text.writeFile "other/onetick.md" $ code
->     [ "one tick_: " <> (Text.pack $ show onetick) <> " cycles"
->     , "next 10: " <> (Text.pack $ show ticks)
+>     [ "one tick_: " <> Text.pack (show onetick) <> " cycles"
+>     , "next 10: " <> Text.pack (show ticks)
 >     , "average over 1m: " <>
->       (Text.pack $ show $ average (fromIntegral <$> avtick)) <> " cycles"
+>       Text.pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
 >     ]
 >
-> 
+>
 
 ```include
 other/onetick.md
@@ -66,7 +63,7 @@ It pays to look at the whole distribution, and a compact way of doing that is to
 >   writeFile "other/quantiles.md" $
 >         "\n    [min, 10th, 20th, .. 90th, max]:" <>
 >         mconcat (sformat (" " % prec 3) <$> qs)
-> 
+>
 
 ```include
 other/quantiles.md
@@ -85,76 +82,15 @@ Let's measure something.  The simplest something I could think of was summing.
 
 `spin` takes n measurements of whatever part you want to measure.
 
->   _ <- warmup 100
->   let f x = foldl' (+) 0 [1..x]
+>   let f :: Double -> Double
+>       f x = foldl' (+) 0 [1..x]
 >   let ms = [1, 10, 100, 1000, 10000, 100000]
 >   let n = 100
->   res <- sequence $ (spin n tick f) <$> ms
->   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
->   let qss = L.fold (quantiles' 11) <$> xs
->   let showxs :: [Double] -> Double -> Text
->       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
->   Text.writeFile "other/spin.md" $ code $
->       zipWith showxs qss ms
-
+>   (xs, _) <- runTick f tick ms n "other/spin.md"
+>
 
 ```include
 other/spin.md
-```
-
-time series
----
-
->   fileSvg "other/raw1k.svg" (300,300) $
->       rect'
->       def
->       [ rectBorderColor .~ Color 0 0 0 0
->       $ rectColor .~ Color 0.333 0.333 0.333 0.5
->       $ def]
->       [zipWith4 V4 [0..] (cycle [0]) [1..] (xs !! 3)]
->       
->   fileSvg "other/raw100.svg" (300,300) $
->       rect'
->       def
->       [ rectBorderColor .~ Color 0 0 0 0
->       $ rectColor .~ Color 0.333 0.333 0.333 0.5
->       $ def]
->       [zipWith4 V4 [0..] (cycle [0]) [1..] (xs !! 2)]
-
-Individual measurements for m=100
-
-![](other/raw100.svg)
-
-Individual measurements for m=1000
-
-![](other/raw1k.svg)
-
-On my run, a 3e5 cycle process comes along every 3e6 or so and smashes the loop.
-
-
-Tower
----
-
-`spin n tickf f` takes n measures using the tickf version, which just looks at function application effects.
-
->   _ <- warmup 100
->   let f x = foldl' (T.+) 0 [1..x]
->   let ms = [1, 10, 100, 1000, 10000, 100000]
->   let n = 100
->   res <- sequence $ (spin n tickf f) <$> ms
->   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
->   let qss = L.fold (quantiles' 11) <$> xs
->   let showxs :: [Double] -> Double -> Text
->       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
->   Text.writeFile "other/ticktower.md" $ code $
->       zipWith showxs qss ms
-
-```include
-other/ticktower.md
 ```
 
 vector
@@ -162,19 +98,10 @@ vector
 
 Using vector to sum:
 
->   _ <- warmup 100
->   let f x = V.foldl (+) 0 $ V.replicate x 1
->   let ms = [1, 10, 100, 1000, 10000, 100000]
->   let n = 100
->   res <- sequence $ (spin n tickf f) <$> ms
->   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
->   let qss = L.fold (quantiles' 11) <$> xs
->   let showxs :: [Double] -> Double -> Text
->       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
->   Text.writeFile "other/vector1.md" $ code $
->       zipWith showxs qss (fromIntegral <$> ms)
+>   let f :: Double -> Double
+>       f x = V.foldl (+) 0 $ V.replicate (floor x) 1
+>   _ <- runTick f tickf ms n "other/vector1.md"
+>
 
 ```include
 other/vector1.md
@@ -185,39 +112,14 @@ unboxed vector
 
 Using unboxed vector to sum Ints:
 
->   _ <- warmup 100
->   let f x = U.foldl' (+) (0::Int) $ U.replicate x 1
->   let ms = [1, 10, 100, 1000, 10000, 100000]
->   let n = 100
->   res <- sequence $ (spin n tickf f) <$> ms
->   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
->   let qss = L.fold (quantiles' 11) <$> xs
->   let showxs :: [Double] -> Double -> Text
->       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
->   Text.writeFile "other/vector2.md" $ code $
->       zipWith showxs qss (fromIntegral <$> ms)
+>   let f :: Double -> Double
+>       f x = U.foldl' (+) (0::Double) $ U.replicate (floor x) 1
+>   (xs, _) <- runTick f tickf ms n "other/vector2.md"
+>
 
 ```include
 other/vector2.md
 ```
-
-Peak performance clocks in on my machine around 11 cycles per element. Immutable is the important proviso.
-
->   fileSvg "other/unboxed1k.svg" (300,300) $
->       rect'
->       def
->       [ rectBorderColor .~ Color 0 0 0 0
->       $ rectColor .~ Color 0.333 0.333 0.333 0.5
->       $ def]
->       [zipWith4 V4 [0..] (cycle [0]) [1..] (xs !! 3)]
-
-Individual measurements for m=1000
-
-![](other/unboxed1k.svg)
-
-We are down to one 3e5 brain fart, but only because our computation is a lot faster now. It's going to be something boring like GC, or an out of order execution effect.  Since it's regular, we can keep an eye on it, and separate the effect whatever it is.
 
 the `!f` and the `!a`
 ---
@@ -228,18 +130,18 @@ Same unboxed Int vector, looking at `tickfa`:
 >   let f x = U.foldl' (+) (0::Int) $ U.replicate x 1
 >   let ms = [1, 10, 100, 1000, 10000, 100000]
 >   let n = 100
->   res <- sequence $ (spin n tickfa f) <$> ms
->   res' <- sequence $ (spin n tick f) <$> ms
+>   res <- sequence $ spin n tickfa f <$> ms
+>   res' <- sequence $ spin n tick f <$> ms
 >   let xsf = fmap (fromIntegral . fst) <$> (fst <$> res) :: [[Double]]
 >   let xsa = fmap (fromIntegral . snd) <$> (fst <$> res) :: [[Double]]
->   let xsb = fmap (fromIntegral) <$> (fst <$> res') :: [[Double]]
+>   let xsb = fmap fromIntegral <$> (fst <$> res') :: [[Double]]
 >   let qssf = L.fold (quantiles' 11) <$> xsf
 >   let qssa = L.fold (quantiles' 11) <$> xsa
 >   let qssb = L.fold (quantiles' 11) <$> xsb
 >   let showxs :: [Double] -> Double -> Text
 >       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
+>           show m <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
 >   Text.writeFile "other/f.md" $ code $
 >       zipWith showxs qssf (fromIntegral <$> ms)
 >   Text.writeFile "other/a.md" $ code $
@@ -268,23 +170,24 @@ other/b.md
 mutation
 ---
 
-Mutable summer of Ints:
+Mutable summer of Doubles:
 
 >   _ <- warmup 100
 >   let f x = L.foldM mutFold $ V.replicate x (1::Int)
 >   let ms = [1, 10, 100, 1000, 10000, 100000]
 >   let n = 100
->   res <- sequence $ (spinM n tickfM f) <$> ms
+>   res <- sequence $ spinM n tickfM f <$> ms
 >   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
 >   let xsres = snd <$> res :: [Int]
 >   print $ L.fold (L.Fold (+) 0 Protolude.identity) xsres
 >   let qss = L.fold (quantiles' 11) <$> xs
 >   let showxs :: [Double] -> Double -> Text
 >       showxs qs m =
->           (show m) <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((\x -> x/m) <$> qs))
+>           show m <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
 >   Text.writeFile "other/mutable.md" $ code $
 >       zipWith showxs qss (fromIntegral <$> ms)
+>
 
 ```include
 other/mutable.md
@@ -299,7 +202,21 @@ helpers
 ---
 
 >
-> code cs = mconcat $ (<> "\n") <$> ("    " <>) <$> cs
+>
+> runTick f t ms n name = do
+>     _ <- warmup 100
+>     res <- sequence $ spin n t f <$> ms
+>     let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
+>     let qs = L.fold (quantiles' 11) <$> xs
+>     Text.writeFile name $ code $ zipWith showxs qs ms
+>     return (qs, xs)
+>   where
+>       showxs :: [Double] -> Double -> Text
+>       showxs qs m =
+>           show m <> ": " <>
+>           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
+>
+> code cs = mconcat $ (<> "\n") . ("    " <>) <$> cs
 >
 
 > mutFold :: L.FoldM IO Int Int
@@ -309,7 +226,6 @@ helpers
 >     begin = newMutVar 0
 >     done = readMutVar
 
-
 rdpmc
 ---
 
@@ -318,4 +234,111 @@ A first-cousin of rdtsc, [rdpmc](https://software.intel.com/en-us/forums/softwar
 workflow
 ---
 
-    stack install && readme && pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include
+~~~
+stack install && readme && pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include
+~~~
+
+time
+---
+
+[Optimising haskell for a tight inner loop](http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html)
+
+[Tools for analysing performance](http://stackoverflow.com/questions/3276240/tools-for-analyzing-performance-of-a-haskell-program/3276557#3276557)
+
+[Write haskell as fast as c](https://donsbot.wordpress.com/2008/05/06/write-haskell-as-fast-as-c-exploiting-strictness-laziness-and-recursion/)
+
+[Reading ghc core](http://stackoverflow.com/questions/6121146/reading-ghc-core)
+
+space
+---
+
+[Chasing space leaks in shake](http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html)
+
+[Space leak zoo](http://blog.ezyang.com/2011/05/space-leak-zoo/)
+
+[Anatomy of a thunk leak](http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/)
+
+[An insufficiently lazy map](http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/)
+
+[Pinpointing space leaks in big programs](http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/)
+
+checklist
+---
+
+- compile with rtsopts flag
+
+~~~
+find . -name '*.o' -type f -print -delete
+find . -name '*.hl' -type f -print -delete
+ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts
+~~~
+
+- check GC
+
+~~~
+example +RTS -s
+~~~
+
+- enabling profiling
+
+1. a normal ghc
+
+~~~
+    ghc -fforce-recomp --make -O2 -isrc example/example.hs
+~~~
+
+2. profile enabled automatically
+
+
+~~~
+  ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs
+~~~
+
+3. if template haskell
+
+~~~
+  ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs
+~~~
+
+
+creates an A.prof on execution:
+
+~~~
+  time A +RTS -p
+~~~
+
+- visual-profile
+
+~~~
+  /Users/tonyday/git/VisualProf/dist/build/visual-prof/visual-prof -th dev/Reuters/A.hs dev/Reuters/A "test/data/reuters-100k.txt"
+~~~
+
+- space
+
+~~~
+  time dev/Reuters/A "test/data/reuters-100k.txt" +RTS -p -hc
+  hp2ps -e8in -c A.hp
+~~~
+
+    hy = types
+    hd = constructors
+
+- strictness pragma?
+
+~~~
+
+  :: {-# UNPACK
+~~~
+
+- space leaks
+
+~~~
++RTS -s - additional memory
++RTS -xt -hy
+~~~
+
+- example ghc command
+
+~~~
+  ghc -O2 &#x2013;make test/TestSerialize.hs -fforce-recomp -isrc:test -package-db .cabal-sandbox/\*-ghc-7.8.2-packages.conf.d/ -rtsopts -auto -auto-all -prof -threaded -main-is testBinaryController
+~~~

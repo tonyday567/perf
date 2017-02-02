@@ -32,12 +32,14 @@ library
   hs-source-dirs:      
     src
   exposed-modules:
-    Perf.Cycles
+    Perf.Cycles,
+    Perf.Quantiles
   build-depends:
     base >= 4.7 && < 5,
     rdtsc,
     foldl,
-    protolude
+    protolude,
+    vector
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,
@@ -90,8 +92,6 @@ executable readme
     protolude,
     rdtsc,
     perf,
-    chart-unit,
-    online,
     lens,
     data-default,
     linear,
@@ -99,7 +99,6 @@ executable readme
     foldl,
     exact-combinatorics,
     text,
-    tower,
     vector,
     primitive
   default-extensions:

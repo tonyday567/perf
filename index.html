@@ -1,7 +1,4 @@
-<meta charset="utf-8"> <link rel="stylesheet" href="other/lhs.css">
-<script type="text/javascript" async
-  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
-</script>
+<pre><code>other/header.md</code></pre>
 <h1 id="perf-build-status"><a href="https://tonyday567.github.io/perf/index.html">perf</a> <a href="https://travis-ci.org/tonyday567/perf"><img src="https://travis-ci.org/tonyday567/perf.png" alt="Build Status" /></a></h1>
 <p>If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
@@ -9,19 +6,16 @@
 <span class="kw">import qualified</span> <span class="dt">Data.Text.IO</span> <span class="kw">as</span> <span class="dt">Text</span>
 <span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">Text</span>
 <span class="kw">import </span><span class="dt">Formatting</span>
-<span class="kw">import </span><span class="dt">Online</span>
 <span class="kw">import qualified</span> <span class="dt">Control.Foldl</span> <span class="kw">as</span> <span class="dt">L</span>
 <span class="kw">import </span><span class="dt">Math.Combinatorics.Exact.Primes</span>
 <span class="kw">import </span><span class="dt">Perf.Cycles</span>
-<span class="kw">import </span><span class="dt">Chart.Unit</span> <span class="kw">hiding</span> ((&lt;&gt;))
-<span class="kw">import </span><span class="dt">Chart.Types</span>
+<span class="kw">import </span><span class="dt">Perf.Quantiles</span>
 <span class="kw">import </span><span class="dt">Control.Lens</span>
 <span class="kw">import </span><span class="dt">Data.Default</span>
 <span class="kw">import qualified</span> <span class="dt">Data.Vector</span> <span class="kw">as</span> <span class="dt">V</span>
 <span class="kw">import qualified</span> <span class="dt">Data.Vector.Unboxed</span> <span class="kw">as</span> <span class="dt">U</span>
 <span class="kw">import </span><span class="dt">Data.List</span>
 <span class="kw">import </span><span class="dt">Linear</span>
-<span class="kw">import qualified</span> <span class="dt">Tower</span> <span class="kw">as</span> <span class="dt">T</span>
 <span class="kw">import </span><span class="dt">Data.Primitive.MutVar</span></code></pre></div>
 <h2 id="main">main</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
@@ -32,15 +26,15 @@ main <span class="fu">=</span> <span class="kw">do</span></code></pre></div>
   avtick <span class="ot">&lt;-</span> replicateM <span class="dv">1000000</span> tick_
   <span class="kw">let</span> average cs <span class="fu">=</span> L.fold ((<span class="fu">/</span>) <span class="fu">&lt;$&gt;</span> L.sum <span class="fu">&lt;*&gt;</span> L.genericLength) cs
   Text.writeFile <span class="st">&quot;other/onetick.md&quot;</span> <span class="fu">$</span> code
-    [ <span class="st">&quot;one tick_: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show onetick) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
-    , <span class="st">&quot;next 10: &quot;</span> <span class="fu">&lt;&gt;</span> (Text.pack <span class="fu">$</span> show ticks)
+    [ <span class="st">&quot;one tick_: &quot;</span> <span class="fu">&lt;&gt;</span> Text.pack (show onetick) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
+    , <span class="st">&quot;next 10: &quot;</span> <span class="fu">&lt;&gt;</span> Text.pack (show ticks)
     , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
-      (Text.pack <span class="fu">$</span> show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
+      Text.pack (show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
     ]
 </code></pre></div>
-<pre><code>one tick_: 46 cycles
-next 10: [25,22,18,21,21,22,22,21,21,21]
-average over 1m: 24.88446 cycles</code></pre>
+<pre><code>one tick_: 81 cycles
+next 10: [26,23,18,20,23,23,23,23,26,23]
+average over 1m: 22.12898 cycles</code></pre>
 <p>It often makes sense to give tick_ a few spins before measuring something, to warm everything up.</p>
 <p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
 <p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
@@ -51,154 +45,64 @@ average over 1m: 24.88446 cycles</code></pre>
   writeFile <span class="st">&quot;other/quantiles.md&quot;</span> <span class="fu">$</span>
         <span class="st">&quot;\n    [min, 10th, 20th, .. 90th, max]:&quot;</span> <span class="fu">&lt;&gt;</span>
         mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs)</code></pre></div>
-<pre><code>[min, 10th, 20th, .. 90th, max]: 12.0 21.0 21.0 21.0 21.0 21.0 21.0 21.0 22.5 48.3 294</code></pre>
+<pre><code>[min, 10th, 20th, .. 90th, max]: 12.0 14.0 14.1 20.0 20.4 22.0 22.0 22.5 29.5 48.2 1.29e3</code></pre>
 <p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of cache missing.</p>
 <p>The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large brain farts at around 2k cycles.</p>
 <p>For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s</p>
 <h1 id="spin">spin</h1>
 <p>Let's measure something. The simplest something I could think of was summing.</p>
 <p><code>spin</code> takes n measurements of whatever part you want to measure.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  <span class="kw">let</span> f x <span class="fu">=</span> foldl&#39; (<span class="fu">+</span>) <span class="dv">0</span> [<span class="dv">1</span><span class="fu">..</span>x]
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> f ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
+      f x <span class="fu">=</span> foldl&#39; (<span class="fu">+</span>) <span class="dv">0</span> [<span class="dv">1</span><span class="fu">..</span>x]
   <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
   <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tick f) <span class="fu">&lt;$&gt;</span> ms
-  <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
-  <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-      showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/spin.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
-      zipWith showxs qss ms</code></pre></div>
-<pre><code>1.0:  428 436 440 444 455 490 534 612 726 3.27e3 4.93e4
-10.0:  160 165 165 167 176 177 187 193 198 207 2.15e5
-100.0:  130 138 138 138 139 139 167 169 188 388 3.48e3
-1000.0:  134 135 135 135 136 143 158 269 334 347 373
-10000.0:  179 184 186 187 188 190 191 194 199 208 209
-100000.0:  181 190 191 191 191 192 192 192 198 209 226</code></pre>
-<h2 id="time-series">time series</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  fileSvg <span class="st">&quot;other/raw1k.svg&quot;</span> (<span class="dv">300</span>,<span class="dv">300</span>) <span class="fu">$</span>
-      rect&#39;
-      def
-      [ rectBorderColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span>
-      <span class="fu">$</span> rectColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.5</span>
-      <span class="fu">$</span> def]
-      [zipWith4 <span class="dt">V4</span> [<span class="dv">0</span><span class="fu">..</span>] (cycle [<span class="dv">0</span>]) [<span class="dv">1</span><span class="fu">..</span>] (xs <span class="fu">!!</span> <span class="dv">3</span>)]
-      
-  fileSvg <span class="st">&quot;other/raw100.svg&quot;</span> (<span class="dv">300</span>,<span class="dv">300</span>) <span class="fu">$</span>
-      rect&#39;
-      def
-      [ rectBorderColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span>
-      <span class="fu">$</span> rectColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.5</span>
-      <span class="fu">$</span> def]
-      [zipWith4 <span class="dt">V4</span> [<span class="dv">0</span><span class="fu">..</span>] (cycle [<span class="dv">0</span>]) [<span class="dv">1</span><span class="fu">..</span>] (xs <span class="fu">!!</span> <span class="dv">2</span>)]</code></pre></div>
-<p>Individual measurements for m=100</p>
-<div class="figure">
-<img src="other/raw100.svg" />
-
-</div>
-<p>Individual measurements for m=1000</p>
-<div class="figure">
-<img src="other/raw1k.svg" />
-
-</div>
-<p>On my run, a 3e5 cycle process comes along every 3e6 or so and smashes the loop.</p>
-<h2 id="tower">Tower</h2>
-<p><code>spin n tickf f</code> takes n measures using the tickf version, which just looks at function application effects.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  <span class="kw">let</span> f x <span class="fu">=</span> foldl&#39; (<span class="fu">T.+</span>) <span class="dv">0</span> [<span class="dv">1</span><span class="fu">..</span>x]
-  <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
-  <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tickf f) <span class="fu">&lt;$&gt;</span> ms
-  <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
-  <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-      showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/ticktower.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
-      zipWith showxs qss ms</code></pre></div>
-<pre><code>1.0:  446 593 599 600 600 627 664 667 777 932 7.59e3
-10.0:  165 197 202 203 208 218 225 226 275 338 6.06e4
-100.0:  135 137 137 137 138 139 141 162 230 597 2.42e3
-1000.0:  132 133 133 134 134 141 152 305 318 329 362
-10000.0:  170 177 182 183 185 189 191 196 198 200 204
-100000.0:  180 183 184 185 185 186 187 188 190 193 202</code></pre>
+  (xs, _) <span class="ot">&lt;-</span> runTick f tick ms n <span class="st">&quot;other/spin.md&quot;</span></code></pre></div>
+<pre><code>1.0:  426 439 440 440 446 486 510 672 758 1.23e3 4.84e4
+10.0:  159 165 169 191 223 249 297 628 3.73e3 4.28e4 2.56e5
+100.0:  131 133 135 135 136 136 137 138 168 456 3.28e3
+1000.0:  131 132 132 133 134 138 152 298 312 326 371
+10000.0:  172 177 179 183 183 184 185 189 203 203 208
+100000.0:  180 183 183 184 184 184 185 186 186 188 191</code></pre>
 <h2 id="vector">vector</h2>
 <p>Using vector to sum:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  <span class="kw">let</span> f x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> <span class="fu">$</span> V.replicate x <span class="dv">1</span>
-  <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
-  <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tickf f) <span class="fu">&lt;$&gt;</span> ms
-  <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
-  <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-      showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/vector1.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
-      zipWith showxs qss (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
-<pre><code>1.0:  42.0 48.1 48.6 51.7 59.0 59.3 62.0 65.0 80.0 86.0 1.56e3
-10.0:  33.0 35.1 35.1 35.4 35.4 35.5 36.2 36.3 37.0 43.3 104
-100.0:  29.7 36.1 38.4 39.6 40.0 41.4 42.4 42.9 42.9 46.4 9.48e3
-1000.0:  29.6 29.8 29.8 29.9 30.0 30.3 31.0 40.2 149 2.41e3 4.76e4
-10000.0:  26.9 27.2 27.2 29.8 29.8 29.9 31.0 34.4 58.9 60.5 73.4
-100000.0:  32.1 34.0 34.2 34.2 34.3 34.4 34.6 34.9 35.9 36.0 38.7</code></pre>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> f ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
+      f x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> <span class="fu">$</span> V.replicate (floor x) <span class="dv">1</span>
+  _ <span class="ot">&lt;-</span> runTick f tickf ms n <span class="st">&quot;other/vector1.md&quot;</span></code></pre></div>
+<pre><code>1.0:  30.0 37.0 37.0 37.0 37.1 40.0 40.0 40.3 43.0 64.0 1.48e3
+10.0:  6.40 7.30 7.30 7.40 7.40 7.41 7.50 8.02 11.9 12.6 13.2
+100.0:  7.89 7.92 7.95 7.95 7.96 7.98 7.99 7.99 8.01 8.08 8.44
+1000.0:  7.24 7.68 7.68 7.68 7.68 7.68 7.68 7.68 7.68 8.79 29.8
+10000.0:  7.22 7.22 7.23 7.23 7.23 7.23 7.23 7.23 7.24 7.98 11.2
+100000.0:  7.22 7.22 7.22 7.23 7.47 8.01 8.46 9.30 10.1 12.3 14.5</code></pre>
 <h2 id="unboxed-vector">unboxed vector</h2>
 <p>Using unboxed vector to sum Ints:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  <span class="kw">let</span> f x <span class="fu">=</span> U.foldl&#39; (<span class="fu">+</span>) (<span class="dv">0</span><span class="ot">::</span><span class="dt">Int</span>) <span class="fu">$</span> U.replicate x <span class="dv">1</span>
-  <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
-  <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tickf f) <span class="fu">&lt;$&gt;</span> ms
-  <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
-  <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-      showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-  Text.writeFile <span class="st">&quot;other/vector2.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
-      zipWith showxs qss (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
-<pre><code>1.0:  110 116 117 119 128 129 156 159 162 260 2.12e4
-10.0:  18.7 19.6 19.6 19.6 19.7 20.1 20.2 21.3 24.0 30.7 38.3
-100.0:  11.2 11.4 11.4 11.4 11.5 11.5 11.7 12.0 12.3 12.6 13.4
-1000.0:  10.5 10.7 10.8 11.0 11.5 12.0 12.1 13.9 16.3 20.1 432
-10000.0:  10.5 11.5 11.5 11.6 11.6 11.9 12.6 14.4 19.4 33.8 66.1
-100000.0:  11.3 13.1 13.1 13.3 13.6 13.8 13.9 14.0 14.3 14.8 15.1</code></pre>
-<p>Peak performance clocks in on my machine around 11 cycles per element. Immutable is the important proviso.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  fileSvg <span class="st">&quot;other/unboxed1k.svg&quot;</span> (<span class="dv">300</span>,<span class="dv">300</span>) <span class="fu">$</span>
-      rect&#39;
-      def
-      [ rectBorderColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">0</span>
-      <span class="fu">$</span> rectColor <span class="fu">.~</span> <span class="dt">Color</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.333</span> <span class="fl">0.5</span>
-      <span class="fu">$</span> def]
-      [zipWith4 <span class="dt">V4</span> [<span class="dv">0</span><span class="fu">..</span>] (cycle [<span class="dv">0</span>]) [<span class="dv">1</span><span class="fu">..</span>] (xs <span class="fu">!!</span> <span class="dv">3</span>)]</code></pre></div>
-<p>Individual measurements for m=1000</p>
-<div class="figure">
-<img src="other/unboxed1k.svg" />
-
-</div>
-<p>We are down to one 3e5 brain fart, but only because our computation is a lot faster now. It's going to be something boring like GC, or an out of order execution effect. Since it's regular, we can keep an eye on it, and separate the effect whatever it is.</p>
+<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> f ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
+      f x <span class="fu">=</span> U.foldl&#39; (<span class="fu">+</span>) (<span class="dv">0</span><span class="ot">::</span><span class="dt">Double</span>) <span class="fu">$</span> U.replicate (floor x) <span class="dv">1</span>
+  (xs, _) <span class="ot">&lt;-</span> runTick f tickf ms n <span class="st">&quot;other/vector2.md&quot;</span></code></pre></div>
+<pre><code>1.0:  122 126 126 128 128 131 132 137 162 416 3.06e4
+10.0:  19.8 21.1 21.1 21.1 21.1 22.0 24.8 25.7 27.5 38.3 48.3
+100.0:  10.6 10.6 10.6 10.7 10.7 10.7 10.9 11.0 11.8 12.1 13.3
+1000.0:  9.56 9.73 9.76 9.78 9.79 9.82 9.87 10.2 12.2 25.5 229
+10000.0:  9.41 9.44 9.47 9.50 9.53 9.69 9.71 9.82 9.87 21.6 35.2
+100000.0:  10.2 11.5 12.1 12.1 12.1 12.2 12.3 12.5 12.8 12.8 13.3</code></pre>
 <h2 id="the-f-and-the-a">the <code>!f</code> and the <code>!a</code></h2>
 <p>Same unboxed Int vector, looking at <code>tickfa</code>:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
   <span class="kw">let</span> f x <span class="fu">=</span> U.foldl&#39; (<span class="fu">+</span>) (<span class="dv">0</span><span class="ot">::</span><span class="dt">Int</span>) <span class="fu">$</span> U.replicate x <span class="dv">1</span>
   <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
   <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tickfa f) <span class="fu">&lt;$&gt;</span> ms
-  res&#39; <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spin n tick f) <span class="fu">&lt;$&gt;</span> ms
+  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> spin n tickfa f <span class="fu">&lt;$&gt;</span> ms
+  res&#39; <span class="ot">&lt;-</span> sequence <span class="fu">$</span> spin n tick f <span class="fu">&lt;$&gt;</span> ms
   <span class="kw">let</span> xsf <span class="fu">=</span> fmap (fromIntegral <span class="fu">.</span> fst) <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
   <span class="kw">let</span> xsa <span class="fu">=</span> fmap (fromIntegral <span class="fu">.</span> snd) <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-  <span class="kw">let</span> xsb <span class="fu">=</span> fmap (fromIntegral) <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res&#39;)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
+  <span class="kw">let</span> xsb <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res&#39;)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
   <span class="kw">let</span> qssf <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xsf
   <span class="kw">let</span> qssa <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xsa
   <span class="kw">let</span> qssb <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xsb
   <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
       showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
+          show m <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
+          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
   Text.writeFile <span class="st">&quot;other/f.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qssf (fromIntegral <span class="fu">&lt;$&gt;</span> ms)
   Text.writeFile <span class="st">&quot;other/a.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
@@ -206,54 +110,68 @@ average over 1m: 24.88446 cycles</code></pre>
   Text.writeFile <span class="st">&quot;other/b.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qssb (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
 <p>function application effect</p>
-<pre><code>1.0:  110 114 116 116 116 118 120 130 292 292 2.75e3
-10.0:  15.8 19.4 19.4 19.4 19.6 19.6 20.0 22.4 22.8 30.0 43.8
-100.0:  10.6 11.3 11.3 11.4 11.4 11.4 11.5 11.9 12.0 12.1 13.0
-1000.0:  9.99 10.4 10.4 10.5 10.7 10.8 11.3 13.4 13.4 13.8 454
-10000.0:  9.96 10.2 10.5 10.5 10.6 10.8 12.6 12.8 13.5 38.0 65.1
-100000.0:  11.1 13.0 13.2 13.3 13.5 13.6 13.9 14.1 14.3 14.6 15.7</code></pre>
+<pre><code>1.0:  119 122 123 124 127 130 131 138 184 297 2.93e3
+10.0:  18.9 19.3 19.5 19.6 19.6 19.9 20.2 22.0 24.1 29.7 44.0
+100.0:  11.1 11.3 11.3 11.4 11.4 11.5 11.7 11.9 12.0 12.3 7.55e3
+1000.0:  10.6 10.8 10.9 10.9 10.9 11.0 11.7 12.4 13.7 13.8 276
+10000.0:  10.4 10.5 10.5 10.5 10.5 10.5 10.5 10.6 12.0 27.8 33.4
+100000.0:  11.4 13.0 13.1 13.3 13.4 13.5 13.6 13.7 14.0 14.4 16.1</code></pre>
 <p>instantiation effect</p>
-<pre><code>1.0:  12.0 12.7 14.0 14.0 14.1 14.6 17.9 22.0 43.3 56.5 92.0
-10.0:  1.20 1.40 1.40 1.40 1.42 1.53 2.04 4.80 4.81 5.02 5.80
-100.0:  0.120 0.140 0.140 0.140 0.141 0.143 0.160 0.480 0.480 0.480 0.520
-1000.0:  0.0120 0.0121 0.0140 0.0140 0.0140 0.0144 0.0210 0.0222 0.0345 0.0630 0.0700
-10000.0:  0.00140 0.00408 0.00456 0.00466 0.00494 0.00505 0.00526 0.00570 0.00611 0.00725 0.0101
-100000.0:  0.000180 0.000295 0.000332 0.000422 0.000490 0.000551 0.000552 0.000570 0.000720 0.000899 0.00123</code></pre>
+<pre><code>1.0:  18.0 21.0 21.0 21.0 21.1 21.4 22.0 22.3 22.5 27.0 266
+10.0:  1.80 2.06 2.10 2.10 2.10 2.10 2.11 2.19 2.22 2.23 3.10
+100.0:  0.180 0.182 0.210 0.210 0.212 0.215 0.220 0.220 0.221 0.265 1.23
+1000.0:  0.0180 0.0210 0.0210 0.0213 0.0220 0.0220 0.0221 0.0240 0.0280 0.0300 0.147
+10000.0:  0.00210 0.00346 0.00406 0.00433 0.00489 0.00497 0.00533 0.00584 0.00660 0.00880 0.0138
+100000.0:  0.000210 0.000814 0.000950 0.00104 0.00104 0.00106 0.00107 0.00107 0.00113 0.00121 0.00132</code></pre>
 <p>both effects</p>
-<pre><code>1.0:  156 190 202 221 225 238 275 422 437 759 1.85e5
-10.0:  18.7 30.0 30.6 31.6 32.1 32.1 32.7 33.6 36.1 44.3 120
-100.0:  11.2 11.3 11.4 11.5 11.5 11.8 11.8 12.3 14.0 15.0 21.3
-1000.0:  10.6 10.9 10.9 10.9 11.0 11.1 11.2 11.3 11.6 23.3 349
-10000.0:  10.4 10.5 10.7 10.7 10.7 10.7 10.8 10.9 11.9 24.8 43.1
-100000.0:  11.5 13.1 13.1 13.2 13.4 13.6 13.8 14.1 14.1 14.2 15.3</code></pre>
+<pre><code>1.0:  171 202 205 213 220 220 233 251 345 823 2.13e5
+10.0:  27.2 33.0 33.6 33.9 34.0 34.2 34.5 35.8 36.0 39.8 74.6
+100.0:  11.0 11.4 11.4 11.5 11.5 11.6 12.3 12.6 12.8 18.5 23.9
+1000.0:  10.5 10.7 10.7 10.7 10.8 10.8 10.9 11.0 12.9 37.4 402
+10000.0:  10.4 10.5 10.5 10.5 10.5 10.6 10.7 10.7 12.0 28.5 50.1
+100000.0:  10.7 13.2 13.3 13.4 13.5 13.6 13.6 13.7 13.8 14.0 14.3</code></pre>
 <h2 id="mutation">mutation</h2>
-<p>Mutable summer of Ints:</p>
+<p>Mutable summer of Doubles:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
   <span class="kw">let</span> f x <span class="fu">=</span> L.foldM mutFold <span class="fu">$</span> V.replicate x (<span class="dv">1</span><span class="ot">::</span><span class="dt">Int</span>)
   <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
   <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
-  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> (spinM n tickfM f) <span class="fu">&lt;$&gt;</span> ms
+  res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> spinM n tickfM f <span class="fu">&lt;$&gt;</span> ms
   <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
   <span class="kw">let</span> xsres <span class="fu">=</span> snd <span class="fu">&lt;$&gt;</span><span class="ot"> res ::</span> [<span class="dt">Int</span>]
   print <span class="fu">$</span> L.fold (<span class="dt">L.Fold</span> (<span class="fu">+</span>) <span class="dv">0</span> Protolude.identity) xsres
   <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
   <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
       showxs qs m <span class="fu">=</span>
-          (show m) <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((\x <span class="ot">-&gt;</span> x<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
+          show m <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
+          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
   Text.writeFile <span class="st">&quot;other/mutable.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qss (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
-<pre><code>1.0:  39.0 45.2 45.5 48.0 65.9 68.5 71.3 75.5 92.0 98.0 758
-10.0:  14.3 14.8 16.6 16.9 17.0 24.9 26.4 27.1 28.2 28.5 49.0
-100.0:  12.0 12.3 12.5 12.8 13.7 13.8 14.2 14.7 16.6 16.8 22.8
-1000.0:  10.5 12.6 12.8 12.9 13.5 15.1 17.6 20.3 33.0 87.7 351
-10000.0:  9.51 10.5 10.7 11.4 13.7 13.9 16.2 22.7 32.7 34.1 40.6
-100000.0:  14.1 15.0 15.0 15.1 15.2 15.4 15.5 15.7 15.8 16.1 17.1</code></pre>
+<pre><code>1.0:  42.0 46.3 48.0 48.0 50.9 53.0 54.0 56.0 81.5 185 734
+10.0:  13.7 14.0 14.3 14.3 14.5 14.8 15.0 16.7 19.0 25.6 38.0
+100.0:  10.8 10.9 11.1 11.3 11.3 11.6 14.1 14.7 14.7 15.6 17.5
+1000.0:  11.4 12.2 12.3 12.5 12.9 18.9 19.5 21.4 23.1 23.7 1.16e3
+10000.0:  10.3 12.3 12.5 16.0 17.7 18.6 22.8 25.8 41.5 56.1 105
+100000.0:  14.4 15.6 15.7 15.8 15.8 16.0 16.3 16.4 16.8 18.3 29.7</code></pre>
 <p>I had to rewrite the code to actually use the eventual values, or else it's a noop in IO.</p>
 <p>No major difference between mutability and immutablility. Something else is happening...</p>
 <h2 id="helpers">helpers</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">
-code cs <span class="fu">=</span> mconcat <span class="fu">$</span> (<span class="fu">&lt;&gt;</span> <span class="st">&quot;\n&quot;</span>) <span class="fu">&lt;$&gt;</span> (<span class="st">&quot;    &quot;</span> <span class="fu">&lt;&gt;</span>) <span class="fu">&lt;$&gt;</span> cs</code></pre></div>
+
+runTick f t ms n name <span class="fu">=</span> <span class="kw">do</span>
+    _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
+    res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> spin n t f <span class="fu">&lt;$&gt;</span> ms
+    <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
+    <span class="kw">let</span> qs <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
+    Text.writeFile name <span class="fu">$</span> code <span class="fu">$</span> zipWith showxs qs ms
+    return (qs, xs)
+  <span class="kw">where</span>
+<span class="ot">      showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
+      showxs qs m <span class="fu">=</span>
+          show m <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
+          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
+
+code cs <span class="fu">=</span> mconcat <span class="fu">$</span> (<span class="fu">&lt;&gt;</span> <span class="st">&quot;\n&quot;</span>) <span class="fu">.</span> (<span class="st">&quot;    &quot;</span> <span class="fu">&lt;&gt;</span>) <span class="fu">&lt;$&gt;</span> cs</code></pre></div>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">mutFold ::</span> <span class="dt">L.FoldM</span> <span class="dt">IO</span> <span class="dt">Int</span> <span class="dt">Int</span>
 mutFold <span class="fu">=</span> <span class="dt">L.FoldM</span> step begin done
   <span class="kw">where</span>
@@ -264,3 +182,67 @@ mutFold <span class="fu">=</span> <span class="dt">L.FoldM</span> step begin don
 <p>A first-cousin of rdtsc, <a href="https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214">rdpmc</a>, offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.</p>
 <h2 id="workflow">workflow</h2>
 <pre><code>stack install &amp;&amp; readme &amp;&amp; pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include</code></pre>
+<h2 id="time">time</h2>
+<p><a href="http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html">Optimising haskell for a tight inner loop</a></p>
+<p><a href="http://stackoverflow.com/questions/3276240/tools-for-analyzing-performance-of-a-haskell-program/3276557#3276557">Tools for analysing performance</a></p>
+<p><a href="https://donsbot.wordpress.com/2008/05/06/write-haskell-as-fast-as-c-exploiting-strictness-laziness-and-recursion/">Write haskell as fast as c</a></p>
+<p><a href="http://stackoverflow.com/questions/6121146/reading-ghc-core">Reading ghc core</a></p>
+<h2 id="space">space</h2>
+<p><a href="http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html">Chasing space leaks in shake</a></p>
+<p><a href="http://blog.ezyang.com/2011/05/space-leak-zoo/">Space leak zoo</a></p>
+<p><a href="http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/">Anatomy of a thunk leak</a></p>
+<p><a href="http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/">An insufficiently lazy map</a></p>
+<p><a href="http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/">Pinpointing space leaks in big programs</a></p>
+<h2 id="checklist">checklist</h2>
+<ul class="incremental">
+<li>compile with rtsopts flag</li>
+</ul>
+<pre><code>find . -name &#39;*.o&#39; -type f -print -delete
+find . -name &#39;*.hl&#39; -type f -print -delete
+ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts</code></pre>
+<ul class="incremental">
+<li>check GC</li>
+</ul>
+<pre><code>example +RTS -s</code></pre>
+<ul class="incremental">
+<li>enabling profiling</li>
+</ul>
+<ol class="incremental" style="list-style-type: decimal">
+<li>a normal ghc</li>
+</ol>
+<pre><code>    ghc -fforce-recomp --make -O2 -isrc example/example.hs</code></pre>
+<ol class="incremental" start="2" style="list-style-type: decimal">
+<li>profile enabled automatically</li>
+</ol>
+<pre><code>  ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></pre>
+<ol class="incremental" start="3" style="list-style-type: decimal">
+<li>if template haskell</li>
+</ol>
+<pre><code>  ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></pre>
+<p>creates an A.prof on execution:</p>
+<pre><code>  time A +RTS -p</code></pre>
+<ul class="incremental">
+<li>visual-profile</li>
+</ul>
+<pre><code>  /Users/tonyday/git/VisualProf/dist/build/visual-prof/visual-prof -th dev/Reuters/A.hs dev/Reuters/A &quot;test/data/reuters-100k.txt&quot;</code></pre>
+<ul class="incremental">
+<li>space</li>
+</ul>
+<pre><code>  time dev/Reuters/A &quot;test/data/reuters-100k.txt&quot; +RTS -p -hc
+  hp2ps -e8in -c A.hp</code></pre>
+<pre><code>hy = types
+hd = constructors</code></pre>
+<ul class="incremental">
+<li>strictness pragma?</li>
+</ul>
+<pre><code>
+  :: {-# UNPACK</code></pre>
+<ul class="incremental">
+<li>space leaks</li>
+</ul>
+<pre><code>+RTS -s - additional memory
++RTS -xt -hy</code></pre>
+<ul class="incremental">
+<li>example ghc command</li>
+</ul>
+<pre><code>  ghc -O2 &amp;#x2013;make test/TestSerialize.hs -fforce-recomp -isrc:test -package-db .cabal-sandbox/\*-ghc-7.8.2-packages.conf.d/ -rtsopts -auto -auto-all -prof -threaded -main-is testBinaryController</code></pre>

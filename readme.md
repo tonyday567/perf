@@ -13,21 +13,17 @@ on x86.
 
 ``` {.sourceCode .literate .haskell}
 {-# LANGUAGE OverloadedStrings #-}
-import Protolude hiding ((%))
-import qualified Data.Text.IO as Text
-import qualified Data.Text as Text
+import Data.Primitive.MutVar
+import Data.Text (pack)
+import Data.Text.IO (writeFile)
 import Formatting
+import Protolude hiding ((%))
+
 import qualified Control.Foldl as L
-import Math.Combinatorics.Exact.Primes
+import qualified Data.Vector as V
+
 import Perf.Cycles
 import Perf.Quantiles
-import Control.Lens
-import Data.Default
-import qualified Data.Vector as V
-import qualified Data.Vector.Unboxed as U
-import Data.List
-import Linear
-import Data.Primitive.MutVar
 ```
 
 main
@@ -45,18 +41,17 @@ main = do
   ticks <- replicateM 10 tick_
   avtick <- replicateM 1000000 tick_
   let average cs = L.fold ((/) <$> L.sum <*> L.genericLength) cs
-  Text.writeFile "other/onetick.md" $ code
-    [ "one tick_: " <> Text.pack (show onetick) <> " cycles"
-    , "next 10: " <> Text.pack (show ticks)
+  writeFile "other/onetick.md" $ code
+    [ "one tick_: " <> pack (show onetick) <> " cycles"
+    , "next 10: " <> pack (show ticks)
     , "average over 1m: " <>
-      Text.pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
+      pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
     ]
-
 ```
 
-    one tick_: 42 cycles
-    next 10: [24,32,18,21,18,21,21,18,32,21]
-    average over 1m: 20.330693 cycles
+    one tick_: 40 cycles
+    next 10: [25,22,22,24,21,18,18,19,22,21]
+    average over 1m: 21.571953 cycles
 
 It often makes sense to give tick\_ a few spins before measuring
 something, to warm everything up.
@@ -78,7 +73,7 @@ that is to calculate quantiles:
         mconcat (sformat (" " % prec 3) <$> qs)
 ```
 
-    [min, 10th, 20th, .. 90th, max]: 12.0 20.7 22.0 22.0 22.0 22.0 22.0 22.1 22.7 24.0 680
+    [min, 10th, 20th, .. 90th, max]: 24.0 28.0 28.0 28.0 32.0 32.9 35.1 35.1 36.1 37.5 340
 
 The important cycle count for most work is around the 30th to 50th
 percentile, where you get a clean measure, hopefully free of cache
@@ -106,12 +101,12 @@ summing.
   (xs, _) <- runTick f tick ms n "other/spin.md"
 ```
 
-     1.0e0:  449 454 457 467 471 481 558 679 786 4.84e3 4.74e4
-     1.0e1:  164 166 167 168 171 188 195 201 223 225 320
-     1.0e2:  127 136 136 137 138 138 139 158 171 217 3.55e3
-     1.0e3:  131 132 132 133 135 148 165 254 330 352 405
-     1.0e4:  176 183 184 187 189 189 193 196 202 210 222
-     1.0e5:  181 188 189 190 191 197 205 212 213 214 216
+     1.00e0:  418 424 433 434 436 446 454 598 642 654 4.41e4
+     1.00e1:  150 151 151 152 153 156 161 172 177 179 218
+     1.00e2:  122 125 126 129 134 141 164 270 652 1.15e3 6.24e3
+     1.00e3:  127 127 127 128 129 133 160 309 351 358 360
+     1.00e4:  167 174 176 179 181 183 186 188 193 198 203
+     1.00e5:  176 178 179 179 180 180 181 182 184 189 198
 
 vector
 ------
@@ -124,30 +119,12 @@ Using vector to sum:
   _ <- runTick f tickf ms n "other/vector1.md"
 ```
 
-     1.0e0:  33.0 35.2 36.4 37.0 37.0 37.0 37.3 40.0 40.0 94.6 1.13e3
-     1.0e1:  7.00 7.30 7.35 7.46 7.52 7.61 7.63 7.77 11.6 11.9 13.8
-     1.0e2:  7.89 7.92 7.92 7.92 7.95 7.95 7.95 7.96 7.96 8.08 10.5
-     1.0e3:  7.43 7.68 7.68 7.68 7.75 7.75 7.76 7.76 7.83 7.96 30.3
-     1.0e4:  7.43 7.43 7.43 7.43 7.43 7.43 7.43 7.44 7.47 7.92 9.80
-     1.0e5:  7.43 7.43 7.43 7.44 7.54 7.65 7.68 7.90 8.59 10.1 12.4
-
-unboxed vector
---------------
-
-Using unboxed vector to sum Ints:
-
-``` {.sourceCode .literate .haskell}
-  let f :: Double -> Double
-      f x = U.foldl' (+) (0::Double) $ U.replicate (floor x) 1
-  (xs, _) <- runTick f tickf ms n "other/vector2.md"
-```
-
-     1.0e0:  122 125 125 125 125 127 129 156 251 471 3.51e4
-     1.0e1:  19.3 20.2 20.2 20.2 20.3 20.7 21.3 22.6 24.5 28.1 50.7
-     1.0e2:  10.5 10.6 10.6 10.6 10.7 10.8 11.0 11.2 11.4 12.7 18.0
-     1.0e3:  9.39 9.74 9.81 9.85 9.85 9.92 9.94 14.3 14.5 15.2 883
-     1.0e4:  9.38 9.45 9.47 9.47 9.48 9.50 9.51 9.55 9.82 22.2 35.9
-     1.0e5:  9.77 11.3 11.4 11.5 11.5 11.5 11.6 11.9 12.1 12.2 13.0
+     1.00e0:  33.0 37.0 37.0 37.9 40.0 40.0 40.0 40.3 43.0 91.0 1.55e3
+     1.00e1:  6.70 7.30 7.30 7.30 7.31 7.36 7.45 7.50 8.00 11.0 14.1
+     1.00e2:  7.89 7.92 7.92 7.92 7.92 7.93 7.95 7.95 7.96 7.98 8.41
+     1.00e3:  7.43 7.68 7.68 7.68 7.68 7.68 7.68 7.70 7.75 10.4 30.2
+     1.00e4:  7.22 7.23 7.43 7.43 7.43 7.43 7.43 7.43 7.43 7.43 9.65
+     1.00e5:  7.22 7.23 7.32 7.65 7.65 7.91 8.67 10.0 10.1 11.8 14.1
 
 mutation
 --------
@@ -166,42 +143,34 @@ Mutable summer of Doubles:
   let qss = L.fold (quantiles' 11) <$> xs
   let showxs :: [Double] -> Double -> Text
       showxs qs m =
-          show m <> ": " <>
+          sformat (" " % Formatting.expt 2) m <> ": " <>
           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
-  Text.writeFile "other/mutable.md" $ code $
+  writeFile "other/mutable.md" $ code $
       zipWith showxs qss (fromIntegral <$> ms)
 ```
 
-    1.0:  43.0 49.0 49.0 49.0 49.0 49.0 49.2 50.0 55.0 92.0 1.16e3
-    10.0:  11.4 13.1 13.1 13.1 13.1 13.3 14.6 35.1 165 753 4.33e3
-    100.0:  9.44 9.58 9.60 9.72 9.98 10.7 11.9 16.9 29.1 339 1.18e4
-    1000.0:  9.19 9.56 9.81 10.9 10.9 11.5 12.0 13.4 26.6 250 2.70e3
-    10000.0:  9.46 9.70 9.81 9.84 10.1 10.8 14.5 18.1 29.7 33.0 42.2
-    100000.0:  14.8 15.8 16.0 16.2 16.2 16.3 16.6 16.6 16.7 17.6 20.7
-
-I had to rewrite the code to actually use the eventual values, or else
-it's a noop in IO.
-
-No major difference between mutability and immutablility. Something else
-is happening...
+     1.00e0:  43.0 46.0 46.0 46.0 46.2 48.0 49.0 49.1 52.0 101 835
+     1.00e1:  12.8 13.5 13.5 13.7 13.7 13.8 13.9 14.7 17.7 18.1 34.9
+     1.00e2:  10.5 10.5 10.7 10.7 10.7 11.0 11.2 11.3 12.3 13.3 13.6
+     1.00e3:  10.2 10.3 10.3 10.4 10.6 11.3 13.4 20.6 65.0 117 650
+     1.00e4:  10.2 10.3 10.4 10.4 10.4 10.6 11.2 27.5 28.1 28.5 33.1
+     1.00e5:  14.4 15.3 15.4 15.6 15.8 16.0 16.5 16.5 16.6 16.8 18.3
 
 helpers
 -------
 
 ``` {.sourceCode .literate .haskell}
-
-
 runTick f t ms n name = do
     _ <- warmup 100
     res <- sequence $ spin n t f <$> ms
     let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
     let qs = L.fold (quantiles' 11) <$> xs
-    Text.writeFile name $ code $ zipWith showxs qs ms
+    writeFile name $ code $ zipWith showxs qs ms
     return (qs, xs)
   where
       showxs :: [Double] -> Double -> Text
       showxs qs m =
-          (sformat (" " % Formatting.expt 1) m) <> ": " <>
+          sformat (" " % Formatting.expt 2) m <> ": " <>
           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
 
 code cs = mconcat $ (<> "\n") . ("    " <>) <$> cs

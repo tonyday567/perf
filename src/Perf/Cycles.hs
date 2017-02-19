@@ -1,6 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Perf.Cycles where
 
 import Protolude
@@ -8,7 +5,7 @@ import System.CPUTime.Rdtsc
 import Data.List
 import qualified Control.Foldl as L
 
--- Cycles
+-- | Cycles
 type Cycles = Word64
 
 -- | `tick f a` applies a to f, and strictly returns a (number of cycles, application result) tuple

@@ -1,12 +1,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 module Perf.Quantiles where
 
-import Protolude hiding (zipWith, drop, take, (++), empty, toList, map, length)
+import Protolude hiding (zipWith, drop, take, empty, toList, map)
 import qualified Control.Foldl as L
 import Data.Vector as V
 
@@ -53,7 +49,7 @@ quantiles' n = L.Fold stepP2 (Quantiles n empty empty) (\(Quantiles _ m _) -> to
 digitize :: (Ord a, Fractional a) => Int -> (a -> a) -> a -> L.Fold a Int
 digitize n f decay = L.Fold step begin extract
   where
-    begin = (Quantiles n empty empty, (-1/0))
+    begin = (Quantiles n empty empty, -1/0)
     extract (qs, a) = bucket qs a
     step (x, _) a =
         (Quantiles
@@ -64,40 +60,40 @@ digitize n f decay = L.Fold step begin extract
       where
         (Quantiles s' m' c') = stepP2 x (f a)
 
-max :: (Quantiles Vector a) -> a
+max :: Quantiles Vector a -> a
 max (Quantiles s m _) = m ! (s - 1)
 
-min :: (Quantiles Vector a) -> a
+min :: Quantiles Vector a -> a
 min (Quantiles _ m _) = m ! 0
 
-nth :: Int -> (Quantiles Vector a) -> a
+nth :: Int -> Quantiles Vector a -> a
 nth n (Quantiles _ m _) = m ! n
 
-stepP2 :: (Fractional a) => (Quantiles Vector a) -> a -> (Quantiles Vector a)
+stepP2 :: (Fractional a) => Quantiles Vector a -> a -> Quantiles Vector a
 stepP2 q@(Quantiles b ms _) a
-  | length ms < b =
+  | V.length ms < b =
         Quantiles b
         (fromList (sort $ toList $ cons a ms))
-        (generate (fromIntegral $ length ms + 1) (\x -> fromIntegral x + 1))
+        (generate (fromIntegral $ V.length ms + 1) (\x -> fromIntegral x + 1))
   | otherwise = Quantiles b markersFinal countsFinal
   where
-    countsFinal = take 1 counts' ++ cs24 ++ drop (b - 1) counts'
+    countsFinal = take 1 counts' V.++ cs24 V.++ drop (b - 1) counts'
     (Quantiles _ markers' counts') = addOne q a
-    markersFinal = take 1 markers' ++ ms24'' ++ drop (b - 1) markers'
+    markersFinal = take 1 markers' V.++ ms24'' V.++ drop (b - 1) markers'
     cs24 = zipWith3 (\x y z-> if x then y+z else y) isOut (init $ tail counts') (init $ tail dsign)
-    csIdeal = generate b (\i -> 1 + ((last counts') - 1) * fromIntegral i/(fromIntegral b - 1))
+    csIdeal = generate b (\i -> 1 + (last counts' - 1) * fromIntegral i/(fromIntegral b - 1))
     d = zipWith (-) csIdeal counts'
     dsign = map (\x -> if x>0 then 1 else 0) d
     c' = zipWith (-) (tail counts') (init counts')
     isOut = zipWith3 (\d' nd1 nd0 -> d' >= 1 && nd1 > 1  || d' <= (-1) && nd0 > 1) (init $ tail d) (tail c') c'
-    p2' = p2 markers' (counts') dsign
-    l2' = l2 markers' (counts') dsign
+    p2' = p2 markers' counts' dsign
+    l2' = l2 markers' counts' dsign
     ms24 = take (b - 2) $ tail markers'
     okP2 = zipWith3 (\x x0 x1 -> x > x0 && x < x1) p2' markers' (drop 2 markers')
     ms24' = zipWith3 (\x y z-> if x then y else z) okP2 p2' l2'
     ms24'' = zipWith3 (\x y z-> if x then y else z) isOut ms24' ms24
 
-addOne :: (Num a) => (Quantiles Vector a) -> a -> (Quantiles Vector a)
+addOne :: (Num a) => Quantiles Vector a -> a -> Quantiles Vector a
 addOne (Quantiles b ms qs) a
     | a < ms!0 =
       Quantiles b (cons a (tail ms))
@@ -112,12 +108,12 @@ addOne (Quantiles b ms qs) a
       (imap (\i q -> if ms!i > a then q+1 else q) qs)
 
 -- bucket of the value
-bucket :: (Quantiles Vector a) -> a -> Int
+bucket :: Quantiles Vector a -> a -> Int
 bucket (Quantiles _ ms _) a
-    | length ms == 0 = 0
+    | V.null ms = 0
     | a < ms!0 = 0
-    | a > last ms = fromIntegral $ length ms - 1
-    | otherwise = L.fold L.sum [if ms!x > a then 0 else 1 | x <- [0..(length ms - 1) - 1]]
+    | a > last ms = fromIntegral $ V.length ms - 1
+    | otherwise = L.fold L.sum [if ms!x > a then 0 else 1 | x <- [0..(V.length ms - 1) - 1]]
 
 p2 :: (Fractional a) => Vector a -> Vector a -> Vector a -> Vector a
 p2 q n d = res

@@ -1,6 +1,8 @@
-```
-other/header.md
-```
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://tonyday567.github.io/other/lhs.css">
+<script type="text/javascript" async
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
 
 [perf](https://tonyday567.github.io/perf/index.html) [![Build Status](https://travis-ci.org/tonyday567/perf.png)](https://travis-ci.org/tonyday567/perf)
 ===
@@ -8,22 +10,17 @@ other/header.md
 If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
 
 > {-# LANGUAGE OverloadedStrings #-}
-> import Protolude hiding ((%))
-> import qualified Data.Text.IO as Text
-> import qualified Data.Text as Text
+> import Data.Primitive.MutVar
+> import Data.Text (pack)
+> import Data.Text.IO (writeFile)
 > import Formatting
+> import Protolude hiding ((%))
+> 
 > import qualified Control.Foldl as L
-> import Math.Combinatorics.Exact.Primes
+> import qualified Data.Vector as V
+>
 > import Perf.Cycles
 > import Perf.Quantiles
-> import Control.Lens
-> import Data.Default
-> import qualified Data.Vector as V
-> import qualified Data.Vector.Unboxed as U
-> import Data.List
-> import Linear
-> import Data.Primitive.MutVar
->
 
 main
 ---
@@ -37,14 +34,12 @@ main
 >   ticks <- replicateM 10 tick_
 >   avtick <- replicateM 1000000 tick_
 >   let average cs = L.fold ((/) <$> L.sum <*> L.genericLength) cs
->   Text.writeFile "other/onetick.md" $ code
->     [ "one tick_: " <> Text.pack (show onetick) <> " cycles"
->     , "next 10: " <> Text.pack (show ticks)
+>   writeFile "other/onetick.md" $ code
+>     [ "one tick_: " <> pack (show onetick) <> " cycles"
+>     , "next 10: " <> pack (show ticks)
 >     , "average over 1m: " <>
->       Text.pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
+>       pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
 >     ]
->
->
 
 ```include
 other/onetick.md
@@ -63,7 +58,6 @@ It pays to look at the whole distribution, and a compact way of doing that is to
 >   writeFile "other/quantiles.md" $
 >         "\n    [min, 10th, 20th, .. 90th, max]:" <>
 >         mconcat (sformat (" " % prec 3) <$> qs)
->
 
 ```include
 other/quantiles.md
@@ -107,66 +101,6 @@ Using vector to sum:
 other/vector1.md
 ```
 
-unboxed vector
----
-
-Using unboxed vector to sum Ints:
-
->   let f :: Double -> Double
->       f x = U.foldl' (+) (0::Double) $ U.replicate (floor x) 1
->   (xs, _) <- runTick f tickf ms n "other/vector2.md"
->
-
-```include
-other/vector2.md
-```
-
-the `!f` and the `!a`
----
-
-Same unboxed Int vector, looking at `tickfa`:
-
->   _ <- warmup 100
->   let f x = U.foldl' (+) (0::Int) $ U.replicate x 1
->   let ms = [1, 10, 100, 1000, 10000, 100000]
->   let n = 100
->   res <- sequence $ spin n tickfa f <$> ms
->   res' <- sequence $ spin n tick f <$> ms
->   let xsf = fmap (fromIntegral . fst) <$> (fst <$> res) :: [[Double]]
->   let xsa = fmap (fromIntegral . snd) <$> (fst <$> res) :: [[Double]]
->   let xsb = fmap fromIntegral <$> (fst <$> res') :: [[Double]]
->   let qssf = L.fold (quantiles' 11) <$> xsf
->   let qssa = L.fold (quantiles' 11) <$> xsa
->   let qssb = L.fold (quantiles' 11) <$> xsb
->   let showxs :: [Double] -> Double -> Text
->       showxs qs m =
->           show m <> ": " <>
->           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
->   Text.writeFile "other/f.md" $ code $
->       zipWith showxs qssf (fromIntegral <$> ms)
->   Text.writeFile "other/a.md" $ code $
->       zipWith showxs qssa (fromIntegral <$> ms)
->   Text.writeFile "other/b.md" $ code $
->       zipWith showxs qssb (fromIntegral <$> ms)
-
-function application effect
-
-```include
-other/f.md
-```
-
-instantiation effect
-
-```include
-other/a.md
-```
-
-both effects
-
-```include
-other/b.md
-```
-
 mutation
 ---
 
@@ -183,9 +117,9 @@ Mutable summer of Doubles:
 >   let qss = L.fold (quantiles' 11) <$> xs
 >   let showxs :: [Double] -> Double -> Text
 >       showxs qs m =
->           show m <> ": " <>
+>           sformat (" " % Formatting.expt 2) m <> ": " <>
 >           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
->   Text.writeFile "other/mutable.md" $ code $
+>   writeFile "other/mutable.md" $ code $
 >       zipWith showxs qss (fromIntegral <$> ms)
 >
 
@@ -193,27 +127,20 @@ Mutable summer of Doubles:
 other/mutable.md
 ```
 
-I had to rewrite the code to actually use the eventual values, or else it's a noop in IO.
-
-No major difference between mutability and immutablility. Something else is happening...
-
-
 helpers
 ---
 
->
->
 > runTick f t ms n name = do
 >     _ <- warmup 100
 >     res <- sequence $ spin n t f <$> ms
 >     let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
 >     let qs = L.fold (quantiles' 11) <$> xs
->     Text.writeFile name $ code $ zipWith showxs qs ms
+>     writeFile name $ code $ zipWith showxs qs ms
 >     return (qs, xs)
 >   where
 >       showxs :: [Double] -> Double -> Text
 >       showxs qs m =
->           show m <> ": " <>
+>           sformat (" " % Formatting.expt 2) m <> ": " <>
 >           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
 >
 > code cs = mconcat $ (<> "\n") . ("    " <>) <$> cs
@@ -226,6 +153,9 @@ helpers
 >     begin = newMutVar 0
 >     done = readMutVar
 
+notes
+===
+
 rdpmc
 ---
 
@@ -235,10 +165,10 @@ workflow
 ---
 
 ~~~
-stack install && readme && pandoc -f markdown+lhs -t html -i readme.lhs -o index.html --filter pandoc-include
+stack install && perf-examples && pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include && pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include
 ~~~
 
-time
+time performance references
 ---
 
 [Optimising haskell for a tight inner loop](http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html)
@@ -249,7 +179,7 @@ time
 
 [Reading ghc core](http://stackoverflow.com/questions/6121146/reading-ghc-core)
 
-space
+space performance references
 ---
 
 [Chasing space leaks in shake](http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html)
@@ -262,10 +192,10 @@ space
 
 [Pinpointing space leaks in big programs](http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/)
 
-checklist
+A (fairly old) checklist
 ---
 
-- compile with rtsopts flag
+1. compile with rtsopts flag
 
 ~~~
 find . -name '*.o' -type f -print -delete
@@ -273,47 +203,17 @@ find . -name '*.hl' -type f -print -delete
 ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts
 ~~~
 
-- check GC
+2. check GC `example +RTS -s`
 
-~~~
-example +RTS -s
-~~~
+3. enabling profiling
 
-- enabling profiling
+- a normal ghc `ghc -fforce-recomp --make -O2 -isrc example/example.hs`
+- profile enabled automatically `ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
+- if template haskell `ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
 
-1. a normal ghc
+4. create an A.prof on execution: `time A +RTS -p`
 
-~~~
-    ghc -fforce-recomp --make -O2 -isrc example/example.hs
-~~~
-
-2. profile enabled automatically
-
-
-~~~
-  ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs
-~~~
-
-3. if template haskell
-
-~~~
-  ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs
-~~~
-
-
-creates an A.prof on execution:
-
-~~~
-  time A +RTS -p
-~~~
-
-- visual-profile
-
-~~~
-  /Users/tonyday/git/VisualProf/dist/build/visual-prof/visual-prof -th dev/Reuters/A.hs dev/Reuters/A "test/data/reuters-100k.txt"
-~~~
-
-- space
+5. space
 
 ~~~
   time dev/Reuters/A "test/data/reuters-100k.txt" +RTS -p -hc
@@ -323,22 +223,12 @@ creates an A.prof on execution:
     hy = types
     hd = constructors
 
-- strictness pragma?
+6. strictness pragmas?
 
-~~~
-
-  :: {-# UNPACK
-~~~
-
-- space leaks
+7. space leaks
 
 ~~~
 +RTS -s - additional memory
 +RTS -xt -hy
 ~~~
 
-- example ghc command
-
-~~~
-  ghc -O2 &#x2013;make test/TestSerialize.hs -fforce-recomp -isrc:test -package-db .cabal-sandbox/\*-ghc-7.8.2-packages.conf.d/ -rtsopts -auto -auto-all -prof -threaded -main-is testBinaryController
-~~~

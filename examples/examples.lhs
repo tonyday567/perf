@@ -10,17 +10,19 @@
 If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
 
 > {-# LANGUAGE OverloadedStrings #-}
+> {-# LANGUAGE DataKinds #-}
 > import Data.Primitive.MutVar
 > import Data.Text (pack)
 > import Data.Text.IO (writeFile)
 > import Formatting
 > import Protolude hiding ((%))
+> import Data.List.NonEmpty (NonEmpty(..))
 > 
 > import qualified Control.Foldl as L
 > import qualified Data.Vector as V
 >
 > import Perf.Cycles
-> import Perf.Quantiles
+> import Data.TDigest
 
 main
 ---
@@ -54,10 +56,10 @@ It pays to look at the whole distribution, and a compact way of doing that is to
 >   _ <- warmup 100
 >   xs' <- replicateM 10000 tick_
 >   let xs = fromIntegral <$> xs' :: [Double]
->   let qs = L.fold (quantiles' 11) xs
+>   let qs = (\x -> quantile x (tdigest xs :: TDigest 25)) <$> ((0.1*) <$> ([0..10]))
 >   writeFile "other/quantiles.md" $
 >         "\n    [min, 10th, 20th, .. 90th, max]:" <>
->         mconcat (sformat (" " % prec 3) <$> qs)
+>         mconcat (sformat (" " % prec 3) <$> (fromMaybe 0 <$> qs))
 
 ```include
 other/quantiles.md
@@ -65,7 +67,7 @@ other/quantiles.md
 
 The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of cache missing.
 
-The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large brain farts at around 2k cycles.
+The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large hiccoughs at around 2k cycles.
 
 For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s
 
@@ -114,7 +116,7 @@ Mutable summer of Doubles:
 >   let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
 >   let xsres = snd <$> res :: [Int]
 >   print $ L.fold (L.Fold (+) 0 Protolude.identity) xsres
->   let qss = L.fold (quantiles' 11) <$> xs
+>   let qss = (\xs -> (\x -> fromMaybe 0 $ quantile x (tdigest xs :: TDigest 25)) <$> ((0.1*) <$> ([0..10]))) <$> xs
 >   let showxs :: [Double] -> Double -> Text
 >       showxs qs m =
 >           sformat (" " % Formatting.expt 2) m <> ": " <>
@@ -134,9 +136,9 @@ helpers
 >     _ <- warmup 100
 >     res <- sequence $ spin n t f <$> ms
 >     let xs = fmap fromIntegral <$> (fst <$> res) :: [[Double]]
->     let qs = L.fold (quantiles' 11) <$> xs
->     writeFile name $ code $ zipWith showxs qs ms
->     return (qs, xs)
+>     let qss = (\xs -> (\x -> fromMaybe 0 $ quantile x (tdigest xs :: TDigest 25)) <$> ((0.1*) <$> ([0..10]))) <$> xs
+>     writeFile name $ code $ zipWith showxs qss ms
+>     return (qss, xs)
 >   where
 >       showxs :: [Double] -> Double -> Text
 >       showxs qs m =
@@ -165,7 +167,7 @@ workflow
 ---
 
 ~~~
-stack install && perf-examples && pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include && pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include
+stack build --copy-bins --exec "perf-examples" --exec "pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include" --exec "pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include"
 ~~~
 
 time performance references

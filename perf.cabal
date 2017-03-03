@@ -32,13 +32,13 @@ library
   hs-source-dirs:      
     src
   exposed-modules:
-    Perf.Cycles,
-    Perf.Quantiles
+    Perf.Cycles
   build-depends:
     base >= 4.7 && < 5,
     rdtsc,
     foldl,
     protolude,
+    tdigest,
     vector
   default-extensions:
     NoImplicitPrelude,
@@ -100,7 +100,8 @@ executable perf-examples
     exact-combinatorics,
     text,
     vector,
-    primitive
+    primitive,
+    tdigest
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,

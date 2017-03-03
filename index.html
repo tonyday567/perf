@@ -5,17 +5,19 @@
 <h1 id="perf-build-status"><a href="https://tonyday567.github.io/perf/index.html">perf</a> <a href="https://travis-ci.org/tonyday567/perf"><img src="https://travis-ci.org/tonyday567/perf.png" alt="Build Status" /></a></h1>
 <p>If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+<span class="ot">{-# LANGUAGE DataKinds #-}</span>
 <span class="kw">import </span><span class="dt">Data.Primitive.MutVar</span>
 <span class="kw">import </span><span class="dt">Data.Text</span> (pack)
 <span class="kw">import </span><span class="dt">Data.Text.IO</span> (writeFile)
 <span class="kw">import </span><span class="dt">Formatting</span>
 <span class="kw">import </span><span class="dt">Protolude</span> <span class="kw">hiding</span> ((%))
+<span class="kw">import </span><span class="dt">Data.List.NonEmpty</span> (<span class="dt">NonEmpty</span>(..))
 
 <span class="kw">import qualified</span> <span class="dt">Control.Foldl</span> <span class="kw">as</span> <span class="dt">L</span>
 <span class="kw">import qualified</span> <span class="dt">Data.Vector</span> <span class="kw">as</span> <span class="dt">V</span>
 
 <span class="kw">import </span><span class="dt">Perf.Cycles</span>
-<span class="kw">import </span><span class="dt">Perf.Quantiles</span></code></pre></div>
+<span class="kw">import </span><span class="dt">Data.TDigest</span></code></pre></div>
 <h2 id="main">main</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
 main <span class="fu">=</span> <span class="kw">do</span></code></pre></div>
@@ -30,22 +32,22 @@ main <span class="fu">=</span> <span class="kw">do</span></code></pre></div>
     , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
       pack (show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
     ]</code></pre></div>
-<pre><code>one tick_: 40 cycles
-next 10: [25,22,22,24,21,18,18,19,22,21]
-average over 1m: 21.571953 cycles</code></pre>
+<pre><code>one tick_: 100 cycles
+next 10: [32,28,24,28,28,24,28,24,28,28]
+average over 1m: 20.868261 cycles</code></pre>
 <p>It often makes sense to give tick_ a few spins before measuring something, to warm everything up.</p>
 <p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
 <p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
   xs&#39; <span class="ot">&lt;-</span> replicateM <span class="dv">10000</span> tick_
   <span class="kw">let</span> xs <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span><span class="ot"> xs&#39; ::</span> [<span class="dt">Double</span>]
-  <span class="kw">let</span> qs <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) xs
+  <span class="kw">let</span> qs <span class="fu">=</span> (\x <span class="ot">-&gt;</span> quantile x (tdigest<span class="ot"> xs ::</span> <span class="dt">TDigest</span> <span class="dv">25</span>)) <span class="fu">&lt;$&gt;</span> ((<span class="fl">0.1</span><span class="fu">*</span>) <span class="fu">&lt;$&gt;</span> ([<span class="dv">0</span><span class="fu">..</span><span class="dv">10</span>]))
   writeFile <span class="st">&quot;other/quantiles.md&quot;</span> <span class="fu">$</span>
         <span class="st">&quot;\n    [min, 10th, 20th, .. 90th, max]:&quot;</span> <span class="fu">&lt;&gt;</span>
-        mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> qs)</code></pre></div>
-<pre><code>[min, 10th, 20th, .. 90th, max]: 24.0 28.0 28.0 28.0 32.0 32.9 35.1 35.1 36.1 37.5 340</code></pre>
+        mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> (fromMaybe <span class="dv">0</span> <span class="fu">&lt;$&gt;</span> qs))</code></pre></div>
+<pre><code>[min, 10th, 20th, .. 90th, max]: 12.0 17.4 19.2 20.2 20.6 20.9 21.3 21.7 22.2 22.7 960</code></pre>
 <p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of cache missing.</p>
-<p>The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large brain farts at around 2k cycles.</p>
+<p>The quantile print of tick_ often shows a 12 to 14 point jump around the 70th to 90th percential, and this is probably a L2 miss, and then a few large hiccoughs at around 2k cycles.</p>
 <p>For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s</p>
 <h1 id="spin">spin</h1>
 <p>Let's measure something. The simplest something I could think of was summing.</p>
@@ -55,23 +57,23 @@ average over 1m: 21.571953 cycles</code></pre>
   <span class="kw">let</span> ms <span class="fu">=</span> [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>, <span class="dv">1000</span>, <span class="dv">10000</span>, <span class="dv">100000</span>]
   <span class="kw">let</span> n <span class="fu">=</span> <span class="dv">100</span>
   (xs, _) <span class="ot">&lt;-</span> runTick f tick ms n <span class="st">&quot;other/spin.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  418 424 433 434 436 446 454 598 642 654 4.41e4
- 1.00e1:  150 151 151 152 153 156 161 172 177 179 218
- 1.00e2:  122 125 126 129 134 141 164 270 652 1.15e3 6.24e3
- 1.00e3:  127 127 127 128 129 133 160 309 351 358 360
- 1.00e4:  167 174 176 179 181 183 186 188 193 198 203
- 1.00e5:  176 178 179 179 180 180 181 182 184 189 198</code></pre>
+<pre><code> 1.00e0:  486 497 499 502 503 504 505 506 511 541 3.85e3
+ 1.00e1:  162 164 165 165 165 167 169 170 172 177 189
+ 1.00e2:  130 130 130 130 131 131 131 131 132 165 2.98e3
+ 1.00e3:  127 127 127 127 127 128 139 325 386 409 524
+ 1.00e4:  185 196 200 204 207 211 215 217 223 232 260
+ 1.00e5:  174 177 178 178 179 179 180 182 200 205 210</code></pre>
 <h2 id="vector">vector</h2>
 <p>Using vector to sum:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> f ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
       f x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> <span class="fu">$</span> V.replicate (floor x) <span class="dv">1</span>
   _ <span class="ot">&lt;-</span> runTick f tickf ms n <span class="st">&quot;other/vector1.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  33.0 37.0 37.0 37.9 40.0 40.0 40.0 40.3 43.0 91.0 1.55e3
- 1.00e1:  6.70 7.30 7.30 7.30 7.31 7.36 7.45 7.50 8.00 11.0 14.1
- 1.00e2:  7.89 7.92 7.92 7.92 7.92 7.93 7.95 7.95 7.96 7.98 8.41
- 1.00e3:  7.43 7.68 7.68 7.68 7.68 7.68 7.68 7.70 7.75 10.4 30.2
- 1.00e4:  7.22 7.23 7.43 7.43 7.43 7.43 7.43 7.43 7.43 7.43 9.65
- 1.00e5:  7.22 7.23 7.32 7.65 7.65 7.91 8.67 10.0 10.1 11.8 14.1</code></pre>
+<pre><code> 1.00e0:  33.0 33.4 34.1 34.8 35.8 36.6 36.9 37.3 37.6 37.9 881
+ 1.00e1:  6.40 6.90 6.98 7.06 7.13 7.19 7.27 7.35 7.46 7.69 14.1
+ 1.00e2:  7.86 7.89 7.91 7.92 7.92 7.93 7.94 7.95 7.96 7.97 8.02
+ 1.00e3:  7.67 7.67 7.67 7.67 7.67 7.68 7.68 7.68 7.68 7.68 7.70
+ 1.00e4:  7.22 7.22 7.22 7.22 7.23 7.23 7.23 7.23 7.23 7.23 9.75
+ 1.00e5:  7.22 7.22 7.22 7.38 7.58 8.39 8.39 9.80 10.0 10.7 12.4</code></pre>
 <h2 id="mutation">mutation</h2>
 <p>Mutable summer of Doubles:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
@@ -82,27 +84,27 @@ average over 1m: 21.571953 cycles</code></pre>
   <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
   <span class="kw">let</span> xsres <span class="fu">=</span> snd <span class="fu">&lt;$&gt;</span><span class="ot"> res ::</span> [<span class="dt">Int</span>]
   print <span class="fu">$</span> L.fold (<span class="dt">L.Fold</span> (<span class="fu">+</span>) <span class="dv">0</span> Protolude.identity) xsres
-  <span class="kw">let</span> qss <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
+  <span class="kw">let</span> qss <span class="fu">=</span> (\xs <span class="ot">-&gt;</span> (\x <span class="ot">-&gt;</span> fromMaybe <span class="dv">0</span> <span class="fu">$</span> quantile x (tdigest<span class="ot"> xs ::</span> <span class="dt">TDigest</span> <span class="dv">25</span>)) <span class="fu">&lt;$&gt;</span> ((<span class="fl">0.1</span><span class="fu">*</span>) <span class="fu">&lt;$&gt;</span> ([<span class="dv">0</span><span class="fu">..</span><span class="dv">10</span>]))) <span class="fu">&lt;$&gt;</span> xs
   <span class="kw">let</span><span class="ot"> showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
       showxs qs m <span class="fu">=</span>
           sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> Formatting.expt <span class="dv">2</span>) m <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
           mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
   writeFile <span class="st">&quot;other/mutable.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
       zipWith showxs qss (fromIntegral <span class="fu">&lt;$&gt;</span> ms)</code></pre></div>
-<pre><code> 1.00e0:  43.0 46.0 46.0 46.0 46.2 48.0 49.0 49.1 52.0 101 835
- 1.00e1:  12.8 13.5 13.5 13.7 13.7 13.8 13.9 14.7 17.7 18.1 34.9
- 1.00e2:  10.5 10.5 10.7 10.7 10.7 11.0 11.2 11.3 12.3 13.3 13.6
- 1.00e3:  10.2 10.3 10.3 10.4 10.6 11.3 13.4 20.6 65.0 117 650
- 1.00e4:  10.2 10.3 10.4 10.4 10.4 10.6 11.2 27.5 28.1 28.5 33.1
- 1.00e5:  14.4 15.3 15.4 15.6 15.8 16.0 16.5 16.5 16.6 16.8 18.3</code></pre>
+<pre><code> 1.00e0:  22.0 27.8 28.9 33.0 53.0 57.3 61.7 63.5 64.1 64.7 1.05e3
+ 1.00e1:  12.0 12.0 12.1 12.1 12.2 12.2 12.3 14.0 15.5 16.7 21.0
+ 1.00e2:  9.88 10.2 10.3 10.4 10.7 11.2 15.5 16.8 17.9 19.3 3.26e3
+ 1.00e3:  10.1 10.2 10.2 10.2 10.3 10.3 10.5 10.7 11.5 16.8 223
+ 1.00e4:  10.1 10.2 10.2 10.2 10.3 10.4 10.9 19.0 26.9 29.8 33.0
+ 1.00e5:  14.3 15.0 15.3 15.5 15.6 15.7 15.9 16.0 16.1 16.3 17.7</code></pre>
 <h2 id="helpers">helpers</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">runTick f t ms n name <span class="fu">=</span> <span class="kw">do</span>
     _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
     res <span class="ot">&lt;-</span> sequence <span class="fu">$</span> spin n t f <span class="fu">&lt;$&gt;</span> ms
     <span class="kw">let</span> xs <span class="fu">=</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> (fst <span class="fu">&lt;$&gt;</span> res)<span class="ot"> ::</span> [[<span class="dt">Double</span>]]
-    <span class="kw">let</span> qs <span class="fu">=</span> L.fold (quantiles&#39; <span class="dv">11</span>) <span class="fu">&lt;$&gt;</span> xs
-    writeFile name <span class="fu">$</span> code <span class="fu">$</span> zipWith showxs qs ms
-    return (qs, xs)
+    <span class="kw">let</span> qss <span class="fu">=</span> (\xs <span class="ot">-&gt;</span> (\x <span class="ot">-&gt;</span> fromMaybe <span class="dv">0</span> <span class="fu">$</span> quantile x (tdigest<span class="ot"> xs ::</span> <span class="dt">TDigest</span> <span class="dv">25</span>)) <span class="fu">&lt;$&gt;</span> ((<span class="fl">0.1</span><span class="fu">*</span>) <span class="fu">&lt;$&gt;</span> ([<span class="dv">0</span><span class="fu">..</span><span class="dv">10</span>]))) <span class="fu">&lt;$&gt;</span> xs
+    writeFile name <span class="fu">$</span> code <span class="fu">$</span> zipWith showxs qss ms
+    return (qss, xs)
   <span class="kw">where</span>
 <span class="ot">      showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
       showxs qs m <span class="fu">=</span>
@@ -120,7 +122,7 @@ mutFold <span class="fu">=</span> <span class="dt">L.FoldM</span> step begin don
 <h2 id="rdpmc">rdpmc</h2>
 <p>A first-cousin of rdtsc, <a href="https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214">rdpmc</a>, offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.</p>
 <h2 id="workflow">workflow</h2>
-<pre><code>stack install &amp;&amp; perf-examples &amp;&amp; pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include &amp;&amp; pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include</code></pre>
+<pre><code>stack build --copy-bins --exec &quot;perf-examples&quot; --exec &quot;pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include&quot; --exec &quot;pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include&quot;</code></pre>
 <h2 id="time-performance-references">time performance references</h2>
 <p><a href="http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html">Optimising haskell for a tight inner loop</a></p>
 <p><a href="http://stackoverflow.com/questions/3276240/tools-for-analyzing-performance-of-a-haskell-program/3276557#3276557">Tools for analysing performance</a></p>

@@ -32,6 +32,8 @@ library
   hs-source-dirs:      
     src
   exposed-modules:
+    Perf,
+    Perf.Measure,
     Perf.Cycles
   build-depends:
     base >= 4.7 && < 5,
@@ -39,7 +41,9 @@ library
     foldl,
     protolude,
     tdigest,
-    vector
+    vector,
+    containers,
+    time
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,
@@ -78,11 +82,12 @@ executable perf-examples
   default-language:
     Haskell2010
   ghc-options:
-    -funbox-strict-fields
+    -- -funbox-strict-fields
     -fforce-recomp
-    -threaded
+    -- -threaded
     -rtsopts
-    -with-rtsopts=-N
+    -- -with-rtsopts=-N
+    -O2
   hs-source-dirs:
     examples
   main-is:
@@ -93,6 +98,7 @@ executable perf-examples
     rdtsc,
     perf,
     lens,
+    optparse-generic,
     data-default,
     linear,
     formatting,
@@ -101,7 +107,10 @@ executable perf-examples
     text,
     vector,
     primitive,
-    tdigest
+    tdigest,
+    chart-unit,
+    diagrams-lib,
+    mwc-probability
   default-extensions:
     NoImplicitPrelude,
     UnicodeSyntax,

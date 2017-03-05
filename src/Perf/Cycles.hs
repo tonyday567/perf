@@ -1,12 +1,23 @@
+{-# LANGUAGE DataKinds #-}
+
 module Perf.Cycles where
 
 import Protolude
 import System.CPUTime.Rdtsc
 import Data.List
 import qualified Control.Foldl as L
+import Data.TDigest
 
 -- | Cycles
 type Cycles = Word64
+
+instance Semigroup Cycles where
+    (<>) = (+)
+
+instance Monoid Cycles where
+  mempty = 0
+  mappend = (+)
+
 
 -- | `tick f a` applies a to f, and strictly returns a (number of cycles, application result) tuple
 tick :: (a -> b) -> a -> IO (Cycles, b)
@@ -82,6 +93,12 @@ spin :: Int -> ((a -> b) -> a -> IO (c, b)) ->
 spin n tick f a = do
     ticks <- replicateM n (tick f a)
     pure (fst <$> ticks, snd $ last ticks)
+
+spins :: Int -> ((a -> b) -> a -> IO (c, b)) ->
+    (a -> b) -> [a] -> IO ([[c]], [b])
+spins n t f as = do
+    cs <- sequence $ spin n t f <$> as
+    pure (fst <$> cs, snd <$> cs)
 
 -- | n measurements of whatever tick engine
 spinM :: Int -> ((a -> IO b) -> a -> IO (c, b)) ->

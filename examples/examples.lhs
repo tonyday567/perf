@@ -37,12 +37,7 @@ The examples below mostly use `Perf.Cycles`.  There is also a monad layer in `Pe
 
 All the imports that are needed for charts
 
-> import Chart.Unit
-> import Chart.Types
-> import Chart.Range
-> import Data.Default
-> import Diagrams.Prelude
-> 
+> import Chart
 
 command line
 ---
@@ -316,12 +311,15 @@ helpers
 > 
 > histLine :: [Double] -> Chart' a
 > histLine xs =
->     line (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) wideScreen
+>     lines (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
 >      (zipWith (\x y -> [V2 x 0,V2 x y]) [0..] xs) <>
->         axes def wideScreen
->         [ toCorners (V2
+>      axes
+>      ( chartAspect .~ widescreen
+>      $ chartRange .~ Just
+>        (V2
 >          (Range (0.0,fromIntegral $ length xs))
->          (Range (0,L.fold (L.Fold max 0 identity) xs)))]
+>          (Range (0,L.fold (L.Fold max 0 identity) xs)))
+>      $ def)
 
 
 

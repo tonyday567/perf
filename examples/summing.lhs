@@ -8,42 +8,23 @@ http://ghc.readthedocs.io/en/8.0.2/sooner.html
 > {-# LANGUAGE DeriveGeneric     #-}
 > {-# LANGUAGE NoImplicitPrelude #-}
 > {-# LANGUAGE TypeOperators     #-}
+> import Chart
+> import Data.List.NonEmpty (NonEmpty(..))
 > import Data.Primitive.MutVar
+> import Data.TDigest
 > import Data.Text (pack, unpack, intercalate)
 > import Data.Text.IO (writeFile)
 > import Formatting
-> import Protolude hiding ((%), intercalate)
-> import Data.List.NonEmpty (NonEmpty(..))
-> 
-> import qualified Control.Foldl as L
-> import qualified Data.Vector as V
-> import Perf
-> import Perf.Measure
-> import Perf.Cycles
-> import Data.TDigest
-
-All the imports that are needed for charts
-
-> import Chart.Unit
-> import Chart.Types
-> import Chart.Range
-> import Data.Default
-> import Diagrams.Prelude
-> import Linear.V4
-> import Data.List ((!!), zipWith4)
-> 
-
-imports for random numbers
-
-> import System.Random.MWC.Probability
-
-command line options parsing
-
 > import Options.Generic
-
-printing of performance output
-
+> import Perf
+> import Perf.Cycles
+> import Perf.Measure
+> import Protolude hiding ((%), intercalate)
+> import System.Random.MWC.Probability
+> import qualified Control.Foldl as L
 > import qualified Data.Map.Strict as Map
+> import qualified Data.Vector as V
+> import Data.List ((!!))
 
 > data Opts = Opts
 >   { runs :: Maybe Int             -- <?> "number of runs"
@@ -73,12 +54,15 @@ printing of performance output
 >           if (chart o) then
 >             let name = fromMaybe "other/summing.svg" (chartName o) in
 >             fileSvg (unpack name) (750,250) $ pad 1.1 $
->             ((hist [def] wideScreen
+>             ((hists [def] widescreen
 >             [zipWith4 V4 [0..] (repeat 0) [1..] xs1]) <>
->             (axes def wideScreen
->             [ toCorners (V2
->              (Range (0.0,(fromIntegral $ length xs1)))
->              (Range (0,(L.fold (L.Fold max 0 identity) xs1))))]))
+>             (axes
+>              ( chartAspect .~ widescreen
+>              $ chartRange .~ Just
+>                ((V2
+>                  (Range (0.0,(fromIntegral $ length xs1)))
+>                  (Range (0,(L.fold (L.Fold max 0 identity) xs1)))))
+>              $ def)))
 >           else (pure ())
 >         pure ()
 >     putStrLn $ showPerf res

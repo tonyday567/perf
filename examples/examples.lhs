@@ -4,7 +4,7 @@
   src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
 </script>
  
-[perf](https://tonyday567.github.io/perf/index.html) [![Build Status](https://travis-ci.org/tonyday567/perf.png)](https://travis-ci.org/tonyday567/perf)
+[perf](https://github.com/tonyday567/perf) [![Build Status](https://travis-ci.org/tonyday567/perf.png)](https://travis-ci.org/tonyday567/perf)
 ===
 
 If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
@@ -29,15 +29,14 @@ The interface is subject to change as intuition develops and rabbit holes explor
 > import qualified Data.Vector as V
 > import qualified Data.Vector.Unboxed as U
 > import qualified Data.Vector.Storable as S
->
+> import Chart
+> 
 
 The examples below mostly use `Perf.Cycles`.  There is also a monad layer in `Perf` which has been used in `other/summing.lhs`.
 
 > import Perf
 
 All the imports that are needed for charts
-
-> import Chart
 
 command line
 ---
@@ -70,12 +69,12 @@ For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s
 `tick_` taps the register twice to get a sense of the cost.
 
 >   onetick <- tick_
->   ticks <- replicateM 10 tick_
+>   ticks' <- replicateM 10 tick_
 >   avtick <- replicateM 1000000 tick_
 >   let average cs = L.fold ((/) <$> L.sum <*> L.genericLength) cs
 >   writeFile "other/onetick.md" $ code
 >     [ "one tick_: " <> pack (show onetick) <> " cycles"
->     , "next 10: " <> pack (show ticks)
+>     , "next 10: " <> pack (show ticks')
 >     , "average over 1m: " <>
 >       pack (show $ average (fromIntegral <$> avtick)) <> " cycles"
 >     ]
@@ -94,7 +93,7 @@ It pays to look at the whole distribution, and a compact way of doing that is to
 >   xs <- replicateM 10000 tick_
 >   writeFile "other/tick_.md" $ code $
 >         (["[min, 10th, 20th, .. 90th, max]:"] :: [Text]) <>
->         [mconcat (sformat (" " % prec 3) <$> deciles (fromIntegral <$> xs))]
+>         [mconcat (sformat (" " % prec 3) <$> deciles 5 (fromIntegral <$> xs))]
 
 ```include
 other/tick_.md
@@ -135,7 +134,7 @@ The exception is the 70th to 90th zone, where the number of cycles creeps up to 
 Charting the 1k sumTo:
 
 >   let xs_0 = fromIntegral <$> take 10000 (cs!!numChart) -- summing to 1000
->   let xs1 = (\x -> min x (trunc*deciles xs_0 !! 5)) <$> xs_0
+>   let xs1 = (\x -> min x (trunc*deciles 5 xs_0 !! 5)) <$> xs_0
 >   fileSvg "other/spin1k.svg" (750,250) $ pad 1.1 $ histLine xs1
 
 ![](other/spin1k.svg)
@@ -187,7 +186,7 @@ other/vectorr.md
 Charting the 1k sumTo:
 
 >   let csr0 = fromIntegral <$> take 10000 (csr!!numChart) -- summing to 1000
->   let csr1 = (\x -> min x (trunc*deciles csr0 !! 5)) <$> csr0
+>   let csr1 = (\x -> min x (trunc*deciles 5 csr0 !! 5)) <$> csr0
 >   fileSvg "other/vector1k.svg" (750,250) $ pad 1.1 $ histLine csr1
 
 ![](other/vector1k.svg)
@@ -210,7 +209,7 @@ other/vectoru.md
 Charting the 1k sumTo:
 
 >   let csu0 = fromIntegral <$> take 10000 (csu!!numChart) -- summing to 1000
->   let csu1 = (\x -> min x (trunc*deciles csu0 !! 5)) <$> csu0
+>   let csu1 = (\x -> min x (trunc*deciles 5 csu0 !! 5)) <$> csu0
 >   fileSvg "other/vectoru1k.svg" (750,250) $ pad 1.1 $ histLine csu1
 
 ![](other/vectoru1k.svg)
@@ -233,7 +232,7 @@ other/vectors.md
 Charting the 1k sumTo:
 
 >   let css0 = fromIntegral <$> take 10000 (css!!numChart) -- summing to 1000
->   let css1 = (\x -> min x (trunc*deciles css0 !! 5)) <$> css0
+>   let css1 = (\x -> min x (trunc*deciles 5 css0 !! 5)) <$> css0
 >   fileSvg "other/vectors1k.svg" (750,250) $ pad 1.1 $ histLine css1
 
 ![](other/vectors1k.svg)
@@ -298,120 +297,27 @@ helpers
 >           sformat (" " % Formatting.expt 2) m <> ": " <>
 >           mconcat (sformat (" " % prec 3) <$> ((/m) <$> qs))
 > 
-> deciles :: forall (f :: * -> *). Foldable f => f Double -> [Double]
-> deciles xs =
->   (\x -> fromMaybe 0 $ quantile x (tdigest xs :: TDigest 25)) <$> ((0.1*) <$> [0..10])
+> deciles :: (Foldable f) => Int -> f Double -> [Double]
+> deciles n xs =
+>   (\x -> fromMaybe 0 $
+>       quantile x (tdigest xs :: TDigest 25)) <$>
+>       ((/fromIntegral n) . fromIntegral <$> [0..n]) :: [Double]
 > 
 > reportQuantiles ::  [[Cycles]] -> [Double] -> FilePath -> IO ()
 > reportQuantiles css as name =
->   writeFile name $ code $ zipWith showxs (deciles . fmap fromIntegral <$> css) as
+>   writeFile name $ code $ zipWith showxs (deciles 5 . fmap fromIntegral <$> css) as
 > 
 > code :: [Text] -> Text
 > code cs = "\n~~~\n" <> intercalate "\n" cs <> "\n~~~\n"
 > 
 > histLine :: [Double] -> Chart' a
 > histLine xs =
->     lines (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
+>     lineChart (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
 >      (zipWith (\x y -> [V2 x 0,V2 x y]) [0..] xs) <>
 >      axes
 >      ( chartAspect .~ widescreen
 >      $ chartRange .~ Just
->        (V2
+>        (Rect $ V2
 >          (Range (0.0,fromIntegral $ length xs))
 >          (Range (0,L.fold (L.Fold max 0 identity) xs)))
 >      $ def)
-
-
-
-
-
-notes
-===
-
-rdpmc
----
-
-A first-cousin of rdtsc, [rdpmc](https://software.intel.com/en-us/forums/software-tuning-performance-optimization-platform-monitoring/topic/595214), offers the possibility to track page faults, cache misses and other such beasties, but lacks an easy entry-point c library.
-
-workflow
----
-
-~~~
-stack build --copy-bins --exec "perf-examples" --exec "pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include" --exec "pandoc -f markdown+lhs -t markdown -i examples/examples.lhs -o readme.md --filter pandoc-include"
-~~~
-
-time performance references
----
-
-[Optimising haskell for a tight inner loop](http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html)
-
-[Tools for analysing performance](http://stackoverflow.com/questions/3276240/tools-for-analyzing-performance-of-a-haskell-program/3276557#3276557)
-
-[Write haskell as fast as c](https://donsbot.wordpress.com/2008/05/06/write-haskell-as-fast-as-c-exploiting-strictness-laziness-and-recursion/)
-
-[Reading ghc core](http://stackoverflow.com/questions/6121146/reading-ghc-core)
-
-space performance references
----
-
-[Chasing space leaks in shake](http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html)
-
-[Space leak zoo](http://blog.ezyang.com/2011/05/space-leak-zoo/)
-
-[Anatomy of a thunk leak](http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/)
-
-[An insufficiently lazy map](http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/)
-
-[Pinpointing space leaks in big programs](http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/)
-
-A (fairly old) checklist
----
-
-1. compile with rtsopts flag
-
-~~~
-find . -name '*.o' -type f -print -delete
-find . -name '*.hl' -type f -print -delete
-ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts
-~~~
-
-2. check GC `example +RTS -s`
-
-3. enabling profiling
-
-- a normal ghc `ghc -fforce-recomp --make -O2 -isrc example/example.hs`
-- profile enabled automatically `ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
-- if template haskell `ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
-
-4. create an A.prof on execution: `time A +RTS -p`
-
-5. space
-
-~~~
-  time dev/Reuters/A "test/data/reuters-100k.txt" +RTS -p -hc
-  hp2ps -e8in -c A.hp
-~~~
-
-    hy = types
-    hd = constructors
-
-6. strictness pragmas?
-
-7. space leaks
-
-~~~
-+RTS -s - additional memory
-+RTS -xt -hy
-~~~
-
-cache cycle estimates
----
-
-| register | 4 per cycle |
-| L1 Cache access| 3-4 cycles|
-| L2 Cache access| 11-12 cycles|
-| L3 unified access| 30 - 40|
-| DRAM hit| 195 cycles|
-| L1 miss | 40 cycles|
-| L2 miss | >600 cycles|
-

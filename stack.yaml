@@ -1,20 +1,11 @@
-resolver: lts-7.19
+resolver: lts-8.9
 
 packages:
 - '.'
-- location:
-    git: https://github.com/futurice/haskell-tdigest
-    commit: 7b16d730b84b1fca2f97dfa3862d5781856d19e9
-  extra-dep: true
-- '../chart-unit'
-#- location:
-#    git: https://github.com/tonyday567/chart-unit.git
-#    commit: b8485c83fda7b6768010053f7faa66e7f37d4fb1
-#  extra-dep: true
-- location:
-    git: https://github.com/tonyday567/tower.git
-    commit: ff36e3028c84d45329b6dc928150f317e598ee1c
-  extra-dep: true
 
 extra-deps:
   - rdtsc-1.3.0.1
+  - tdigest-0.1
+  - chart-unit-0.3.1
+  - numhask-0.0.4
+  - numhask-range-0.0.2

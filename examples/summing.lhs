@@ -5,6 +5,8 @@ http://ghc.readthedocs.io/en/8.0.2/sooner.html
 > {-# LANGUAGE ScopedTypeVariables #-}
 > {-# LANGUAGE OverloadedStrings #-}
 > {-# LANGUAGE DataKinds #-}
+> {-# LANGUAGE RankNTypes #-}
+> {-# LANGUAGE FlexibleContexts #-}
 > {-# LANGUAGE DeriveGeneric     #-}
 > {-# LANGUAGE NoImplicitPrelude #-}
 > {-# LANGUAGE TypeOperators     #-}
@@ -53,19 +55,22 @@ http://ghc.readthedocs.io/en/8.0.2/sooner.html
 >         _ <- perf "chart creation" cycles $ do
 >           if (chart o) then
 >             let name = fromMaybe "other/summing.svg" (chartName o) in
->             fileSvg (unpack name) (750,250) $ pad 1.1 $
->             ((hists [def] widescreen
->             [zipWith4 V4 [0..] (repeat 0) [1..] xs1]) <>
->             (axes
->              ( chartAspect .~ widescreen
->              $ chartRange .~ Just
->                ((V2
->                  (Range (0.0,(fromIntegral $ length xs1)))
->                  (Range (0,(L.fold (L.Fold max 0 identity) xs1)))))
->              $ def)))
+>             fileSvg (unpack name) (750,250) $ pad 1.1 $ histLine xs1
 >           else (pure ())
 >         pure ()
 >     putStrLn $ showPerf res
+
+> histLine :: [Double] -> Chart' a
+> histLine xs =
+>     lineChart (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
+>      (zipWith (\x y -> [V2 x 0,V2 x y]) [0..] xs) <>
+>      axes
+>      ( chartAspect .~ widescreen
+>      $ chartRange .~ Just
+>        (Rect $ V2
+>          (Range (0.0,fromIntegral $ length xs))
+>          (Range (0,L.fold (L.Fold max 0 identity) xs)))
+>      $ def)
 
 > sum1 :: Double -> Int -> IO [Double]
 > sum1 a n = do

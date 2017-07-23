@@ -58,9 +58,9 @@ main <span class="fu">=</span> <span class="kw">do</span>
     , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
       pack (show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
     ]</code></pre></div>
-<pre><code>one tick_: 30 cycles
-next 10: [50,14,48,14,12,14,14,48,14,14]
-average over 1m: 23.906295 cycles</code></pre>
+<pre><code>one tick_: 44 cycles
+next 10: [28,24,28,24,28,24,28,24,28,24]
+average over 1m: 20.985862 cycles</code></pre>
 <p>Before we actually measure something, lets take a closer look at tick_.</p>
 <p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
 <p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
@@ -70,7 +70,7 @@ average over 1m: 23.906295 cycles</code></pre>
         ([<span class="st">&quot;[min, 10th, 20th, .. 90th, max]:&quot;</span>]<span class="ot"> ::</span> [<span class="dt">Text</span>]) <span class="fu">&lt;&gt;</span>
         [mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> deciles <span class="dv">5</span> (fromIntegral <span class="fu">&lt;$&gt;</span> xs))]</code></pre></div>
 <pre><code>[min, 10th, 20th, .. 90th, max]:
- 24.0 25.6 26.8 27.9 28.9 92.0</code></pre>
+ 18.0 19.5 20.5 21.6 28.1 193</code></pre>
 <p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of GC activity and cache miss-fires.</p>
 <p>The quantile print of tick_ sometimes shows a 12 to 14 point jump around the 90th percential, and this is in the zone of an L2 access. Without a warmup, one or more larger values occur at the start, and often are in the zone of an L2 miss. Sometimes there's also a few large hiccoughs at around 2k cycles.</p>
 <h1 id="summing">summing</h1>
@@ -81,11 +81,11 @@ average over 1m: 23.906295 cycles</code></pre>
   _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
   (cs,_) <span class="ot">&lt;-</span> spins n tick f as
   reportQuantiles cs as <span class="st">&quot;other/spin.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  482 500 502 505 523 2.74e5
- 1.00e1:  155 157 161 162 167 4.73e4
- 1.00e2:  127 128 148 177 204 3.85e3
- 1.00e3:  124 128 140 171 188 582
- 1.00e4:  124 132 139 147 181 274</code></pre>
+<pre><code> 1.00e0:  406 424 425 427 456 2.88e5
+ 1.00e1:  151 157 157 160 165 4.25e4
+ 1.00e2:  124 125 128 146 173 3.83e3
+ 1.00e3:  121 124 141 168 187 640
+ 1.00e4:  121 132 142 168 186 278</code></pre>
 <p>Each row represents summing to a certain point: 1 up to 10000, and each column is a decile: min, 10th .. 90th, max. The values in each cell are the number of cycles divided by the number of runs and the number of sumTo.</p>
 <p>The first row (summing to 1) represents the cost of setting up the sum, so we're looking at about (692 - 128) = 560 cycles every run.</p>
 <p>Overall, the computation looks like it's running in O(n) where n is the number of runs * nuber of sumTo. Specifically, I would write down the order at about:</p>
@@ -114,11 +114,11 @@ average over 1m: 23.906295 cycles</code></pre>
       sumv x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> x
   (csv,_) <span class="ot">&lt;-</span> spins n tick sumv asv
   reportQuantiles csv as <span class="st">&quot;other/vectorGen.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  52.0 58.8 60.0 65.3 68.0 1.77e5
- 1.00e1:  16.4 17.5 17.8 18.0 18.3 1.01e5
- 1.00e2:  14.3 16.0 16.6 17.5 25.8 8.27e3
- 1.00e3:  15.2 15.5 16.1 18.6 21.4 1.05e3
- 1.00e4:  15.4 16.7 17.4 23.3 34.7 111</code></pre>
+<pre><code> 1.00e0:  54.0 61.1 63.0 69.3 70.8 1.82e5
+ 1.00e1:  18.4 19.9 20.2 20.6 21.3 1.14e5
+ 1.00e2:  14.8 16.1 16.5 16.9 17.4 1.05e4
+ 1.00e3:  15.2 15.5 15.9 17.9 21.4 1.85e3
+ 1.00e4:  16.0 16.9 19.6 23.4 36.5 191</code></pre>
 <h2 id="randomizing-data">randomizing data</h2>
 <p>To avoid ghc (and fusion) trickiness, it's often a good idea to use random numbers instead of simple progressions. One day, a compiler will discover <code>x(x+1)/2</code> and then we'll be in real trouble.</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  mwc <span class="ot">&lt;-</span> create
@@ -126,11 +126,11 @@ average over 1m: 23.906295 cycles</code></pre>
   void <span class="fu">$</span> warmup <span class="dv">100</span>
   (csr,_) <span class="ot">&lt;-</span> spins n tick sumv asr
   reportQuantiles csr as <span class="st">&quot;other/vectorr.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  14.0 29.4 30.2 31.1 36.6 1.28e6
- 1.00e1:  6.80 8.09 8.21 8.35 8.95 1.33e5
- 1.00e2:  6.76 6.83 6.89 6.94 10.7 1.37e4
- 1.00e3:  6.54 6.58 7.64 9.10 9.15 2.25e3
- 1.00e4:  6.68 6.71 6.73 7.78 9.29 231</code></pre>
+<pre><code> 1.00e0:  21.0 32.2 33.5 38.0 44.3 1.39e6
+ 1.00e1:  7.50 9.61 9.78 9.93 10.1 4.88e5
+ 1.00e2:  6.66 7.01 7.25 7.47 7.98 1.83e4
+ 1.00e3:  6.58 6.84 6.90 7.12 9.20 1.47e3
+ 1.00e4:  8.88 9.16 9.38 9.91 12.4 240</code></pre>
 <p>Charting the 1k sumTo:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> csr0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (csr<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
   <span class="kw">let</span> csr1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> csr0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> csr0
@@ -146,11 +146,11 @@ average over 1m: 23.906295 cycles</code></pre>
   void <span class="fu">$</span> warmup <span class="dv">100</span>
   (csu,_) <span class="ot">&lt;-</span> spins n tick sumu asu
   reportQuantiles csu as <span class="st">&quot;other/vectoru.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  14.0 27.6 28.3 29.1 31.0 1.01e6
- 1.00e1:  3.20 4.93 5.00 5.08 5.20 1.03e5
- 1.00e2:  2.36 2.56 2.66 2.69 2.70 2.05e5
- 1.00e3:  2.19 2.21 2.27 2.27 3.60 1.04e3
- 1.00e4:  2.17 2.17 2.23 2.52 3.01 172</code></pre>
+<pre><code> 1.00e0:  16.0 28.6 29.6 30.4 35.8 1.02e6
+ 1.00e1:  3.40 5.28 5.51 7.53 8.16 1.78e5
+ 1.00e2:  2.46 4.13 4.16 4.20 4.21 1.62e4
+ 1.00e3:  2.19 2.55 2.56 3.05 3.06 1.36e3
+ 1.00e4:  2.17 2.17 2.52 3.01 3.32 162</code></pre>
 <p>Charting the 1k sumTo:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> csu0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (csu<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
   <span class="kw">let</span> csu1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> csu0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> csu0
@@ -166,11 +166,11 @@ average over 1m: 23.906295 cycles</code></pre>
   void <span class="fu">$</span> warmup <span class="dv">100</span>
   (css,_) <span class="ot">&lt;-</span> spins n tick sums ass
   reportQuantiles css as <span class="st">&quot;other/vectors.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  14.0 27.3 28.0 28.8 30.5 1.01e6
- 1.00e1:  3.00 4.64 4.81 4.97 7.12 1.57e5
- 1.00e2:  3.84 4.02 4.06 4.08 4.09 1.63e4
- 1.00e3:  2.54 2.56 3.04 3.05 3.05 1.63e3
- 1.00e4:  2.17 2.17 2.18 2.52 3.01 106</code></pre>
+<pre><code> 1.00e0:  12.0 19.5 20.3 22.8 53.7 7.52e5
+ 1.00e1:  2.20 3.40 4.66 4.87 6.53 1.01e5
+ 1.00e2:  2.34 2.46 2.53 2.54 2.55 9.88e3
+ 1.00e3:  2.19 2.20 2.24 2.27 2.27 1.04e3
+ 1.00e4:  2.17 2.17 2.52 3.01 3.01 98.7</code></pre>
 <p>Charting the 1k sumTo:</p>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> css0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (css<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
   <span class="kw">let</span> css1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> css0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> css0
@@ -193,35 +193,35 @@ average over 1m: 23.906295 cycles</code></pre>
   reportQuantiles (fmap fst <span class="fu">&lt;$&gt;</span> csvfa) as <span class="st">&quot;other/vectorfaf.md&quot;</span>
   reportQuantiles (fmap snd <span class="fu">&lt;$&gt;</span> csvfa) as <span class="st">&quot;other/vectorfaa.md&quot;</span></code></pre></div>
 <p>a full tick</p>
-<pre><code> 1.00e0:  24.0 39.4 40.9 42.6 44.8 5.02e5
- 1.00e1:  9.60 11.2 11.5 11.6 11.8 2.33e5
- 1.00e2:  9.36 9.47 9.49 9.52 9.56 1.83e4
- 1.00e3:  6.52 6.54 6.55 6.78 7.60 1.43e3
- 1.00e4:  6.51 6.52 6.53 6.86 9.03 140</code></pre>
+<pre><code> 1.00e0:  24.0 32.1 33.2 34.0 34.6 7.21e5
+ 1.00e1:  7.40 8.65 8.86 8.97 9.22 1.36e5
+ 1.00e2:  6.74 7.14 7.25 7.27 7.31 1.48e4
+ 1.00e3:  6.69 6.70 6.73 6.74 6.92 1.64e3
+ 1.00e4:  6.52 6.54 6.91 7.94 9.04 161</code></pre>
 <p>just function application</p>
-<pre><code> 1.00e0:  14.0 28.8 29.6 30.3 35.0 1.36e6
- 1.00e1:  6.60 8.12 8.25 8.42 9.00 1.52e5
- 1.00e2:  6.64 6.82 6.83 6.89 6.92 1.35e4
- 1.00e3:  6.52 6.54 7.59 9.05 9.06 1.57e3
- 1.00e4:  6.51 6.52 6.53 7.57 9.03 174</code></pre>
+<pre><code> 1.00e0:  14.0 29.0 29.7 30.4 35.8 1.59e6
+ 1.00e1:  5.20 8.13 8.23 8.88 9.21 1.44e5
+ 1.00e2:  7.09 7.23 7.25 7.26 7.29 1.42e4
+ 1.00e3:  6.53 7.81 9.05 9.05 9.14 1.92e3
+ 1.00e4:  6.52 6.53 6.71 7.59 9.04 197</code></pre>
 <p>just forcing <code>a</code>:</p>
-<pre><code> 1.00e0:  24.0 27.7 31.4 35.1 36.6 156
- 1.00e1:  2.40 2.86 3.24 3.56 3.81 16.8
- 1.00e2:  0.240 0.259 0.270 0.280 0.291 1.12
- 1.00e3:  0.0120 0.0146 0.0215 0.0221 0.0277 0.156
- 1.00e4:  0.00120 0.00502 0.00564 0.00664 0.00760 0.0364</code></pre>
+<pre><code> 1.00e0:  24.0 25.7 26.9 28.0 29.1 256
+ 1.00e1:  1.80 2.01 2.15 2.64 3.13 22.6
+ 1.00e2:  0.180 0.196 0.206 0.216 0.283 2.32
+ 1.00e3:  0.0120 0.0198 0.0220 0.0229 0.0279 0.128
+ 1.00e4:  0.00120 0.00459 0.00524 0.00612 0.00725 0.107</code></pre>
 <p>the f splice of f a</p>
-<pre><code> 1.00e0:  16.0 26.0 27.1 28.0 28.9 1.46e6
- 1.00e1:  6.80 7.88 7.98 8.08 8.27 1.66e5
- 1.00e2:  6.74 6.80 6.82 6.85 6.91 1.50e4
- 1.00e3:  6.53 6.53 6.55 6.74 8.40 1.50e3
- 1.00e4:  6.51 6.52 6.53 6.72 9.02 248</code></pre>
+<pre><code> 1.00e0:  16.0 29.3 30.3 33.1 34.5 1.45e6
+ 1.00e1:  6.80 7.98 8.13 8.23 8.49 1.44e5
+ 1.00e2:  6.74 7.92 8.05 9.48 9.51 6.09e5
+ 1.00e3:  6.53 6.71 7.60 8.76 9.06 2.58e3
+ 1.00e4:  6.50 6.52 6.91 9.01 9.03 277</code></pre>
 <p>the a slice of fa</p>
-<pre><code> 1.00e0:  12.0 14.7 21.2 21.8 22.5 104
- 1.00e1:  1.20 1.47 2.12 2.19 2.25 9.80
- 1.00e2:  0.120 0.146 0.212 0.219 0.225 1.34
- 1.00e3:  0.0120 0.0147 0.0216 0.0225 0.0282 0.164
- 1.00e4:  0.00120 0.00583 0.00699 0.00777 0.00878 0.0304</code></pre>
+<pre><code> 1.00e0:  12.0 18.7 21.0 21.8 22.5 136
+ 1.00e1:  1.20 1.48 2.11 2.18 2.25 12.6
+ 1.00e2:  0.120 0.210 0.234 0.278 0.283 3.92
+ 1.00e3:  0.0120 0.0207 0.0222 0.0277 0.0284 0.276
+ 1.00e4:  0.00120 0.00540 0.00625 0.00718 0.00806 0.102</code></pre>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  pure ()</code></pre></div>
 <h2 id="helpers">helpers</h2>
 <div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>

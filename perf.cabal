@@ -1,11 +1,11 @@
-name:
-  perf
-version:
-  0.1.0
+name: perf
+version: 0.1.1
 synopsis:
-  See readme.lhs
+  low-level performance statistics
 description:
-  See readme.lhs for description
+  .
+  See <<https://tonyday567.github.io/perf>> for example results and write-up.
+  .
 category:
   project
 homepage:
@@ -41,7 +41,6 @@ library
     foldl,
     protolude,
     tdigest,
-    vector,
     containers,
     time
   default-extensions:
@@ -95,21 +94,14 @@ executable perf-examples
   build-depends:
     base >= 4.7 && < 5,
     protolude,
-    rdtsc,
     perf,
-    lens,
     optparse-generic,
-    data-default,
-    linear,
     formatting,
     foldl,
-    exact-combinatorics,
     text,
     vector,
-    primitive,
     tdigest,
     chart-unit,
-    diagrams-lib,
     mwc-probability
   default-extensions:
     NoImplicitPrelude,

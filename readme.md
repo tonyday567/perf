@@ -1,6 +1,10 @@
 
-[perf](https://tonyday567.github.io/perf/index.html) [![Build Status](https://travis-ci.org/tonyday567/perf.png)](https://travis-ci.org/tonyday567/perf)
+[perf](https://tonyday567.github.io/perf/index.html)
 ===
+
+[![Build Status](https://travis-ci.org/tonyday567/perf.svg)](https://travis-ci.org/tonyday567/perf) [![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![lts](https://www.stackage.org/package/perf/badge/lts)](http://stackage.org/lts/package/perf) [![nightly](https://www.stackage.org/package/perf/badge/nightly)](http://stackage.org/nightly/package/perf)
+
+[repo](https://github.com/tonyday567/perf)
 
 This repo is an experiment in measuring cycles (or ticks) to develop intuition about what is going on at the very fast level.
 
@@ -9,7 +13,9 @@ See https://tonyday567.github.io/perf for example results and write-up.
 workflow
 --------
 
-    stack build --copy-bins --exec "perf-examples" --exec "pandoc -f markdown+lhs -t html -i examples/examples.lhs -o index.html --filter pandoc-include"
+~~~
+stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown+lhs -i examples/examples.lhs -t html -o index.html --filter pandoc-include --mathjax" --file-watch
+~~~
 
 time performance references
 ---

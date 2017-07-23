@@ -1,10 +1,10 @@
 name: perf
-version: 0.1.1
+version: 0.1.2
 synopsis:
   low-level performance statistics
 description:
   .
-  See <<https://tonyday567.github.io/perf>> for example results and write-up.
+  See <https://tonyday567.github.io/perf perf> for example results and write-up.
   .
 category:
   project

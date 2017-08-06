@@ -34,6 +34,7 @@ The interface is subject to change as intuition develops and rabbit holes explor
 > import qualified Data.Vector.Unboxed as U
 > import qualified Data.Vector.Storable as S
 > import Chart
+> import Diagrams.Prelude
 > 
 
 The examples below mostly use `Perf.Cycles`.  There is also a monad layer in `Perf` which has been used in `other/summing.lhs`.
@@ -316,12 +317,12 @@ helpers
 > 
 > histLine :: [Double] -> Chart' a
 > histLine xs =
->     lineChart (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
->      (zipWith (\x y -> [V2 x 0,V2 x y]) [0..] xs) <>
+>     lineChart_ (repeat (LineConfig 0.002 (Color 0 0 1 0.1))) widescreen
+>      (zipWith (\x y -> [Pair x 0,Pair x y]) [0..] xs) <>
 >      axes
 >      ( chartAspect .~ widescreen
 >      $ chartRange .~ Just
->        (Rect $ V2
->          (Range (0.0,fromIntegral $ length xs))
->          (Range (0,L.fold (L.Fold max 0 identity) xs)))
+>        (Ranges
+>          (Range 0.0 (fromIntegral $ length xs))
+>          (Range 0 (L.fold (L.Fold max 0 identity) xs)))
 >      $ def)

@@ -1,258 +1,134 @@
-<meta charset="utf-8"> <link rel="stylesheet" href="https://tonyday567.github.io/other/lhs.css">
+<meta charset="utf-8"> <link rel="stylesheet" href="https://tonyday567.github.io/other/lhs.css"> <link href="https://fonts.googleapis.com/css?family=Inconsolata|Lora|Raleway" rel="stylesheet">
 <script type="text/javascript" async
-  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
 </script>
 <h1 id="perf"><a href="https://tonyday567.github.io/perf/index.html">perf</a></h1>
 <p><a href="https://travis-ci.org/tonyday567/perf"><img src="https://travis-ci.org/tonyday567/perf.svg" alt="Build Status" /></a> <a href="https://hackage.haskell.org/package/perf"><img src="https://img.shields.io/hackage/v/perf.svg" alt="Hackage" /></a> <a href="http://stackage.org/lts/package/perf"><img src="https://www.stackage.org/package/perf/badge/lts" alt="lts" /></a> <a href="http://stackage.org/nightly/package/perf"><img src="https://www.stackage.org/package/perf/badge/nightly" alt="nightly" /></a></p>
 <p><a href="https://github.com/tonyday567/perf">repo</a></p>
-<p>If you want to make stuff very fast in haskell, you need to dig down below the criterion abstraction-level and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
-<p>These examples are experiments in measuring cycles (or ticks), a development of intuition about what is going on at the very fast level.</p>
-<p>The interface is subject to change as intuition develops and rabbit holes explored.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">{-# OPTIONS_GHC -Wall #-}</span>
-<span class="ot">{-# OPTIONS_GHC -fno-warn-type-defaults #-}</span>
-<span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
-<span class="ot">{-# LANGUAGE DataKinds #-}</span>
-<span class="kw">import </span><span class="dt">Data.Text</span> (pack, intercalate)
-<span class="kw">import </span><span class="dt">Data.Text.IO</span> (writeFile)
-<span class="kw">import </span><span class="dt">Formatting</span>
-<span class="kw">import </span><span class="dt">Protolude</span> <span class="kw">hiding</span> ((%), intercalate)
-<span class="kw">import </span><span class="dt">Data.List</span> ((!!))
-<span class="kw">import </span><span class="dt">Data.TDigest</span>
-<span class="kw">import </span><span class="dt">System.Random.MWC.Probability</span>
-<span class="kw">import </span><span class="dt">Options.Generic</span>
-<span class="kw">import qualified</span> <span class="dt">Control.Foldl</span> <span class="kw">as</span> <span class="dt">L</span>
-<span class="kw">import qualified</span> <span class="dt">Data.Vector</span> <span class="kw">as</span> <span class="dt">V</span>
-<span class="kw">import qualified</span> <span class="dt">Data.Vector.Unboxed</span> <span class="kw">as</span> <span class="dt">U</span>
-<span class="kw">import qualified</span> <span class="dt">Data.Vector.Storable</span> <span class="kw">as</span> <span class="dt">S</span>
-<span class="kw">import </span><span class="dt">Chart</span>
-<span class="kw">import </span><span class="dt">Diagrams.Prelude</span></code></pre></div>
-<p>The examples below mostly use <code>Perf.Cycles</code>. There is also a monad layer in <code>Perf</code> which has been used in <code>other/summing.lhs</code>.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="kw">import </span><span class="dt">Perf</span></code></pre></div>
-<p>All the imports that are needed for charts</p>
-<h2 id="command-line">command line</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Opts</span> <span class="fu">=</span> <span class="dt">Opts</span>
-  {<span class="ot"> runs ::</span> <span class="dt">Maybe</span> <span class="dt">Int</span>    <span class="co">-- &lt;?&gt; &quot;number of runs&quot;</span>
-  ,<span class="ot"> sumTo ::</span> [<span class="dt">Double</span>] <span class="co">-- &lt;?&gt; &quot;sum to this number&quot;</span>
-  ,<span class="ot"> chartNum ::</span> <span class="dt">Maybe</span> <span class="dt">Int</span>
-  ,<span class="ot"> truncAt ::</span> <span class="dt">Maybe</span> <span class="dt">Double</span>
-  }
-  <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">Show</span>)
-
-<span class="kw">instance</span> <span class="dt">ParseRecord</span> <span class="dt">Opts</span></code></pre></div>
-<h2 id="main">main</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
-main <span class="fu">=</span> <span class="kw">do</span>
-<span class="ot">  o ::</span> <span class="dt">Opts</span> <span class="ot">&lt;-</span> getRecord <span class="st">&quot;a random bit of text&quot;</span>
-  <span class="kw">let</span> n <span class="fu">=</span> fromMaybe <span class="dv">10000</span> (runs o)
-  <span class="kw">let</span> as <span class="fu">=</span> <span class="kw">case</span> sumTo o <span class="kw">of</span>
-        [] <span class="ot">-&gt;</span> [<span class="dv">1</span>,<span class="dv">10</span>,<span class="dv">100</span>,<span class="dv">1000</span>,<span class="dv">10000</span>]
-        x <span class="ot">-&gt;</span> x
-  <span class="kw">let</span> trunc <span class="fu">=</span> fromMaybe <span class="dv">5</span> (truncAt o)
-  <span class="kw">let</span> numChart <span class="fu">=</span> min (length as) <span class="fu">$</span> fromMaybe <span class="dv">3</span> (chartNum o)</code></pre></div>
-<p>For reference, based on a 2.6G machine one cycle is = 0.38 𝛈s</p>
-<p><code>tick_</code> taps the register twice to get a sense of the cost.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  onetick <span class="ot">&lt;-</span> tick_
-  ticks&#39; <span class="ot">&lt;-</span> replicateM <span class="dv">10</span> tick_
-  avtick <span class="ot">&lt;-</span> replicateM <span class="dv">1000000</span> tick_
-  <span class="kw">let</span> average cs <span class="fu">=</span> L.fold ((<span class="fu">/</span>) <span class="fu">&lt;$&gt;</span> L.sum <span class="fu">&lt;*&gt;</span> L.genericLength) cs
-  writeFile <span class="st">&quot;other/onetick.md&quot;</span> <span class="fu">$</span> code
-    [ <span class="st">&quot;one tick_: &quot;</span> <span class="fu">&lt;&gt;</span> pack (show onetick) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
-    , <span class="st">&quot;next 10: &quot;</span> <span class="fu">&lt;&gt;</span> pack (show ticks&#39;)
-    , <span class="st">&quot;average over 1m: &quot;</span> <span class="fu">&lt;&gt;</span>
-      pack (show <span class="fu">$</span> average (fromIntegral <span class="fu">&lt;$&gt;</span> avtick)) <span class="fu">&lt;&gt;</span> <span class="st">&quot; cycles&quot;</span>
-    ]</code></pre></div>
-<pre><code>one tick_: 674 cycles
-next 10: [22,18,20,20,20,18,16,18,18,18]
-average over 1m: 19.6186 cycles</code></pre>
-<p>Before we actually measure something, lets take a closer look at tick_.</p>
-<p>A pattern I see on my machine are shifts by multiples of 4, which correspond to roughly the L1 <a href="http://stackoverflow.com/questions/1126529/what-is-the-cost-of-an-l1-cache-miss">cache latency</a>.</p>
-<p>It pays to look at the whole distribution, and a compact way of doing that is to calculate quantiles:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="co">-- warmup 100</span>
-  xs <span class="ot">&lt;-</span> replicateM <span class="dv">10000</span> tick_
-  writeFile <span class="st">&quot;other/tick_.md&quot;</span> <span class="fu">$</span> code <span class="fu">$</span>
-        ([<span class="st">&quot;[min, 10th, 20th, .. 90th, max]:&quot;</span>]<span class="ot"> ::</span> [<span class="dt">Text</span>]) <span class="fu">&lt;&gt;</span>
-        [mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> deciles <span class="dv">5</span> (fromIntegral <span class="fu">&lt;$&gt;</span> xs))]</code></pre></div>
-<pre><code>[min, 10th, 20th, .. 90th, max]:
- 14.0 15.1 15.7 16.3 17.0 160</code></pre>
-<p>The important cycle count for most work is around the 30th to 50th percentile, where you get a clean measure, hopefully free of GC activity and cache miss-fires.</p>
-<p>The quantile print of tick_ sometimes shows a 12 to 14 point jump around the 90th percential, and this is in the zone of an L2 access. Without a warmup, one or more larger values occur at the start, and often are in the zone of an L2 miss. Sometimes there's also a few large hiccoughs at around 2k cycles.</p>
-<h1 id="summing">summing</h1>
+<p>If you want to make stuff very fast in haskell, you need to dig down below the criterion-style level of abstraction and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
+<p>This library is an experiment in measuring cycles (or ticks), and development of intuition about what is going on at the very fast level.</p>
+<h1 id="examples">Examples</h1>
+<p>The code for all results can be found in <a href="examples/examples.hs" class="uri">examples/examples.hs</a>.</p>
+<h2 id="tick_">tick_</h2>
+<h2 id="tick">tick</h2>
 <p>Let's measure something. The simplest something I could think of was summing.</p>
-<p>The helper function <code>reportQuantiles</code> utilises <code>spins</code> which takes n measurements of a function application over a range of values to apply.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> f ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
-      f x <span class="fu">=</span> foldl&#39; (<span class="fu">+</span>) <span class="dv">0</span> [<span class="dv">1</span><span class="fu">..</span>x]
-  _ <span class="ot">&lt;-</span> warmup <span class="dv">100</span>
-  (cs,_) <span class="ot">&lt;-</span> spins n tick f as
-  reportQuantiles cs as <span class="st">&quot;other/spin.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  286 302 305 307 345 3.52e5
- 1.00e1:  103 106 109 111 131 4.59e4
- 1.00e2:  75.9 77.5 78.4 89.5 91.2 4.60e3
- 1.00e3:  75.1 76.6 87.9 89.3 110 519
- 1.00e4:  75.3 81.3 86.7 94.7 107 432</code></pre>
-<p>Each row represents summing to a certain point: 1 up to 10000, and each column is a decile: min, 10th .. 90th, max. The values in each cell are the number of cycles divided by the number of runs and the number of sumTo.</p>
-<p>The first row (summing to 1) represents the cost of setting up the sum, so we're looking at about (692 - 128) = 560 cycles every run.</p>
-<p>Overall, the computation looks like it's running in O(n) where n is the number of runs * nuber of sumTo. Specifically, I would write down the order at about:</p>
-<pre><code>123 * o(n) + 560 * o(1)</code></pre>
-<p>The exception is the 70th to 90th zone, where the number of cycles creeps up to 194 for 1k sumTo at the 90th percentile.</p>
-<p>Charting the 1k sumTo:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> xs_0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (cs<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
-  <span class="kw">let</span> xs1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> xs_0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> xs_0
-  fileSvg <span class="st">&quot;other/spin1k.svg&quot;</span> (<span class="dv">750</span>,<span class="dv">250</span>) <span class="fu">$</span> pad <span class="fl">1.1</span> <span class="fu">$</span> histLine xs1</code></pre></div>
-<div class="figure">
-<img src="other/spin1k.svg" />
-
-</div>
-<p>Switching to a solo experiment gives:</p>
+<pre><code>one tick: 197012 cycles
+average over 1000: 10222.79 cycles
+[min, 30th, median, 90th, 99th, max]:
+ 1.002e4 1.011e4 1.013e4 1.044e4 1.051e4 2.623e4</code></pre>
+<h2 id="ticks">ticks</h2>
+<pre><code>sum to 1000.0
+Perf.ticks n f a                        8.37e3 cycles
+Main.ticks n f a                        8.38e3 cycles
+Perf.ticksIO n (pure $ f a)             8.38e3 cycles
+Perf.qtick n f a                        8.38e3 cycles
+Main.qtick n f a                        8.38e3 cycles
+replicateM n (tick f a)                 8.37e3 cycles
+replicateM&#39; n (tick f a)                9.74e3 cycles
+replicateM n (tickIO (pure (f a)))      1.21e4 cycles
+replicateM n (tick (app (f a)) ())      9.72e3 cycles
+replicateM n (tick identity (f n))      18.2 cycles
+replicateM n (tick (const (f a)) ())    9.71e3 cycles
+(replicateM n . tick f) &lt;$&gt; [1,10,100,1000,10000]:  16.3 16.2 16.3 16.2 16.2
+Perf.tickns n f [1,10,100,1000,10000]:  16.2 16.2 16.2 16.2 16.2</code></pre>
+<h2 id="vector">vector</h2>
+<h1 id="workflow">workflow</h1>
+<pre><code>stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-install-root)/bin/perf-summing&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i other/header.md readme.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
+<p>solo experiments:</p>
 <pre><code>stack exec &quot;ghc&quot; -- -O2 -rtsopts examples/summing.lhs
 ./examples/summing +RTS -s -RTS --runs 10000 --sumTo 1000 --chart --chartName other/sum1e3.svg --truncAt 4</code></pre>
-<div class="figure">
-<img src="other/sum1e3.svg" />
-
+<h1 id="references">references</h1>
+<ul class="incremental">
+<li><p><a href="https://www.cheatography.com/nash/cheat-sheets/ghc-and-rts-options/">rts cheat sheet</a></p></li>
+<li><p><a href="http://ghc.readthedocs.io/en/8.0.2/sooner.html">ghc tips</a></p></li>
+</ul>
+<h2 id="time">time</h2>
+<ul class="incremental">
+<li><p><a href="http://neilmitchell.blogspot.co.uk/2014/01/optimising-haskell-for-tight-inner-loop.html">Optimising haskell for a tight inner loop</a></p></li>
+<li><p><a href="http://stackoverflow.com/questions/3276240/tools-for-analyzing-performance-of-a-haskell-program/3276557#3276557">Tools for analysing performance</a></p></li>
+<li><p><a href="https://donsbot.wordpress.com/2008/05/06/write-haskell-as-fast-as-c-exploiting-strictness-laziness-and-recursion/">Write haskell as fast as c</a></p></li>
+<li><p><a href="http://stackoverflow.com/questions/6121146/reading-ghc-core">Reading ghc core</a></p></li>
+</ul>
+<h2 id="space">space</h2>
+<ul class="incremental">
+<li><p><a href="http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html">Chasing space leaks in shake</a></p></li>
+<li><p><a href="http://blog.ezyang.com/2011/05/space-leak-zoo/">Space leak zoo</a></p></li>
+<li><p><a href="http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/">Anatomy of a thunk leak</a></p></li>
+<li><p><a href="http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/">An insufficiently lazy map</a></p></li>
+<li><p><a href="http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/">Pinpointing space leaks in big programs</a></p></li>
+</ul>
+<h2 id="memoization">memoization</h2>
+<p>http://okmij.org/ftp/Haskell/#memo-off</p>
+<h2 id="cache-cycle-estimates">cache cycle estimates</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Cache</th>
+<th>Cycles</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>register</td>
+<td>4 per cycle</td>
+</tr>
+<tr class="even">
+<td>L1 Cache access</td>
+<td>3-4 cycles</td>
+</tr>
+<tr class="odd">
+<td>L2 Cache access</td>
+<td>11-12 cycles</td>
+</tr>
+<tr class="even">
+<td>L3 unified access</td>
+<td>30 - 40</td>
+</tr>
+<tr class="odd">
+<td>DRAM hit</td>
+<td>195 cycles</td>
+</tr>
+<tr class="even">
+<td>L1 miss</td>
+<td>40 cycles</td>
+</tr>
+<tr class="odd">
+<td>L2 miss</td>
+<td>&gt;600 cycles</td>
+</tr>
+</tbody>
+</table>
+<h2 id="a-performance-checklist">A performance checklist</h2>
+<ol class="incremental" style="list-style-type: decimal">
+<li>compile with rtsopts flag</li>
+</ol>
+<pre><code>find . -name &#39;*.o&#39; -type f -print -delete
+find . -name &#39;*.hl&#39; -type f -print -delete
+ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts</code></pre>
+<ol class="incremental" start="2" style="list-style-type: decimal">
+<li><p>check GC <code>example +RTS -s</code></p></li>
+<li><p>enabling profiling</p></li>
+</ol>
+<ul class="incremental">
+<li>a normal ghc: <code>ghc -fforce-recomp --make -O2 -isrc example/example.hs</code></li>
+<li>profile enabled automatically: <code>ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></li>
+<li>if template haskell: <code>ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></li>
+</ul>
+<ol class="incremental" start="4" style="list-style-type: decimal">
+<li><p>create an A.prof on execution: <code>time A +RTS -p</code></p></li>
+<li><p>space</p></li>
+</ol>
+<pre><code>time dev/Reuters/A &quot;test/data/reuters-100k.txt&quot; +RTS -p -hc
+hp2ps -e8in -c A.hp
+hy = types
+hd = constructors</code></pre>
+<ol class="incremental" start="6" style="list-style-type: decimal">
+<li><p>check strictness pragmas</p></li>
+<li><p>space leaks</p></li>
+</ol>
+<pre><code>+RTS -s - additional memory
++RTS -xt -hy</code></pre>
+<hr />
+<div class="footer">
+<p>Made with love 'n' care; and <a href="https://haskell-lang.org/">haskell</a>, <a href="https://pandoc.org">pandoc</a>, and <a href="https://docs.haskellstack.org/en/stable/README/">stack</a>.</p>
 </div>
-<p>Executable complexity has changed the profile of the overall computation. Both measurements have the same value, however, up to around the 30th percentile.</p>
-<h2 id="generic-vector">generic vector</h2>
-<p>Using vector to sum:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span><span class="ot"> asv ::</span> [<span class="dt">V.Vector</span> <span class="dt">Double</span>] <span class="fu">=</span> (\x <span class="ot">-&gt;</span> V.generate (floor x) fromIntegral) <span class="fu">&lt;$&gt;</span> as
-  <span class="kw">let</span><span class="ot"> sumv ::</span> <span class="dt">V.Vector</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
-      sumv x <span class="fu">=</span> V.foldl (<span class="fu">+</span>) <span class="dv">0</span> x
-  (csv,_) <span class="ot">&lt;-</span> spins n tick sumv asv
-  reportQuantiles csv as <span class="st">&quot;other/vectorGen.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  38.0 41.1 41.8 42.5 44.0 2.46e6
- 1.00e1:  12.4 12.6 12.7 12.8 13.0 5.95e4
- 1.00e2:  11.9 14.3 14.9 17.5 18.4 6.88e3
- 1.00e3:  11.7 11.9 13.3 13.7 15.6 770
- 1.00e4:  12.0 13.7 15.9 19.6 27.4 130</code></pre>
-<h2 id="randomizing-data">randomizing data</h2>
-<p>To avoid ghc (and fusion) trickiness, it's often a good idea to use random numbers instead of simple progressions. One day, a compiler will discover <code>x(x+1)/2</code> and then we'll be in real trouble.</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  mwc <span class="ot">&lt;-</span> create
-  <span class="fu">!</span>asr <span class="ot">&lt;-</span> (fmap V.fromList <span class="fu">&lt;$&gt;</span>) <span class="fu">&lt;$&gt;</span> sequence <span class="fu">$</span> (\x <span class="ot">-&gt;</span> samples x uniform mwc) <span class="fu">.</span> floor <span class="fu">&lt;$&gt;</span> as
-  void <span class="fu">$</span> warmup <span class="dv">100</span>
-  (csr,_) <span class="ot">&lt;-</span> spins n tick sumv asr
-  reportQuantiles csr as <span class="st">&quot;other/vectorr.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  16.0 20.4 21.6 22.4 23.8 7.73e5
- 1.00e1:  5.20 5.58 5.67 5.77 5.86 9.96e4
- 1.00e2:  6.02 6.07 6.09 6.12 6.20 9.89e3
- 1.00e3:  5.82 5.85 5.87 5.89 7.41 1.12e3
- 1.00e4:  5.81 7.37 7.38 8.35 8.63 234</code></pre>
-<p>Charting the 1k sumTo:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> csr0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (csr<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
-  <span class="kw">let</span> csr1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> csr0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> csr0
-  fileSvg <span class="st">&quot;other/vector1k.svg&quot;</span> (<span class="dv">750</span>,<span class="dv">250</span>) <span class="fu">$</span> pad <span class="fl">1.1</span> <span class="fu">$</span> histLine csr1</code></pre></div>
-<div class="figure">
-<img src="other/vector1k.svg" />
-
-</div>
-<h2 id="unboxed">unboxed</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="fu">!</span>asu <span class="ot">&lt;-</span> (fmap U.fromList <span class="fu">&lt;$&gt;</span>) <span class="fu">&lt;$&gt;</span> sequence <span class="fu">$</span> (\x <span class="ot">-&gt;</span> samples x uniform mwc) <span class="fu">.</span> floor <span class="fu">&lt;$&gt;</span> as
-  <span class="kw">let</span><span class="ot"> sumu ::</span> <span class="dt">U.Vector</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
-      sumu x <span class="fu">=</span> U.foldl (<span class="fu">+</span>) <span class="dv">0</span> x
-  void <span class="fu">$</span> warmup <span class="dv">100</span>
-  (csu,_) <span class="ot">&lt;-</span> spins n tick sumu asu
-  reportQuantiles csu as <span class="st">&quot;other/vectoru.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  24.0 29.6 31.1 32.6 35.1 1.07e6
- 1.00e1:  3.40 4.28 4.45 4.57 4.67 1.03e5
- 1.00e2:  3.24 3.32 3.34 3.36 3.38 8.50e3
- 1.00e3:  2.59 3.01 3.01 3.02 3.02 1.00e3
- 1.00e4:  2.57 2.57 2.57 2.57 2.58 98.0</code></pre>
-<p>Charting the 1k sumTo:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> csu0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (csu<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
-  <span class="kw">let</span> csu1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> csu0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> csu0
-  fileSvg <span class="st">&quot;other/vectoru1k.svg&quot;</span> (<span class="dv">750</span>,<span class="dv">250</span>) <span class="fu">$</span> pad <span class="fl">1.1</span> <span class="fu">$</span> histLine csu1</code></pre></div>
-<div class="figure">
-<img src="other/vectoru1k.svg" />
-
-</div>
-<h2 id="storable">storable</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="fu">!</span>ass <span class="ot">&lt;-</span> (fmap S.fromList <span class="fu">&lt;$&gt;</span>) <span class="fu">&lt;$&gt;</span> sequence <span class="fu">$</span> (\x <span class="ot">-&gt;</span> samples x uniform mwc) <span class="fu">.</span> floor <span class="fu">&lt;$&gt;</span> as
-  <span class="kw">let</span><span class="ot"> sums ::</span> <span class="dt">S.Vector</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span>
-      sums x <span class="fu">=</span> S.foldl (<span class="fu">+</span>) <span class="dv">0</span> x
-  void <span class="fu">$</span> warmup <span class="dv">100</span>
-  (css,_) <span class="ot">&lt;-</span> spins n tick sums ass
-  reportQuantiles css as <span class="st">&quot;other/vectors.md&quot;</span></code></pre></div>
-<pre><code> 1.00e0:  18.0 23.3 24.3 25.5 27.2 1.15e6
- 1.00e1:  2.40 3.00 3.11 3.20 3.28 8.67e4
- 1.00e2:  3.22 3.30 3.31 3.33 3.35 8.33e3
- 1.00e3:  2.58 2.59 2.60 2.60 3.01 839
- 1.00e4:  2.57 2.57 2.57 2.57 2.99 85.4</code></pre>
-<p>Charting the 1k sumTo:</p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  <span class="kw">let</span> css0 <span class="fu">=</span> fromIntegral <span class="fu">&lt;$&gt;</span> take <span class="dv">10000</span> (css<span class="fu">!!</span>numChart) <span class="co">-- summing to 1000</span>
-  <span class="kw">let</span> css1 <span class="fu">=</span> (\x <span class="ot">-&gt;</span> min x (trunc<span class="fu">*</span>deciles <span class="dv">5</span> css0 <span class="fu">!!</span> <span class="dv">5</span>)) <span class="fu">&lt;$&gt;</span> css0
-  fileSvg <span class="st">&quot;other/vectors1k.svg&quot;</span> (<span class="dv">750</span>,<span class="dv">250</span>) <span class="fu">$</span> pad <span class="fl">1.1</span> <span class="fu">$</span> histLine css1</code></pre></div>
-<div class="figure">
-<img src="other/vectors1k.svg" />
-
-</div>
-<h2 id="tickf-ticka-tickfa">tickf, ticka, tickfa</h2>
-<p>These functions attempt to discriminate between cycles used to compute <code>f a</code> (ie to apply the function f), and cycles used to force <code>a</code>. In experiments so far, this act of observation tends to change the number of cycles.</p>
-<p>Separation of the <code>f</code> and <code>a</code> effects in <code>f a</code></p>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  void <span class="fu">$</span> warmup <span class="dv">100</span>
-  (csr2,_) <span class="ot">&lt;-</span> spins n tick sumv asr
-  (csvf,_) <span class="ot">&lt;-</span> spins n tickf sumv asr
-  (csva,_) <span class="ot">&lt;-</span> spins n ticka sumv asr
-  (csvfa,_) <span class="ot">&lt;-</span> spins n tickfa sumv asr
-  reportQuantiles csr2 as <span class="st">&quot;other/vectorr2.md&quot;</span>
-  reportQuantiles csvf as <span class="st">&quot;other/vectorf.md&quot;</span>
-  reportQuantiles csva as <span class="st">&quot;other/vectora.md&quot;</span>
-  reportQuantiles (fmap fst <span class="fu">&lt;$&gt;</span> csvfa) as <span class="st">&quot;other/vectorfaf.md&quot;</span>
-  reportQuantiles (fmap snd <span class="fu">&lt;$&gt;</span> csvfa) as <span class="st">&quot;other/vectorfaa.md&quot;</span></code></pre></div>
-<p>a full tick</p>
-<pre><code> 1.00e0:  24.0 30.0 31.6 33.2 37.4 4.88e5
- 1.00e1:  7.20 8.12 8.25 8.38 8.55 1.35e5
- 1.00e2:  6.98 7.04 7.06 7.08 7.15 1.17e4
- 1.00e3:  5.79 5.81 5.82 7.35 8.55 1.33e3
- 1.00e4:  5.78 7.34 7.36 8.53 8.55 126</code></pre>
-<p>just function application</p>
-<pre><code> 1.00e0:  16.0 20.3 21.4 22.2 23.0 1.06e6
- 1.00e1:  5.20 5.62 5.73 5.81 5.89 9.74e4
- 1.00e2:  6.00 6.08 6.09 6.11 6.13 9.77e3
- 1.00e3:  5.79 5.81 5.82 6.85 10.3 1.12e3
- 1.00e4:  5.78 7.34 7.35 7.36 8.54 139</code></pre>
-<p>just forcing <code>a</code>:</p>
-<pre><code> 1.00e0:  16.0 22.4 23.7 24.8 26.5 682
- 1.00e1:  1.60 3.43 3.60 3.74 3.93 13.8
- 1.00e2:  0.180 0.273 0.294 0.314 0.334 2.24
- 1.00e3:  0.0140 0.0229 0.0239 0.0249 0.0291 0.240
- 1.00e4:  0.00140 0.00463 0.00527 0.00582 0.00671 0.0368</code></pre>
-<p>the f splice of f a</p>
-<pre><code> 1.00e0:  16.0 18.3 20.5 32.2 33.7 1.98e6
- 1.00e1:  5.40 5.60 5.71 5.80 5.88 1.10e5
- 1.00e2:  6.00 6.04 6.05 6.06 6.08 1.01e4
- 1.00e3:  5.79 5.80 5.80 5.81 5.87 1.07e3
- 1.00e4:  5.78 7.34 7.38 8.54 10.6 215</code></pre>
-<p>the a slice of fa</p>
-<pre><code> 1.00e0:  14.0 21.4 25.0 38.0 41.3 480
- 1.00e1:  1.40 2.76 2.86 2.97 3.09 32.4
- 1.00e2:  0.140 0.193 0.200 0.207 0.222 1.42
- 1.00e3:  0.0140 0.0213 0.0233 0.0242 0.0256 0.488
- 1.00e4:  0.00140 0.00512 0.00594 0.00659 0.00777 0.0312</code></pre>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell">  pure ()</code></pre></div>
-<h2 id="helpers">helpers</h2>
-<div class="sourceCode"><pre class="sourceCode literate haskell"><code class="sourceCode haskell"><span class="ot">showxs ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Text</span>
-showxs qs m <span class="fu">=</span>
-          sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> Formatting.expt <span class="dv">2</span>) m <span class="fu">&lt;&gt;</span> <span class="st">&quot;: &quot;</span> <span class="fu">&lt;&gt;</span>
-          mconcat (sformat (<span class="st">&quot; &quot;</span> <span class="fu">%</span> prec <span class="dv">3</span>) <span class="fu">&lt;$&gt;</span> ((<span class="fu">/</span>m) <span class="fu">&lt;$&gt;</span> qs))
-
-<span class="ot">deciles ::</span> (<span class="dt">Foldable</span> f) <span class="ot">=&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> f <span class="dt">Double</span> <span class="ot">-&gt;</span> [<span class="dt">Double</span>]
-deciles n xs <span class="fu">=</span>
-  (\x <span class="ot">-&gt;</span> fromMaybe <span class="dv">0</span> <span class="fu">$</span>
-      quantile x (tdigest<span class="ot"> xs ::</span> <span class="dt">TDigest</span> <span class="dv">25</span>)) <span class="fu">&lt;$&gt;</span>
-      ((<span class="fu">/</span>fromIntegral n) <span class="fu">.</span> fromIntegral <span class="fu">&lt;$&gt;</span> [<span class="dv">0</span><span class="fu">..</span>n])<span class="ot"> ::</span> [<span class="dt">Double</span>]
-
-<span class="ot">reportQuantiles ::</span>  [[<span class="dt">Cycles</span>]] <span class="ot">-&gt;</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> FilePath <span class="ot">-&gt;</span> <span class="dt">IO</span> ()
-reportQuantiles css as name <span class="fu">=</span>
-  writeFile name <span class="fu">$</span> code <span class="fu">$</span> zipWith showxs (deciles <span class="dv">5</span> <span class="fu">.</span> fmap fromIntegral <span class="fu">&lt;$&gt;</span> css) as
-
-<span class="ot">code ::</span> [<span class="dt">Text</span>] <span class="ot">-&gt;</span> <span class="dt">Text</span>
-code cs <span class="fu">=</span> <span class="st">&quot;\n~~~\n&quot;</span> <span class="fu">&lt;&gt;</span> intercalate <span class="st">&quot;\n&quot;</span> cs <span class="fu">&lt;&gt;</span> <span class="st">&quot;\n~~~\n&quot;</span>
-
-<span class="ot">histLine ::</span> [<span class="dt">Double</span>] <span class="ot">-&gt;</span> <span class="dt">Chart&#39;</span> a
-histLine xs <span class="fu">=</span>
-    lineChart_ (repeat (<span class="dt">LineConfig</span> <span class="fl">0.002</span> (<span class="dt">Color</span> <span class="dv">0</span> <span class="dv">0</span> <span class="dv">1</span> <span class="fl">0.1</span>))) widescreen
-     (zipWith (\x y <span class="ot">-&gt;</span> [<span class="dt">Pair</span> x <span class="dv">0</span>,<span class="dt">Pair</span> x y]) [<span class="dv">0</span><span class="fu">..</span>] xs) <span class="fu">&lt;&gt;</span>
-     axes
-     ( chartAspect <span class="fu">.~</span> widescreen
-     <span class="fu">$</span> chartRange <span class="fu">.~</span> <span class="dt">Just</span>
-       (<span class="dt">Ranges</span>
-         (<span class="dt">Range</span> <span class="fl">0.0</span> (fromIntegral <span class="fu">$</span> length xs))
-         (<span class="dt">Range</span> <span class="dv">0</span> (L.fold (<span class="dt">L.Fold</span> max <span class="dv">0</span> identity) xs)))
-     <span class="fu">$</span> def)</code></pre></div>

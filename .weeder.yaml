@@ -1,0 +1,14 @@
+# Weeder configuration file
+# https://github.com/ndmitchell/weeder
+##########################
+
+- package:
+  - name: perf
+  - section:
+    - name: test:test
+    - message:
+      - name: Redundant build-depends entry
+      - depends: base
+    - message:
+      - name: Redundant build-depends entry
+      - depends: perf

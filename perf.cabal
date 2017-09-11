@@ -37,13 +37,13 @@ library
     Perf.Cycle
   build-depends:
     base >= 4.7 && < 4.11,
-    rdtsc,
-    foldl,
-    protolude,
     containers,
-    time,
+    foldl,
+    numhask >= 0.1.2 && < 0.2,
+    protolude,
+    rdtsc,
     tdigest,
-    numhask >= 0.1.2 && < 0.2
+    time
   default-extensions:
     NegativeLiterals,
     NoImplicitPrelude,
@@ -65,16 +65,14 @@ executable perf-examples
     examples.hs
   build-depends:
     base >= 4.7 && < 4.11,
-    protolude,
-    numhask,
-    perf,
-    optparse-generic,
+    containers,
     formatting,
-    foldl,
+    numhask,
+    optparse-generic,
+    perf,
+    protolude,
     text,
-    vector,
-    tdigest,
-    containers
+    vector
   default-extensions:
     NegativeLiterals,
     NoImplicitPrelude,
@@ -95,7 +93,7 @@ test-suite test
     base >= 4.7 && < 5,
     doctest,
     protolude,
-    perf >= 0.1.3 && < 0.3
+    perf
   default-extensions:
     NegativeLiterals,
     NoImplicitPrelude,

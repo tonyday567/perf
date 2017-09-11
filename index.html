@@ -10,41 +10,41 @@
 <h1 id="examples">Examples</h1>
 <p>The code for all results can be found in <a href="examples/examples.hs" class="uri">examples/examples.hs</a>.</p>
 <h2 id="tick_">tick_</h2>
-<pre><code>one tick_: 88 cycles
-next 10: [20,20,22,18,20,18,18,20,18,20]
-average over 1m: 18.40 cycles
-99.999% perc: 28,790
-99.9% perc: 46.55
-99th perc:  24.79
-40th perc:  16.77
+<pre><code>one tick_: 18 cycles
+next 10: [20,18,18,18,20,20,18,18,20,18]
+average over 1m: 20.46 cycles
+99.999% perc: 408
+99.9% perc: 55.90
+99th perc:  31.08
+40th perc:  18.82
 [min, 10th, 20th, .. 90th, max]:
- 12.00 15.21 15.73 16.25 16.77 17.32 17.90 18.48 19.14 20.44 1.193e5</code></pre>
+ 12.00 17.09 17.66 18.24 18.82 19.56 20.36 21.42 23.24 24.37 3.448e4</code></pre>
 <h2 id="tick">tick</h2>
-<p>Let's measure something. The simplest something I could think of was summing.</p>
-<pre><code>one tick: 2045316 cycles
-average over 1000: 106109.42 cycles
+<pre><code>sum to 10000.0
+first measure: 1255634 cycles
+average over next 1000: 98238.13 cycles
 [min, 30th, median, 90th, 99th, max]:
- 8.355e4 9.858e4 9.871e4 1.364e5 1.705e5 3.750e5</code></pre>
+ 9.541e4 9.705e4 9.722e4 9.759e4 1.479e5 2.531e5</code></pre>
 <h2 id="ticks">ticks</h2>
 <pre><code>sum to 10000.0
-Perf.ticks n f a                        8.48e4 cycles
-Main.ticks n f a                        8.47e4 cycles
-Perf.ticksIO n (pure $ f a)             8.48e4 cycles
-Perf.qtick n f a                        8.47e4 cycles
-Main.qtick n f a                        8.47e4 cycles
-replicateM n (tick f a)                 8.47e4 cycles
+Perf.ticks n f a                        8.49e4 cycles
+Main.ticks n f a                        8.48e4 cycles
+Perf.ticksIO n (pure $ f a)             9.84e4 cycles
+Perf.qtick n f a                        8.49e4 cycles
+Main.qtick n f a                        9.83e4 cycles
+replicateM n (tick f a)                 8.48e4 cycles
 replicateM&#39; n (tick f a)                8.47e4 cycles
 replicateM n (tickIO (pure (f a)))      8.47e4 cycles
-replicateM n (tick (app (f a)) ())      8.48e4 cycles
+replicateM n (tick (app (f a)) ())      8.58e4 cycles
 replicateM n (tick identity (f a))      8.48e4 cycles
 replicateM n (tick (const (f a)) ())    8.48e4 cycles
-(replicateM n . tick f) &lt;$&gt; [1,10,100,1000,10000]:  15.8 18.1 98.2 713 6.45e3
-Perf.tickns n f [1,10,100,1000,10000]:  16.1 23.5 149 1.30e3 1.28e4</code></pre>
+(replicateM n . tick f) &lt;$&gt; [1,10,100,1000,10000]:  15.9 17.9 96.5 676 6.45e3
+Perf.tickns n f [1,10,100,1000,10000]:  16.1 24.6 149 1.30e3 1.28e4</code></pre>
 <h2 id="vector">vector</h2>
 <pre><code>sum to 10000.0
-boxed: 1.47e5
-storable: 6.00e4
-unboxed: 5.22e4</code></pre>
+boxed: 1.48e5
+storable: 5.29e4
+unboxed: 5.90e4</code></pre>
 <h1 id="workflow">workflow</h1>
 <pre><code>stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i other/header.md readme.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
 <p>solo experiments:</p>
@@ -115,32 +115,30 @@ unboxed: 5.22e4</code></pre>
 <ol class="incremental" style="list-style-type: decimal">
 <li>compile with rtsopts flag</li>
 </ol>
-<pre><code>find . -name &#39;*.o&#39; -type f -print -delete
-find . -name &#39;*.hl&#39; -type f -print -delete
-ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts</code></pre>
+<pre><code>stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp</code></pre>
 <ol class="incremental" start="2" style="list-style-type: decimal">
-<li><p>check GC <code>example +RTS -s</code></p></li>
+<li><p>check GC <code>examples/examples +RTS -s</code></p></li>
 <li><p>enabling profiling</p></li>
 </ol>
 <ul class="incremental">
-<li>a normal ghc: <code>ghc -fforce-recomp --make -O2 -isrc example/example.hs</code></li>
-<li>profile enabled automatically: <code>ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></li>
-<li>if template haskell: <code>ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs</code></li>
+<li>a normal ghc: <code>stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp</code></li>
+<li>profile enabled automatically: <code>stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp -prof -auto -auto-all</code></li>
+<li>if template haskell: <code>stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp -prof -auto -auto-all -osuf p_o</code></li>
 </ul>
 <ol class="incremental" start="4" style="list-style-type: decimal">
-<li><p>create an A.prof on execution: <code>time A +RTS -p</code></p></li>
+<li><p>create an examples.prof on execution: <code>time examples/examples +RTS -p</code></p></li>
 <li><p>space</p></li>
 </ol>
-<pre><code>time dev/Reuters/A &quot;test/data/reuters-100k.txt&quot; +RTS -p -hc
-hp2ps -e8in -c A.hp
-hy = types
-hd = constructors</code></pre>
+<pre><code>examples/examples +RTS -p -hc
+hp2ps -e8in -c examples/examples.hp
+hp2ps -e8in -c examples/examples.hy # types
+hp2ps -e8in -c examples/examples.hp # constructors</code></pre>
 <ol class="incremental" start="6" style="list-style-type: decimal">
 <li><p>check strictness pragmas</p></li>
 <li><p>space leaks</p></li>
 </ol>
-<pre><code>+RTS -s - additional memory
-+RTS -xt -hy</code></pre>
+<pre><code>examples/examples +RTS -s - additional memory
+examples/examples +RTS -xt -hy</code></pre>
 <hr />
 <div class="footer">
 <p>Made with love 'n' care; and <a href="https://haskell-lang.org/">haskell</a>, <a href="https://pandoc.org">pandoc</a>, and <a href="https://docs.haskellstack.org/en/stable/README/">stack</a>.</p>

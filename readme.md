@@ -24,8 +24,6 @@ other/tick_.md
 tick
 ---
 
-Let's measure something.  The simplest something I could think of was summing.
-
 ```include
 other/tick.md
 ```

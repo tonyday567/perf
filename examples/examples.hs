@@ -102,8 +102,9 @@ main = do
   let qt x = (`percentile` x) <$> [0, 0.3, 0.5, 0.9, 0.99, 1]
   writeFile "other/tick.md" $
     code
-      [ "one tick: " <> show t <> " cycles"
-      , "average over " <> show n <> ": " <> sformat (fixed 2) (average ts) <>
+      [ "sum to " <> show a
+      , "first measure: " <> show t <> " cycles"
+      , "average over next " <> show n <> ": " <> sformat (fixed 2) (average ts) <>
         " cycles"
       , "[min, 30th, median, 90th, 99th, max]:"
       , mconcat (sformat (" " % prec 4) <$> qt ts)

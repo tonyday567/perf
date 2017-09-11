@@ -1,21 +1,23 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 
-import Chart
-import Data.List (last)
-import Data.Text (intercalate)
-import Data.Text.IO (writeFile)
-
+import qualified Data.List as List
+import qualified Data.Text as Text
+import Data.Text.IO (writeFile, readFile)
+import qualified Data.Map as Map
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
-import Diagrams.Prelude
 import Formatting
 import Options.Generic
-import Protolude hiding ((%), intercalate)
-
+import NumHask.Prelude hiding ((%))
 import Perf
 
 data Opts = Opts
@@ -28,12 +30,12 @@ instance ParseRecord Opts
 ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticks n f a = do
   ts <- replicateM' n (tick f a)
-  pure (fst <$> ts, snd $ last ts)
+  pure (fst <$> ts, snd $ List.last ts)
 
 qtick :: Int -> (a -> b) -> a -> IO (Double, b)
 qtick n f a = do
   ts <- replicateM' n (tick f a)
-  pure (percentile 0.4 $ fst <$> ts, snd $ last ts)
+  pure (percentile 0.4 $ fst <$> ts, snd $ List.last ts)
 
 main :: IO ()
 main = do
@@ -41,6 +43,32 @@ main = do
   let n = fromMaybe 1000 (runs o)
   let a = fromMaybe 10000 (sumTo o)
 
+  -- perf
+  -- prior to Perfification
+  result <- do
+      txt <- readFile "examples/examples.hs"
+      let n = Text.length txt
+      let x = foldl' (+) 0 [1..n]
+      putStrLn $ "sum of one to number of characters is: " <>
+          (show x :: Text)
+      pure (n, x)
+
+  -- post-Perfification
+  (result', ms) <- runPerfT $ do
+          txt <- perf "file read" cycles $ readFile "examples/examples.hs"
+          n <- perf "length" cycles $ pure (Text.length txt)
+          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
+          perf "print to screen" cycles $
+              putStrLn $ "sum of one to number of characters is: " <>
+              (show x :: Text)
+          pure (n, x)
+
+  when (result == result') $ print "PerfT preserves computations"
+
+  let fmt = sformat ((right 40 ' ' %. stext) %prec 3 % " " % stext)
+  writeFile "other/perf.md" $
+    "\nperf cycle measurements\n---\n" <>
+    code ((\(t,c) -> fmt t c "cycles") <$> Map.toList ms)
 
   -- | tick_
   onetick <- tick_
@@ -65,7 +93,6 @@ main = do
       , mconcat (sformat (" " % prec 4) <$> qticks)
       ]
 
-{-
 
   -- tick
   _ <- warmup 100
@@ -107,31 +134,30 @@ main = do
   let r8 = ft cs "replicateM n (tickIO (pure (f a)))"
   cs <- fmap fst <$> replicateM n (tick (app (f a)) ())
   let r9 = ft cs "replicateM n (tick (app (f a)) ())"
-  cs <- fmap fst <$> replicateM n (tick identity (f n))
-  let r10 = ft cs "replicateM n (tick identity (f n))"
+  cs <- fmap fst <$> replicateM n (tick identity (f a))
+  let r10 = ft cs "replicateM n (tick identity (f a))"
   cs <- fmap fst <$> replicateM n (tick (const (f a)) ())
   let r11 = ft cs "replicateM n (tick (const (f a)) ())"
   css <-
     fmap (fmap fst) <$>
-    sequence ((replicateM n . tick f) <$> [1, 10, 100, 1000, 10000])
+    sequence ((replicateM n . tick f) <$> [1, 10, 100, 1000, 10000 :: Int])
   let r12 =
         "(replicateM n . tick f) <$> [1,10,100,1000,10000]: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> css))
-  (ts, _) <- Perf.tickns n f [1, 10, 100, 1000, 10000]
+  (ts, _) <- Perf.tickns n f [1, 10, 100, 1000, 10000 :: Int]
   let r13 =
         "Perf.tickns n f [1,10,100,1000,10000]: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
   writeFile "other/ticks.md" $
     code ["sum to " <> show a, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
--}
+
   -- vectors
 
-{-
   let sumv :: V.Vector Double -> Double
       sumv = V.foldl (+) 0
 
   let asv :: V.Vector Double =
-        (\x -> V.generate (floor x) fromIntegral) a
+        (\x -> V.generate (fromIntegral $ floor x) fromIntegral) a
 
   (t, _) <- Perf.ticks n sumv asv
   let rboxed = sformat ("boxed: " %prec 3) (percentile 0.4 t)
@@ -140,7 +166,7 @@ main = do
       sums = S.foldl (+) 0
 
   let ass :: S.Vector Double =
-        (\x -> S.generate (floor x) fromIntegral) a
+        (\x -> S.generate (fromIntegral $ floor x) fromIntegral) a
 
   (t, _) <- Perf.ticks n sums ass
   let rstorable = sformat ("storable: " %prec 3) (percentile 0.4 t)
@@ -149,46 +175,22 @@ main = do
       sumu = U.foldl (+) 0
 
   let asu :: U.Vector Double =
-        (\x -> U.generate (floor x) fromIntegral) a
+        (\x -> U.generate (fromIntegral $ floor x) fromIntegral) a
 
   (t, _) <- Perf.ticks n sumu asu
   let runboxed = sformat ("unboxed: " %prec 3) (percentile 0.4 t)
 
   writeFile "other/vector.md" $
     code ["sum to " <> show a, rboxed, rstorable, runboxed]
--}
 
-{-
   (t, _) <- Perf.ticks n f a
   putStrLn $ sformat ("Perf.Cycle.ticks n f a: " %prec 3) (percentile 0.4 t)
 
--}  
-
-  pure ()
-
-{-
-  res <-
-    execPerfT $ do
-      xs <- perf "sum1" cycles (sum1 a n)
-      d1 <- perf "decile calc" cycles (pure $ Main.deciles xs)
-      xs1 <-
-        perf "truncation" cycles $ pure $ (\x -> min x ((d1 !! 5) * tr)) <$> xs
-      _ <-
-        perf "prints to stdout" cycles $ do
-          putStrLn $ "inner loop quantiles: " <> (show d1 :: Text)
-          putStrLn $
-            "inner loop total cycles: " <> (show (foldl' (+) 0 xs1) :: Text)
-      _ <-
-        perf "chart creation" cycles $
-          if chart o
-            then let name = fromMaybe "other/summing.svg" (chartName o)
-                 in fileSvg (unpack name) (750, 250) $ pad 1.1 $ histLine xs1
-            else pure ()
-      pure ()
-  putStrLn $ showPerf res
-
--}
+  -- perf basics
+  (result, cs) <- runPerfT $
+      perf "sum" cycles (pure $ foldl' (+) 0 [0..10000 :: Integer])
+  putStrLn (show (result, cs) :: Text)
 
 
 code :: [Text] -> Text
-code cs = "\n```\n" <> intercalate "\n" cs <> "\n```\n"
+code cs = "\n```\n" <> Text.intercalate "\n" cs <> "\n```\n"

@@ -1,10 +1,10 @@
 name: perf
-version: 0.1.3
+version: 0.2.0
 synopsis:
   low-level performance statistics
 description:
   .
-  See <https://tonyday567.github.io/perf perf> for example results and write-up.
+  A set of tools to measure time performance.
   .
 category:
   project
@@ -66,6 +66,7 @@ executable perf-examples
   build-depends:
     base >= 4.7 && < 4.11,
     protolude,
+    numhask,
     perf,
     optparse-generic,
     formatting,
@@ -73,42 +74,13 @@ executable perf-examples
     text,
     vector,
     tdigest,
-    chart-unit >= 0.5.0,
-    diagrams-lib,
-    mwc-probability
+    containers
   default-extensions:
-    NoImplicitPrelude,
-    UnicodeSyntax,
-    BangPatterns,
-    BinaryLiterals,
-    DeriveFoldable,
-    DeriveFunctor,
-    DeriveGeneric,
-    DeriveTraversable,
-    DisambiguateRecordFields,
-    EmptyCase,
-    FlexibleContexts,
-    FlexibleInstances,
-    FunctionalDependencies,
-    GADTSyntax,
-    InstanceSigs,
-    KindSignatures,
-    LambdaCase,
-    MonadComprehensions,
-    MultiParamTypeClasses,
-    MultiWayIf,
     NegativeLiterals,
+    NoImplicitPrelude,
     OverloadedStrings,
-    ParallelListComp,
-    PartialTypeSignatures,
-    PatternSynonyms,
-    RankNTypes,
-    RecordWildCards,
-    RecursiveDo,
-    ScopedTypeVariables,
-    TupleSections,
-    TypeFamilies,
-    TypeOperators
+    UnicodeSyntax,
+    ScopedTypeVariables
 
 test-suite test
   default-language:
@@ -123,7 +95,7 @@ test-suite test
     base >= 4.7 && < 5,
     doctest,
     protolude,
-    perf >= 0.1.3 && < 0.2
+    perf >= 0.1.3 && < 0.3
   default-extensions:
     NegativeLiterals,
     NoImplicitPrelude,

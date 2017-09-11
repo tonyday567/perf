@@ -5,16 +5,17 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
--- | Using the rdtsc chipset to measure time performance
+-- | 'tick' uses the rdtsc chipset to measure time performance of a computation.
 --
--- A 'Cycle' is one cycle of the rdtsc chipset.
+-- The measurement unit - a 'Cycle' - is one oscillation of the chip crystal as measured by the <https://en.wikipedia.org/wiki/Time_Stamp_Counter rdtsc> instruction which inspects the TSC register.
+--
+-- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 --
 module Perf.Cycle
-  ( -- ** Cycle
-    -- $setup
+  ( -- $setup
     Cycle
-  , warmup
   , tick_
+  , warmup
   , tick
   , app
   , tickIO
@@ -33,7 +34,6 @@ import qualified Control.Foldl as L
 import Data.List
 import Data.TDigest
 import NumHask.Prelude hiding (force)
-import qualified NumHask.Prelude as P
 import System.CPUTime.Rdtsc
 import qualified Protolude
 
@@ -45,11 +45,12 @@ import qualified Protolude
 -- >>> let f x = foldl' (+) 0 [1 .. x]
 --
 
+
 -- | an unwrapped Word64
 type Cycle = Word64
 
 instance AdditiveMagma Cycle where
-  plus = (P.+)
+  plus = (Protolude.+)
 
 instance AdditiveUnital Cycle where
   zero = 0
@@ -61,10 +62,12 @@ instance AdditiveCommutative Cycle
 instance Additive Cycle
 
 instance AdditiveInvertible Cycle where
-  negate = P.negate
+  negate = Protolude.negate
 
 instance AdditiveGroup Cycle
 
+instance ToInteger Cycle where
+    toInteger = Protolude.toInteger
 
 -- | tick_ measures the number of cycles it takes to read the rdtsc chip twice: the difference is then how long it took to read the clock the second time.
 --
@@ -95,8 +98,7 @@ tick_ = do
   t' <- rdtsc
   pure (t' - t)
 
--- | warm up the register, to avoid a high first measurement
--- Without a warmup, one or more larger values can occur at the start of a measurement spree, and often are in the zone of an L2 miss.
+-- | Warm up the register, to avoid a high first measurement. Without a warmup, one or more larger values can occur at the start of a measurement spree, and often are in the zone of an L2 miss.
 --
 -- >>> t <- tick_ -- first measure can be very high
 -- >>> _ <- warmup 100
@@ -219,7 +221,7 @@ replicateM' n op' = go n []
 -- > cAv <- average <$> ticks n f a
 --
 average :: (Foldable f) => f Cycle -> Double
-average = L.fold (L.premap Protolude.fromIntegral ((/) <$> L.sum <*> L.genericLength))
+average = L.fold (L.premap fromIntegral ((/) <$> L.sum <*> L.genericLength))
 
 -- | compute deciles
 --
@@ -227,7 +229,7 @@ average = L.fold (L.premap Protolude.fromIntegral ((/) <$> L.sum <*> L.genericLe
 --
 deciles :: (Functor f, Foldable f) => Int -> f Cycle -> [Double]
 deciles n xs =
-  (\x -> fromMaybe 0 $ quantile x (tdigest (Protolude.fromIntegral <$> xs) :: TDigest 25)) <$>
+  (\x -> fromMaybe 0 $ quantile x (tdigest (fromIntegral <$> xs) :: TDigest 25)) <$>
   ((/ fromIntegral n) . fromIntegral <$> [0 .. n]) :: [Double]
 
 -- | compute a percentile
@@ -235,5 +237,5 @@ deciles n xs =
 -- > c <- percentoile 0.4 <$> ticks n f a
 --
 percentile :: (Functor f, Foldable f) => Double -> f Cycle -> Double
-percentile p xs = fromMaybe 0 $ quantile p (tdigest (Protolude.fromIntegral <$> xs) :: TDigest 25)
+percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
 

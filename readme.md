@@ -116,28 +116,26 @@ A performance checklist
 1. compile with rtsopts flag
 
 ```
-find . -name '*.o' -type f -print -delete
-find . -name '*.hl' -type f -print -delete
-ghc -O2 --make example/example.hs -fforce-recomp -isrc:example -rtsopts
-```    
+stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp
+```
 
-2.  check GC `example +RTS -s`
+2.  check GC `examples/examples +RTS -s`
 
 3.  enabling profiling
 
-  - a normal ghc: `ghc -fforce-recomp --make -O2 -isrc example/example.hs`
-  - profile enabled automatically: `ghc -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
-  - if template haskell: `ghc -osuf p_o -prof -auto -auto-all -fforce-recomp --make -O2 -isrc:dev A.hs`
+  - a normal ghc: `stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp`
+  - profile enabled automatically: `stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp -prof -auto -auto-all`
+  - if template haskell: `stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp -prof -auto -auto-all -osuf p_o`
 
-4.  create an A.prof on execution: `time A +RTS -p`
+4.  create an examples.prof on execution: `time examples/examples +RTS -p`
 
 5.  space
 
 ```
-time dev/Reuters/A "test/data/reuters-100k.txt" +RTS -p -hc
-hp2ps -e8in -c A.hp
-hy = types
-hd = constructors
+examples/examples +RTS -p -hc
+hp2ps -e8in -c examples/examples.hp
+hp2ps -e8in -c examples/examples.hy # types
+hp2ps -e8in -c examples/examples.hp # constructors
 ```
 
 6.  check strictness pragmas
@@ -145,6 +143,6 @@ hd = constructors
 7.  space leaks
 
 ```
-+RTS -s - additional memory
-+RTS -xt -hy
+examples/examples +RTS -s - additional memory
+examples/examples +RTS -xt -hy
 ```

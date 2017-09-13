@@ -71,6 +71,7 @@ executable perf-examples
     optparse-generic,
     perf,
     protolude,
+    rdtsc,
     text,
     vector
   default-extensions:

@@ -14,6 +14,13 @@ Examples
 
 The code for all results can be found in [examples/examples.hs](examples/examples.hs).
 
+
+GHC does not memoize functions.
+
+It does, however, compute any given expression in the code at most once per time that its surrounding lambda-expression is entered, or at most once ever if it is at top level. 
+
+https://wiki.haskell.org/Constant_applicative_form
+
 tick_
 ---
 
@@ -26,6 +33,13 @@ tick
 
 ```include
 other/tick.md
+```
+
+ttick
+---
+
+```include
+other/tticks.md
 ```
 
 ticks

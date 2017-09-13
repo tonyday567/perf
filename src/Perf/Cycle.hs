@@ -23,7 +23,6 @@ module Perf.Cycle
   , qtick
   , ticksIO
   , tickns
-  , force
   , replicateM'
   , average
   , deciles
@@ -33,7 +32,7 @@ module Perf.Cycle
 import qualified Control.Foldl as L
 import Data.List
 import Data.TDigest
-import NumHask.Prelude hiding (force)
+import NumHask.Prelude
 import System.CPUTime.Rdtsc
 import qualified Protolude
 
@@ -118,7 +117,7 @@ warmup n = do
 -- > average over 1000: 10222.79 cycles -- 10 cycles per operation
 -- > [min, 30th, median, 90th, 99th, max]:
 -- > 1.002e4 1.011e4 1.013e4 1.044e4 1.051e4 2.623e4
-tick :: (a -> b) -> a -> IO (Cycle, b)
+tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
 tick f a = do
   !t <- rdtsc
   !a' <- pure (f a)
@@ -165,7 +164,7 @@ app e () = e
 -- >>> let n = 1000
 -- >>> (cs, fa) <- ticks n f a
 --
-ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticks :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticks n f a = do
   ts <- replicateM' n (tick f a)
   pure (fst <$> ts, snd $ last ts)
@@ -175,7 +174,7 @@ ticks n f a = do
 --
 -- >>> (c, fa) <- qtick n f a
 --
-qtick :: Int -> (a -> b) -> a -> IO (Double, b)
+qtick :: (NFData b) => Int -> (a -> b) -> a -> IO (Double, b)
 qtick n f a = do
   ts <- replicateM' n (tick f a)
   pure (percentile 0.4 $ fst <$> ts, snd $ last ts)
@@ -198,14 +197,10 @@ ticksIO n a = do
 --
 -- > tickns n f [1,10,100,1000]
 --
-tickns :: Int -> (a -> b) -> [a] -> IO ([[Cycle]], [b])
+tickns :: (NFData b) => Int -> (a -> b) -> [a] -> IO ([[Cycle]], [b])
 tickns n f as = do
   cs <- sequence $ ticks n f <$> as
   pure (fst <$> cs, snd <$> cs)
-
--- | extra oomph for those hard to reach evaluations
-force :: (NFData a) => a -> a
-force x = x `deepseq` x
 
 -- | a replicateM with good attributes
 replicateM' :: Monad m => Int -> m a -> m [a]

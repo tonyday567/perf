@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -19,6 +20,7 @@ import Formatting
 import Options.Generic
 import NumHask.Prelude hiding ((%))
 import Perf
+import System.CPUTime.Rdtsc
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
@@ -27,21 +29,56 @@ data Opts = Opts
 
 instance ParseRecord Opts
 
-ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (fst <$> ts, snd $ List.last ts)
+tickL :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickL f a = do
+  !t <- rdtsc
+  a' <- evaluate (f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
 
-qtick :: Int -> (a -> b) -> a -> IO (Double, b)
-qtick n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (percentile 0.4 $ fst <$> ts, snd $ List.last ts)
+tickS :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickS f a = do
+  !t <- rdtsc
+  !a' <- pure $ force (f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
+
+ticksS :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksS n f a = go f a n []
+  where
+      go :: (NFData b) => (a->b) -> a -> Int -> [Cycle] -> IO ([Cycle], b)
+      go f a n ts
+        | n <= 0 = pure (ts, f a)
+        | otherwise = do
+              (t,_) <- tickS f a
+              go f a (n - 1) (t:ts)
+
+ticksL :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksL n f a = go f a n []
+  where
+      go :: (NFData b) => (a->b) -> a -> Int -> [Cycle] -> IO ([Cycle], b)
+      go f a n ts
+        | n <= 0 = pure (ts, f a)
+        | otherwise = do
+              (t,_) <- tickL f a
+              go f a (n - 1) (t:ts)
+
+f :: Int -> Int
+f = \x -> foldl' (+) 0 $! [1 .. x]
+
+fexp :: Int -> Integer
+fexp = \x -> floor $ foldl' (+) 0 $! exp <$> (fromIntegral <$> [1 .. x] :: [Double])
+
+fFloat :: Int -> Int
+fFloat x = foldl' (+) 0 [1 .. x]
+
+fPoly x = foldl' (+) 0 [1 .. x]
 
 main :: IO ()
 main = do
   o :: Opts <- getRecord "a random bit of text"
   let n = fromMaybe 1000 (runs o)
-  let a = fromMaybe 10000 (sumTo o)
+  let a = fromMaybe 1000 (sumTo o)
 
   -- perf
   -- prior to Perfification
@@ -63,7 +100,7 @@ main = do
               (show x :: Text)
           pure (n, x)
 
-  when (result == result') $ print "PerfT preserves computations"
+  when (result == result') $ print "PerfT preserving computations"
 
   let fmt = sformat ((right 40 ' ' %. stext) %prec 3 % " " % stext)
   writeFile "other/perf.md" $
@@ -96,9 +133,10 @@ main = do
 
   -- tick
   _ <- warmup 100
-  let f x = foldl' (+) 0 [1 .. x]
-  (t, _) <- tick f a
-  (ts, _) <- Main.ticks n f a
+
+  let !a' = fromIntegral $ floor a :: Int
+  (t, _) <- tick f a'
+  (ts, _) <- ticks n f a'
   let qt x = (`percentile` x) <$> [0, 0.3, 0.5, 0.9, 0.99, 1]
   writeFile "other/tick.md" $
     code
@@ -111,49 +149,52 @@ main = do
       ]
 
   -- | ticks & friends
-  (cs, _) <- Perf.ticks n f a
+  (cs, _) <- Perf.ticks n f a'
   let ft cs t =
         sformat
           ((right 40 ' ' %. stext) % prec 3 % " cycles")
           t
           (percentile 0.4 cs)
   let r1 = ft cs "Perf.ticks n f a"
-  (cs, _) <- Main.ticks n f a
-  let r2 = ft cs "Main.ticks n f a"
-  (cs, _) <- Perf.ticksIO n (pure $ f a)
+  (cs, _) <- Perf.ticksIO n (pure $ f a')
   let r3 = ft cs "Perf.ticksIO n (pure $ f a)"
-  (c, _) <- Perf.qtick n f a
+  (c, _) <- Perf.qtick n f a'
   let fq c t = sformat ((right 40 ' ' %. stext) %prec 3 % " cycles") t c
   let r4 = fq c "Perf.qtick n f a"
-  (c, _) <- Main.qtick n f a
-  let r5 = fq c "Main.qtick n f a"
-  cs <- fmap fst <$> replicateM n (tick f a)
+  cs <- fmap fst <$> replicateM n (tick f a')
   let r6 = ft cs "replicateM n (tick f a)"
-  cs <- fmap fst <$> replicateM' n (tick f a)
+  cs <- fmap fst <$> replicateM' n (tick f a')
   let r7 = ft cs "replicateM' n (tick f a)"
-  cs <- fmap fst <$> replicateM n (tickIO (pure (f a)))
+  cs <- fmap fst <$> replicateM n (tickIO (pure (f a')))
   let r8 = ft cs "replicateM n (tickIO (pure (f a)))"
-  cs <- fmap fst <$> replicateM n (tick (app (f a)) ())
+  cs <- fmap fst <$> replicateM n (tick (app (f a')) ())
   let r9 = ft cs "replicateM n (tick (app (f a)) ())"
-  cs <- fmap fst <$> replicateM n (tick identity (f a))
+  cs <- fmap fst <$> replicateM n (tick identity (f a'))
   let r10 = ft cs "replicateM n (tick identity (f a))"
-  cs <- fmap fst <$> replicateM n (tick (const (f a)) ())
+  cs <- fmap fst <$> replicateM n (tick (const (f a')) ())
   let r11 = ft cs "replicateM n (tick (const (f a)) ())"
   css <-
     fmap (fmap fst) <$>
-    sequence ((replicateM n . tick f) <$> [1, 10, 100, 1000, 10000 :: Int])
+    sequence ((replicateM n . tick f) <$> [1, 10, 100, 1000 :: Int])
   let r12 =
-        "(replicateM n . tick f) <$> [1,10,100,1000,10000]: " <>
+        "(replicateM n . tick f) <$> [1,10,100,1000]: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> css))
-  (ts, _) <- Perf.tickns n f [1, 10, 100, 1000, 10000 :: Int]
+  (ts, _) <- Perf.tickns n f [1, 10, 100, 1000 :: Int]
   let r13 =
-        "Perf.tickns n f [1,10,100,1000,10000]: " <>
+        "Perf.tickns n f [1,10,100,1000]: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
   writeFile "other/ticks.md" $
-    code ["sum to " <> show a, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+    code ["sum to " <> show a, "n = " <> show n, r1, r3, r4, r6, r7, r8, r9, r10, r11, r12, r13]
+
+  -- | ttick
+  (cs, _) <- ticksL n f a'
+  let r1 = ft cs "Perf.ticksL n f a"
+  (cs, _) <- ticksS n f a'
+  let r2 = ft cs "Perf.ticksS n f a"
+  writeFile "other/tticks.md" $
+    code ["sum to " <> show a, "n = " <> show n, r1, r2]
 
   -- vectors
-
   let sumv :: V.Vector Double -> Double
       sumv = V.foldl (+) 0
 
@@ -184,12 +225,12 @@ main = do
   writeFile "other/vector.md" $
     code ["sum to " <> show a, rboxed, rstorable, runboxed]
 
-  (t, _) <- Perf.ticks n f a
+  (t, _) <- Perf.ticks n f a'
   putStrLn $ sformat ("Perf.Cycle.ticks n f a: " %prec 3) (percentile 0.4 t)
 
   -- perf basics
   (result, cs) <- runPerfT $
-      perf "sum" cycles (pure $ foldl' (+) 0 [0..10000 :: Integer])
+      perf "sum" cycles (pure $ foldl' (+) 0 [0 .. floor a :: Integer])
   putStrLn (show (result, cs) :: Text)
 
 

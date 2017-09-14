@@ -17,13 +17,12 @@ module Perf.Cycle
   , tick_
   , warmup
   , tick
-  , app
+  , tick'
   , tickIO
   , ticks
-  , qtick
   , ticksIO
+  , tickq
   , tickns
-  , replicateM'
   , average
   , deciles
   , percentile
@@ -108,7 +107,7 @@ warmup n = do
   ts <- replicateM n tick_
   pure $ average ts
 
--- | `tick f a` strictly applies a to f, and returns a (Cycle, f a)
+-- | `tick f a` strictly applies !a to !f, and returns a (Cycle, f a)
 --
 -- >>> _ <- warmup 100
 -- >>> (cs, _) <- tick f a
@@ -117,8 +116,12 @@ warmup n = do
 -- > average over 1000: 10222.79 cycles -- 10 cycles per operation
 -- > [min, 30th, median, 90th, 99th, max]:
 -- > 1.002e4 1.011e4 1.013e4 1.044e4 1.051e4 2.623e4
-tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
-tick f a = do
+tick :: (a -> b) -> a -> IO (Cycle, b)
+tick !f !a = tick' f a
+
+-- | tick where the arguments are lazy, so the evaluation forcing may include prior thunk evaluations in f and a
+tick' :: (a -> b) -> a -> IO (Cycle, b)
+tick' f a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
@@ -134,11 +137,6 @@ tickIO a = do
   !a' <- a
   t' <- rdtsc
   pure (t' - t, a')
-
--- | needs more testing
-app :: t -> () -> t
-app e () = e
-{-# NOINLINE app #-}
 
 -- | n measurements of a tick
 --
@@ -164,21 +162,24 @@ app e () = e
 -- >>> let n = 1000
 -- >>> (cs, fa) <- ticks n f a
 --
-ticks :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (fst <$> ts, snd $ last ts)
-{-# INLINE ticks #-}
+ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticks n0 f a = go f a n0 []
+  where
+    go f' a' n ts
+      | n <= 0 = pure (reverse ts, f a)
+      | otherwise = do
+          (t,_) <- tick f a
+          go f' a' (n - 1) (t:ts)
+-- {-# INLINE ticks #-}
 
 -- | returns the 40th percentile measurement and the last evaluated f a
 --
--- >>> (c, fa) <- qtick n f a
+-- >>> (c, fa) <- tickq n f a
 --
-qtick :: (NFData b) => Int -> (a -> b) -> a -> IO (Double, b)
-qtick n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (percentile 0.4 $ fst <$> ts, snd $ last ts)
-{-# INLINE qtick #-}
+tickq :: (NFData b) => Int -> (a -> b) -> a -> IO (Double, b)
+tickq n f a = do
+  ts <- ticks n f a
+  pure (percentile 0.4 $ fst ts, snd ts)
 
 -- | n measuremenst of a tickIO
 --
@@ -201,15 +202,6 @@ tickns :: (NFData b) => Int -> (a -> b) -> [a] -> IO ([[Cycle]], [b])
 tickns n f as = do
   cs <- sequence $ ticks n f <$> as
   pure (fst <$> cs, snd <$> cs)
-
--- | a replicateM with good attributes
-replicateM' :: Monad m => Int -> m a -> m [a]
-replicateM' n op' = go n []
-  where
-    go 0 acc = return $ reverse acc
-    go n' acc = do
-      x <- op'
-      go (n' - 1) (x : acc)
 
 -- | average of a Cycle foldable
 --

@@ -29,45 +29,61 @@ data Opts = Opts
 
 instance ParseRecord Opts
 
-tickL :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
-tickL f a = do
+-- | needs more testing
+app :: t -> () -> t
+app e () = e
+{-# NOINLINE app #-}
+
+tick' :: (a -> b) -> a -> IO (Cycle, b)
+tick' !f !a = do
   !t <- rdtsc
-  a' <- evaluate (f a)
+  !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
 
-tickS :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
-tickS f a = do
+ticksTest :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksTest n0 f a = go f a n0 []
+  where
+    go f a n ts
+      | n <= 0 = pure (ts, f a)
+      | otherwise = do
+          (t,_) <- Perf.tick' f a
+          go f a (n - 1) (t:ts)
+
+ticksNonMemoising :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksNonMemoising n0 f a = go f a n0 []
+  where
+    go f a n ts
+      | n <= 0 = pure (ts, f a)
+      | otherwise = do
+          (t,_) <- tick f a
+          go f a (n - 1) (t:ts)
+
+ticksMemoising :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksMemoising n f a = do
+    ts <- replicateM n (tick f a)
+    pure (fst <$> ts, List.last $ snd <$> ts)
+
+-- | lazy version of tick
+tickLazy :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickLazy f a = do
   !t <- rdtsc
-  !a' <- pure $ force (f a)
+  a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
 
-ticksS :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksS n f a = go f a n []
+ticksLazy :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksLazy n f a = go f a n []
   where
       go :: (NFData b) => (a->b) -> a -> Int -> [Cycle] -> IO ([Cycle], b)
       go f a n ts
         | n <= 0 = pure (ts, f a)
         | otherwise = do
-              (t,_) <- tickS f a
-              go f a (n - 1) (t:ts)
-
-ticksL :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksL n f a = go f a n []
-  where
-      go :: (NFData b) => (a->b) -> a -> Int -> [Cycle] -> IO ([Cycle], b)
-      go f a n ts
-        | n <= 0 = pure (ts, f a)
-        | otherwise = do
-              (t,_) <- tickL f a
+              (t,_) <- tickLazy f a
               go f a (n - 1) (t:ts)
 
 f :: Int -> Int
 f = \x -> foldl' (+) 0 $! [1 .. x]
-
-fexp :: Int -> Integer
-fexp = \x -> floor $ foldl' (+) 0 $! exp <$> (fromIntegral <$> [1 .. x] :: [Double])
 
 fFloat :: Int -> Int
 fFloat x = foldl' (+) 0 [1 .. x]
@@ -79,7 +95,38 @@ main = do
   o :: Opts <- getRecord "a random bit of text"
   let n = fromMaybe 1000 (runs o)
   let a = fromMaybe 1000 (sumTo o)
+  let !a' = fromIntegral $ floor a :: Int
 
+
+  (cprime, _) <- Perf.ticks n f a'
+  let ft cs t =
+        sformat
+          ((right 40 ' ' %. stext) % prec 3 % " cycles")
+          t
+          (percentile 0.4 cs)
+  let rprime = ft cprime "ticks n f a"
+
+  -- | ttick
+  let ft' :: [Cycle] -> Text -> Text
+      ft' cs label =
+        sformat
+          ((right 30 ' ' %. stext) % (right 6 ' ' %. stext) % (right 36 ' ' %. stext) % (right 6 ' ' %. prec 3) % " cycles")
+          label
+          (mconcat $ sformat (right 6 ' ' %. prec 3 % " ") <$> take 1 cs)
+          (mconcat $ sformat (right 6 ' ' %. prec 3 % " ") <$> take 5 cs)
+          (percentile 0.4 cs)
+  (c1, _) <- ticksNonMemoising n f a'
+  let r1 = ft' c1 "ticksNonMemoising n f a"
+  (cs, _) <- ticksTest n f a'
+  let r2 = ft' cs "ticksTest n f a"
+  (cs, _) <- ticksLazy n f a'
+  let r3 = ft' cs "ticksLazy n f a"
+  (cs, _) <- ticksMemoising n f a'
+  let r4 = ft' cs "ticksMemoising n f a"
+  writeFile "other/tticks.md" $
+    code ["sum to " <> show a, "n = " <> show n, r1, r2, r3, r4]
+
+  
   -- perf
   -- prior to Perfification
   result <- do
@@ -134,7 +181,6 @@ main = do
   -- tick
   _ <- warmup 100
 
-  let !a' = fromIntegral $ floor a :: Int
   (t, _) <- tick f a'
   (ts, _) <- ticks n f a'
   let qt x = (`percentile` x) <$> [0, 0.3, 0.5, 0.9, 0.99, 1]
@@ -149,22 +195,13 @@ main = do
       ]
 
   -- | ticks & friends
-  (cs, _) <- Perf.ticks n f a'
-  let ft cs t =
-        sformat
-          ((right 40 ' ' %. stext) % prec 3 % " cycles")
-          t
-          (percentile 0.4 cs)
-  let r1 = ft cs "Perf.ticks n f a"
-  (cs, _) <- Perf.ticksIO n (pure $ f a')
-  let r3 = ft cs "Perf.ticksIO n (pure $ f a)"
-  (c, _) <- Perf.qtick n f a'
+  (cs, _) <- ticksIO n (pure $ f a')
+  let r3 = ft cs "ticksIO n (pure $ f a)"
+  (c, _) <- tickq n f a'
   let fq c t = sformat ((right 40 ' ' %. stext) %prec 3 % " cycles") t c
-  let r4 = fq c "Perf.qtick n f a"
+  let r4 = fq c "tickq n f a"
   cs <- fmap fst <$> replicateM n (tick f a')
   let r6 = ft cs "replicateM n (tick f a)"
-  cs <- fmap fst <$> replicateM' n (tick f a')
-  let r7 = ft cs "replicateM' n (tick f a)"
   cs <- fmap fst <$> replicateM n (tickIO (pure (f a')))
   let r8 = ft cs "replicateM n (tickIO (pure (f a)))"
   cs <- fmap fst <$> replicateM n (tick (app (f a')) ())
@@ -184,15 +221,8 @@ main = do
         "Perf.tickns n f [1,10,100,1000]: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
   writeFile "other/ticks.md" $
-    code ["sum to " <> show a, "n = " <> show n, r1, r3, r4, r6, r7, r8, r9, r10, r11, r12, r13]
+    code ["sum to " <> show a, "n = " <> show n, rprime, r3, r4, r6, r8, r9, r10, r11, r12, r13]
 
-  -- | ttick
-  (cs, _) <- ticksL n f a'
-  let r1 = ft cs "Perf.ticksL n f a"
-  (cs, _) <- ticksS n f a'
-  let r2 = ft cs "Perf.ticksS n f a"
-  writeFile "other/tticks.md" $
-    code ["sum to " <> show a, "n = " <> show n, r1, r2]
 
   -- vectors
   let sumv :: V.Vector Double -> Double

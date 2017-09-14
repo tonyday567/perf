@@ -13,45 +13,46 @@
 <p>It does, however, compute any given expression in the code at most once per time that its surrounding lambda-expression is entered, or at most once ever if it is at top level.</p>
 <p>https://wiki.haskell.org/Constant_applicative_form</p>
 <h2 id="tick_">tick_</h2>
-<pre><code>one tick_: 18 cycles
-next 10: [20,18,18,18,18,22,20,20,20,18]
-average over 1m: 18.90 cycles
-99.999% perc: 34,360
-99.9% perc: 46.77
-99th perc:  22.17
-40th perc:  17.39
+<pre><code>one tick_: 20 cycles
+next 10: [18,16,18,18,20,18,18,20,20,18]
+average over 1m: 18.94 cycles
+99.999% perc: 12,963
+99.9% perc: 48.16
+99th perc:  24.90
+40th perc:  17.58
 [min, 10th, 20th, .. 90th, max]:
- 12.00 15.41 16.13 16.86 17.39 17.87 18.35 18.83 19.52 20.33 3.691e5</code></pre>
+ 12.00 15.48 16.30 17.08 17.58 18.09 18.59 19.16 20.00 20.84 1.592e5</code></pre>
 <h2 id="tick">tick</h2>
 <pre><code>sum to 1000.0
-first measure: 18262 cycles
-average over next 1000: 16.17 cycles
+first measure: 15272 cycles
+average over next 1000: 31.24 cycles
 [min, 30th, median, 90th, 99th, max]:
- 14.00 15.38 16.02 19.14 25.67 32.00</code></pre>
+ 14.00 16.10 16.88 18.68 21.73 1.409e4</code></pre>
 <h2 id="ttick">ttick</h2>
 <pre><code>sum to 1000.0
 n = 1000
-Perf.ticksL n f a                       1.36e4 cycles
-Perf.ticksS n f a                       1.57e4 cycles</code></pre>
+ticksNonMemoising n f a       1.59e4 1.59e4 1.56e4 1.56e4 2.29e4 1.56e4  1.57e4 cycles
+ticksTest n f a               1.34e4 1.34e4 1.34e4 1.34e4 1.34e4 1.32e4  1.56e4 cycles
+ticksLazy n f a               16.0  16.0  18.0  18.0  16.0  16.0        16.1   cycles
+ticksMemoising n f a          1.37e4 1.37e4 1.33e4 1.33e4 1.34e4 1.38e4  1.34e4 cycles</code></pre>
 <h2 id="ticks">ticks</h2>
 <pre><code>sum to 1000.0
 n = 1000
-Perf.ticks n f a                        16.0 cycles
-Perf.ticksIO n (pure $ f a)             15.9 cycles
-Perf.qtick n f a                        15.8 cycles
-replicateM n (tick f a)                 16.2 cycles
-replicateM&#39; n (tick f a)                16.0 cycles
-replicateM n (tickIO (pure (f a)))      16.2 cycles
-replicateM n (tick (app (f a)) ())      15.7 cycles
-replicateM n (tick identity (f a))      16.3 cycles
-replicateM n (tick (const (f a)) ())    16.2 cycles
-(replicateM n . tick f) &lt;$&gt; [1,10,100,1000]:  23.7 132 1.38e3 1.35e4
-Perf.tickns n f [1,10,100,1000]:  15.8 15.8 15.7 15.9</code></pre>
+ticks n f a                             23.9 cycles
+ticksIO n (pure $ f a)                  23.2 cycles
+tickq n f a                             23.7 cycles
+replicateM n (tick f a)                 23.8 cycles
+replicateM n (tickIO (pure (f a)))      23.8 cycles
+replicateM n (tick (app (f a)) ())      22.6 cycles
+replicateM n (tick identity (f a))      23.8 cycles
+replicateM n (tick (const (f a)) ())    23.8 cycles
+(replicateM n . tick f) &lt;$&gt; [1,10,100,1000]:  34.1 156 1.61e3 1.37e4
+Perf.tickns n f [1,10,100,1000]:  17.2 17.1 17.0 22.9</code></pre>
 <h2 id="vector">vector</h2>
 <pre><code>sum to 1000.0
-boxed: 1.58e4
-storable: 7.54e3
-unboxed: 7.54e3</code></pre>
+boxed: 33.2
+storable: 27.5
+unboxed: 32.0</code></pre>
 <h1 id="workflow">workflow</h1>
 <pre><code>stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i other/header.md readme.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
 <p>solo experiments:</p>

@@ -10,17 +10,22 @@
 -- The measurement unit - a 'Cycle' - is one oscillation of the chip crystal as measured by the <https://en.wikipedia.org/wiki/Time_Stamp_Counter rdtsc> instruction which inspects the TSC register.
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
---
+--  
 module Perf.Cycle
   ( -- $setup
     Cycle
   , tick_
   , warmup
   , tick
+  , tickInline
+  , tickNoinline
   , tick'
   , tickIO
   , ticks
+  , ticksInline
+  , ticksNoinline
   , ticksIO
+  , ticksRepIO
   , tickq
   , tickns
   , average
@@ -29,7 +34,7 @@ module Perf.Cycle
   ) where
 
 import qualified Control.Foldl as L
-import Data.List
+import Data.List as List
 import Data.TDigest
 import NumHask.Prelude
 import System.CPUTime.Rdtsc
@@ -119,6 +124,14 @@ warmup n = do
 tick :: (a -> b) -> a -> IO (Cycle, b)
 tick !f !a = tick' f a
 
+tickInline :: (a -> b) -> a -> IO (Cycle, b)
+tickInline !f !a = tick' f a
+{-# INLINE tickInline #-}
+
+tickNoinline :: (a -> b) -> a -> IO (Cycle, b)
+tickNoinline !f !a = tick' f a
+{-# NOINLINE tickNoinline #-}
+
 -- | tick where the arguments are lazy, so the evaluation forcing may include prior thunk evaluations in f and a
 tick' :: (a -> b) -> a -> IO (Cycle, b)
 tick' f a = do
@@ -170,7 +183,26 @@ ticks n0 f a = go f a n0 []
       | otherwise = do
           (t,_) <- tick f a
           go f' a' (n - 1) (t:ts)
--- {-# INLINE ticks #-}
+
+ticksInline :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksInline n0 f a = go f a n0 []
+  where
+    go f' a' n ts
+      | n <= 0 = pure (reverse ts, f a)
+      | otherwise = do
+          (t,_) <- tickInline f a
+          go f' a' (n - 1) (t:ts)
+{-# INLINE ticksInline #-}
+
+ticksNoinline :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksNoinline n0 f a = go f a n0 []
+  where
+    go f' a' n ts
+      | n <= 0 = pure (reverse ts, f a)
+      | otherwise = do
+          (t,_) <- tickNoinline f a
+          go f' a' (n - 1) (t:ts)
+{-# NOINLINE ticksNoinline #-}
 
 -- | returns the 40th percentile measurement and the last evaluated f a
 --
@@ -188,9 +220,23 @@ tickq n f a = do
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
 --
 ticksIO :: Int -> IO a -> IO ([Cycle], a)
-ticksIO n a = do
-    cs <- replicateM n (tickIO a)
-    pure (fst <$> cs, last $ snd <$> cs)
+ticksIO n0 a = go a n0 []
+  where
+    go a' n ts
+      | n <= 0 = do
+            a'' <- a'
+            pure (reverse ts, a'')
+      | otherwise = do
+          (t,_) <- tickIO a'
+          go a' (n - 1) (t:ts)
+{-# INLINE ticksIO #-}
+
+ticksRepIO :: Int -> IO a -> IO ([Cycle], a)
+ticksRepIO n a = do
+    xs <- replicateM n (tickIO a)
+    pure (fst <$> xs, List.last $ snd <$> xs)
+{-# INLINE ticksRepIO #-}
+
 
 -- | n measurements on each of a list of a's to be applied to f.
 --

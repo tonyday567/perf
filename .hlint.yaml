@@ -51,6 +51,8 @@
 # - ignore: {name: Use let}
 # - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
 - ignore: {name: Reduce duplication, within: Perf.Measure}
+- ignore: {name: Avoid Lambda}
+- ignore: {name: Redundant Lambda}
 
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~

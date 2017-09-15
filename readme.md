@@ -9,17 +9,16 @@ If you want to make stuff very fast in haskell, you need to dig down below the c
 
 This library is an experiment in measuring cycles (or ticks), and development of intuition about what is going on at the very fast level.
 
+https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html?highlight=inline#unboxed-type-kinds
+
+
+
+
 Examples
 ===
 
 The code for all results can be found in [examples/examples.hs](examples/examples.hs).
 
-
-GHC does not memoize functions.
-
-It does, however, compute any given expression in the code at most once per time that its surrounding lambda-expression is entered, or at most once ever if it is at top level. 
-
-https://wiki.haskell.org/Constant_applicative_form
 
 tick_
 ---
@@ -35,18 +34,29 @@ tick
 other/tick.md
 ```
 
-ttick
----
-
-```include
-other/tticks.md
-```
-
 ticks
 ---
 
 ```include
 other/ticks.md
+```
+
+ticks cost
+---
+
+Looking for hidden computation costs:
+
+```include
+other/ticksCost.md
+```
+
+tickns
+---
+
+Multiple runs summing to a series of numbers.
+
+```include
+other/tickns.md
 ```
 
 vector
@@ -55,6 +65,55 @@ vector
 ```include
 other/vector.md
 ```
+
+Findings
+===
+
+strictness
+---
+
+See https://www.fpcomplete.com/blog/2017/09/all-about-strictness
+
+memoization
+---
+
+- turn on no-full-laziness and no-cse
+- add the inline pragma to ticks
+
+
+no-full-laziness & nocse in Perf.Cycle (mono function)
+
+ticks non-memo 1.28e5
+ticks inline memo
+ticks noinline no-memo
+ticks inlinable non-memo
+ticksIO no-memo 6.48e4
+
+no-full-laziness in Perf.cycle
+
+ticks non-memo 6.51e4
+ticks inline memo
+ticksIO nomemo 1.28e5
+
+no-cse
+
+ticks memo 7.66e4
+ticks inline memo
+ticksIO nomemo 6.47e4
+
+
+
+
+
+polymorphism
+---
+
+Can slow a computation down by 2x
+
+lambda expressions
+---
+
+really slow things down 1.58e6 versus 6.42e4
 
 workflow
 ===

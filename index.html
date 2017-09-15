@@ -7,52 +7,79 @@
 <p><a href="https://github.com/tonyday567/perf">repo</a></p>
 <p>If you want to make stuff very fast in haskell, you need to dig down below the criterion-style level of abstraction and start counting cycles using the <a href="https://en.wikipedia.org/wiki/Time_Stamp_Counter">rdtsc</a> register on x86.</p>
 <p>This library is an experiment in measuring cycles (or ticks), and development of intuition about what is going on at the very fast level.</p>
+<p>https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html?highlight=inline#unboxed-type-kinds</p>
 <h1 id="examples">Examples</h1>
 <p>The code for all results can be found in <a href="examples/examples.hs" class="uri">examples/examples.hs</a>.</p>
-<p>GHC does not memoize functions.</p>
-<p>It does, however, compute any given expression in the code at most once per time that its surrounding lambda-expression is entered, or at most once ever if it is at top level.</p>
-<p>https://wiki.haskell.org/Constant_applicative_form</p>
 <h2 id="tick_">tick_</h2>
-<pre><code>one tick_: 20 cycles
-next 10: [18,16,18,18,20,18,18,20,20,18]
-average over 1m: 18.94 cycles
-99.999% perc: 12,963
-99.9% perc: 48.16
-99th perc:  24.90
-40th perc:  17.58
+<pre><code>one tick_: 18 cycles
+next 10: [18,18,20,20,20,16,16,18,18,18]
+average over 1m: 19.74 cycles
+99.999% perc: 260
+99.9% perc: 53.30
+99th perc:  25.54
+40th perc:  18.30
 [min, 10th, 20th, .. 90th, max]:
- 12.00 15.48 16.30 17.08 17.58 18.09 18.59 19.16 20.00 20.84 1.592e5</code></pre>
+ 12.00 15.94 17.10 17.70 18.30 18.90 19.74 20.63 22.01 24.33 1.674e5</code></pre>
 <h2 id="tick">tick</h2>
-<pre><code>sum to 1000.0
-first measure: 15272 cycles
-average over next 1000: 31.24 cycles
+<pre><code>sum to 100000.0
+first measure: 64664 cycles
+second measure: 16 cycles
+average over next 100: 696.80 cycles
 [min, 30th, median, 90th, 99th, max]:
- 14.00 16.10 16.88 18.68 21.73 1.409e4</code></pre>
-<h2 id="ttick">ttick</h2>
-<pre><code>sum to 1000.0
-n = 1000
-ticksNonMemoising n f a       1.59e4 1.59e4 1.56e4 1.56e4 2.29e4 1.56e4  1.57e4 cycles
-ticksTest n f a               1.34e4 1.34e4 1.34e4 1.34e4 1.34e4 1.32e4  1.56e4 cycles
-ticksLazy n f a               16.0  16.0  18.0  18.0  16.0  16.0        16.1   cycles
-ticksMemoising n f a          1.37e4 1.37e4 1.33e4 1.33e4 1.34e4 1.38e4  1.34e4 cycles</code></pre>
+ 14.00 15.69 16.34 18.54 3.404e4 6.796e4</code></pre>
 <h2 id="ticks">ticks</h2>
-<pre><code>sum to 1000.0
-n = 1000
-ticks n f a                             23.9 cycles
-ticksIO n (pure $ f a)                  23.2 cycles
-tickq n f a                             23.7 cycles
-replicateM n (tick f a)                 23.8 cycles
-replicateM n (tickIO (pure (f a)))      23.8 cycles
-replicateM n (tick (app (f a)) ())      22.6 cycles
-replicateM n (tick identity (f a))      23.8 cycles
-replicateM n (tick (const (f a)) ())    23.8 cycles
-(replicateM n . tick f) &lt;$&gt; [1,10,100,1000]:  34.1 156 1.61e3 1.37e4
-Perf.tickns n f [1,10,100,1000]:  17.2 17.1 17.0 22.9</code></pre>
+<pre><code>sum to 100000.0 n = 100 prime run: 6.47e4
+run                       first     2nd     3rd     4th     5th  40th %
+ticksIO                     104    16.0    14.0    16.0    18.0   16.0 cycles
+ticksPure                6.45e4    82.0    18.0    16.0    16.0   16.0 cycles
+ticksInline                14.0    14.0    16.0    16.0    16.0   16.2 cycles
+ticksNoinline            6.42e4  6.42e4  6.42e4  6.42e4  6.42e4 6.42e4 cycles
+ticksInFile              6.42e4  6.42e4  6.44e4  1.39e5  6.43e4 6.42e4 cycles
+ticksRep                   16.0    16.0    18.0    18.0    18.0   16.3 cycles
+ticksIO Lambda           1.84e6    96.0    16.0    14.0    16.0   15.8 cycles
+ticksPure Lambda         1.45e6     144    16.0    16.0    18.0   15.9 cycles
+ticksInline Lambda       1.45e6  1.45e6  1.44e6  1.44e6  1.45e6 1.56e6 cycles
+ticksIO Poly             1.49e5  1.49e5  1.49e5  1.49e5  1.49e5 1.45e5 cycles
+ticksPure Poly           6.58e4     142    40.0    18.0    16.0   16.2 cycles
+ticksInline Poly         6.46e4  6.42e4  6.42e4  6.42e4  6.42e4 6.42e4 cycles</code></pre>
+<h2 id="ticks-cost">ticks cost</h2>
+<p>Looking for hidden computation costs:</p>
+<pre><code>n =    1.00 outside:  4.55e3 inside:  2.31e3 gap:  2.24e3
+n =    10.0 outside:  3.68e3 inside:  1.78e3 gap:  1.90e3
+n =     100 outside:  3.65e3 inside:  1.83e3 gap:  1.82e3
+n =  1.00e3 outside:  4.15e3 inside:  2.36e3 gap:  1.79e3
+n =  1.00e4 outside:  9.99e3 inside:  8.19e3 gap:  1.80e3
+n =  1.00e5 outside:  6.77e4 inside:  6.59e4 gap:  1.83e3</code></pre>
+<h2 id="tickns">tickns</h2>
+<p>Multiple runs summing to a series of numbers.</p>
+<pre><code>sum to&#39;s [1,10,100,1000,10000,100000]
+n = 100
+(replicateM n . tick fMono) &lt;$&gt; as:  15.8 16.3 94.2 675 6.45e3 6.42e4
+Perf.tickns n fMono as:  16.3 16.2 16.0 16.1 16.1 16.8</code></pre>
 <h2 id="vector">vector</h2>
-<pre><code>sum to 1000.0
-boxed: 33.2
-storable: 27.5
-unboxed: 32.0</code></pre>
+<pre><code>sum to 100000.0
+ticksInFile list         1.52e6  1.50e6  1.51e6  1.59e6  1.56e6 1.60e6 cycles
+ticksInFile boxed        9.89e5  1.00e6  1.02e6  9.99e5  9.83e5 9.69e5 cycles
+ticksInFile storable     3.55e5  2.98e5  2.98e5  3.84e5  2.98e5 2.98e5 cycles
+ticksInFile unboxed      2.90e5  3.03e5  2.98e5  2.98e5  3.32e5 2.98e5 cycles</code></pre>
+<h1 id="findings">Findings</h1>
+<h2 id="strictness">strictness</h2>
+<p>See https://www.fpcomplete.com/blog/2017/09/all-about-strictness</p>
+<h2 id="memoization">memoization</h2>
+<ul class="incremental">
+<li>turn on no-full-laziness and no-cse</li>
+<li>add the inline pragma to ticks</li>
+</ul>
+<p>no-full-laziness &amp; nocse in Perf.Cycle (mono function)</p>
+<p>ticks non-memo 1.28e5 ticks inline memo ticks noinline no-memo ticks inlinable non-memo ticksIO no-memo 6.48e4</p>
+<p>no-full-laziness in Perf.cycle</p>
+<p>ticks non-memo 6.51e4 ticks inline memo ticksIO nomemo 1.28e5</p>
+<p>no-cse</p>
+<p>ticks memo 7.66e4 ticks inline memo ticksIO nomemo 6.47e4</p>
+<h2 id="polymorphism">polymorphism</h2>
+<p>Can slow a computation down by 2x</p>
+<h2 id="lambda-expressions">lambda expressions</h2>
+<p>really slow things down 1.58e6 versus 6.42e4</p>
 <h1 id="workflow">workflow</h1>
 <pre><code>stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i other/header.md readme.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
 <p>solo experiments:</p>
@@ -78,7 +105,7 @@ unboxed: 32.0</code></pre>
 <li><p><a href="http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/">An insufficiently lazy map</a></p></li>
 <li><p><a href="http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/">Pinpointing space leaks in big programs</a></p></li>
 </ul>
-<h2 id="memoization">memoization</h2>
+<h2 id="memoization-1">memoization</h2>
 <p>http://okmij.org/ftp/Haskell/#memo-off</p>
 <h2 id="cache-cycle-estimates">cache cycle estimates</h2>
 <table>

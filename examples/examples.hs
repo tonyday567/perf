@@ -1,17 +1,20 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-import qualified Data.List as List
+module Main where
+
 import qualified Data.Text as Text
-import Data.Text.IO (writeFile, readFile)
-import qualified Data.Map as Map
+import Data.Text.IO (writeFile)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
@@ -22,53 +25,91 @@ import Perf
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
-  , sumTo :: Maybe Double -- <?> "sum to this number"
+  , sumTo :: Maybe Int -- <?> "sum to this number"
+  , sumsTo :: Maybe [Int] -- <?> "sum to these numbers"
+  , flipMaybe :: Maybe Bool
   } deriving (Generic, Show)
+
+instance ParseField [Int]
 
 instance ParseRecord Opts
 
-ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (fst <$> ts, snd $ List.last ts)
+ticksInFile :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksInFile n0 f a = go f a n0 []
+  where
+    go f a n ts
+      | n <= 0 = pure (ts, f a)
+      | otherwise = do
+          (t,_) <- tick f a
+          go f a (n - 1) (t:ts)
 
-qtick :: Int -> (a -> b) -> a -> IO (Double, b)
-qtick n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (percentile 0.4 $ fst <$> ts, snd $ List.last ts)
+fLambda :: Int -> Int
+fLambda = \x -> foldl' (+) 0 [1 .. x]
+
+fMono :: Int -> Int
+fMono x = foldl' (+) 0 [1 .. x]
+
+fPoly :: (Enum b, Num b, Additive b) => b -> b
+fPoly x = foldl' (+) 0 [1 .. x]
+
+
+formatone :: (Real a) => Text -> a -> Text
+formatone =
+        sformat
+          ((right 24 ' ' %. stext) %
+           (left 7 ' ' %. prec 3) % " cycles")
+
+runone :: (Real a) => Text -> IO (a, b) -> IO Text
+runone label t = formatone label . fst <$> t
 
 main :: IO ()
 main = do
   o :: Opts <- getRecord "a random bit of text"
   let n = fromMaybe 1000 (runs o)
-  let a = fromMaybe 10000 (sumTo o)
+  let a = fromMaybe 1000 (sumTo o)
+  let !a' = fromIntegral a
+  let !a'' = a'+1
+  let !a''' = a'+1
+  let as = [1, 10, 100, 1000 :: Int]
+  let fm = fromMaybe True (flipMaybe o)
 
-  -- perf
-  -- prior to Perfification
-  result <- do
-      txt <- readFile "examples/examples.hs"
-      let n = Text.length txt
-      let x = foldl' (+) 0 [1..n]
-      putStrLn $ "sum of one to number of characters is: " <>
-          (show x :: Text)
-      pure (n, x)
+  writeFile "other/run.md" $
+    code
+      [ sformat ((right 24 ' ' %. stext)%prec 3)  "number of runs:" n
+      , sformat ((right 24 ' ' %. stext)%prec 3)  "accumulate to:" a
+      , sformat ((right 24 ' ' %. stext)%stext) "function:" "foldl' (+) 0"
+      ]
 
-  -- post-Perfification
-  (result', ms) <- runPerfT $ do
-          txt <- perf "file read" cycles $ readFile "examples/examples.hs"
-          n <- perf "length" cycles $ pure (Text.length txt)
-          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
-          perf "print to screen" cycles $
-              putStrLn $ "sum of one to number of characters is: " <>
-              (show x :: Text)
-          pure (n, x)
+  let formatRun :: [Cycle] -> Text -> Text
+      formatRun cs label =
+        sformat
+          ((right 24 ' ' %. stext) % stext %
+           (left 7 ' ' %. prec 3) % " cycles")
+          label
+          (Text.intercalate " " $ sformat (left 7 ' ' %. prec 3) <$>
+           take 5 cs)
+          (percentile 0.4 cs)
 
-  when (result == result') $ print "PerfT preserves computations"
+  let formatRunHeader =
+        sformat
+          ((right 24 ' ' %. stext) %
+           (left 7 ' ' %. stext) %
+           (left 8 ' ' %. stext) %
+           (left 8 ' ' %. stext) %
+           (left 8 ' ' %. stext) %
+           (left 8 ' ' %. stext) %
+           (left 8 ' ' %. stext))
+          "run"
+          "first"
+          "2nd"
+          "3rd"
+          "4th"
+          "5th"
+          "40th %"
 
-  let fmt = sformat ((right 40 ' ' %. stext) %prec 3 % " " % stext)
-  writeFile "other/perf.md" $
-    "\nperf cycle measurements\n---\n" <>
-    code ((\(t,c) -> fmt t c "cycles") <$> Map.toList ms)
+  let run label t = (`formatRun` label) . fst <$> t
+
+  _ <- warmup 100
 
   -- | tick_
   onetick <- tick_
@@ -93,104 +134,138 @@ main = do
       , mconcat (sformat (" " % prec 4) <$> qticks)
       ]
 
-
   -- tick
-  _ <- warmup 100
-  let f x = foldl' (+) 0 [1 .. x]
-  (t, _) <- tick f a
-  (ts, _) <- Main.ticks n f a
-  let qt x = (`percentile` x) <$> [0, 0.3, 0.5, 0.9, 0.99, 1]
+  (t, resultPrime) <- tick fMono a'
+  print resultPrime
+  (t2,_) <- tick fMono a'
   writeFile "other/tick.md" $
     code
       [ "sum to " <> show a
       , "first measure: " <> show t <> " cycles"
-      , "average over next " <> show n <> ": " <> sformat (fixed 2) (average ts) <>
-        " cycles"
-      , "[min, 30th, median, 90th, 99th, max]:"
-      , mconcat (sformat (" " % prec 4) <$> qt ts)
+      , "second measure: " <> show t2 <> " cycles"
       ]
 
-  -- | ticks & friends
-  (cs, _) <- Perf.ticks n f a
-  let ft cs t =
-        sformat
-          ((right 40 ' ' %. stext) % prec 3 % " cycles")
-          t
-          (percentile 0.4 cs)
-  let r1 = ft cs "Perf.ticks n f a"
-  (cs, _) <- Main.ticks n f a
-  let r2 = ft cs "Main.ticks n f a"
-  (cs, _) <- Perf.ticksIO n (pure $ f a)
-  let r3 = ft cs "Perf.ticksIO n (pure $ f a)"
-  (c, _) <- Perf.qtick n f a
-  let fq c t = sformat ((right 40 ' ' %. stext) %prec 3 % " cycles") t c
-  let r4 = fq c "Perf.qtick n f a"
-  (c, _) <- Main.qtick n f a
-  let r5 = fq c "Main.qtick n f a"
-  cs <- fmap fst <$> replicateM n (tick f a)
-  let r6 = ft cs "replicateM n (tick f a)"
-  cs <- fmap fst <$> replicateM' n (tick f a)
-  let r7 = ft cs "replicateM' n (tick f a)"
-  cs <- fmap fst <$> replicateM n (tickIO (pure (f a)))
-  let r8 = ft cs "replicateM n (tickIO (pure (f a)))"
-  cs <- fmap fst <$> replicateM n (tick (app (f a)) ())
-  let r9 = ft cs "replicateM n (tick (app (f a)) ())"
-  cs <- fmap fst <$> replicateM n (tick identity (f a))
-  let r10 = ft cs "replicateM n (tick identity (f a))"
-  cs <- fmap fst <$> replicateM n (tick (const (f a)) ())
-  let r11 = ft cs "replicateM n (tick (const (f a)) ())"
+  -- | various versions of tick
+  rpure <- run "ticks" $ ticks n fMono a'
+  rpurePoly <- run "ticks (poly)" $ ticks n fPoly a
+  rpureLambda <- run "ticks (lambda)" $ ticks n fLambda a'
+  rio <- run "ticksIO" $ ticksIO n (pure $ fMono a'')
+  rioPoly <- run "ticksIO (poly)" $ ticksIO n (pure $ fPoly a)
+  rioLambda <- run "ticksIO (lambda)" $ ticksIO n (pure $ fLambda a')
+
+  writeFile "other/ticks.md" $
+    code [ "sum to " <> show a <> " n = " <> show n <> " prime run: " <>
+           sformat (prec 3) t
+         , formatRunHeader
+         , rpure
+         , rpureLambda
+         , rpurePoly
+         , rio
+         , rioLambda
+         , rioPoly
+         ]
+
+  -- | overall ticks cost
+  let formatGap :: Int -> (Cycle, ([Cycle],b)) -> Text
+      formatGap a (co, (ci, _)) =
+          sformat
+          ("n = " %(left 7 ' ' %. prec 3)%" outside: "%(left 7 ' ' %. prec 3)%" inside: "%(left 7 ' ' %. prec 3)%" gap: "%(left 7 ' ' %. prec 3))
+          a co (sum ci) (co - sum ci)
+  let runGap t a = formatGap a <$> tickIO t
+  gaps <- sequence $ (\a -> runGap (ticks n fPoly a) a) <$> as
+  writeFile "other/ticksCost.md" $ code gaps
+
+  -- | ns
   css <-
     fmap (fmap fst) <$>
-    sequence ((replicateM n . tick f) <$> [1, 10, 100, 1000, 10000 :: Int])
+    sequence ((replicateM n . tick fMono) <$> as)
   let r12 =
-        "(replicateM n . tick f) <$> [1,10,100,1000,10000]: " <>
+        "(replicateM n . tick fMono) <$> as: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> css))
-  (ts, _) <- Perf.tickns n f [1, 10, 100, 1000, 10000 :: Int]
+  (ts, _) <-ns (ticks n fMono) as
   let r13 =
-        "Perf.tickns n f [1,10,100,1000,10000]: " <>
+        "ns (ticks n fMono) as: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
-  writeFile "other/ticks.md" $
-    code ["sum to " <> show a, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  writeFile "other/tickns.md" $
+    code ["sum to's " <> show as, r13, r12]
 
-  -- vectors
-
-  let sumv :: V.Vector Double -> Double
+  -- | vectors
+  let asl :: [Int]
+      asl = [1 .. a]
+  let suml :: [Int] -> Int
+      suml = foldl' (+) 0
+  rlist <- run "ticks list" $ ticks n suml asl
+  let sumv :: V.Vector Int -> Int
       sumv = V.foldl (+) 0
-
-  let asv :: V.Vector Double =
-        (\x -> V.generate (fromIntegral $ floor x) fromIntegral) a
-
-  (t, _) <- Perf.ticks n sumv asv
-  let rboxed = sformat ("boxed: " %prec 3) (percentile 0.4 t)
-
-  let sums :: S.Vector Double -> Double
+  let asv :: V.Vector Int =
+        V.generate a identity
+  rboxed <- run "ticks boxed" $ ticks n sumv asv
+  let sums :: S.Vector Int -> Int
       sums = S.foldl (+) 0
-
-  let ass :: S.Vector Double =
-        (\x -> S.generate (fromIntegral $ floor x) fromIntegral) a
-
-  (t, _) <- Perf.ticks n sums ass
-  let rstorable = sformat ("storable: " %prec 3) (percentile 0.4 t)
-
-  let sumu :: U.Vector Double -> Double
+  let ass :: S.Vector Int =
+        S.generate a identity
+  rstorable <- run "ticks storable" $ ticks n sums ass
+  let sumu :: U.Vector Int -> Int
       sumu = U.foldl (+) 0
-
-  let asu :: U.Vector Double =
-        (\x -> U.generate (fromIntegral $ floor x) fromIntegral) a
-
-  (t, _) <- Perf.ticks n sumu asu
-  let runboxed = sformat ("unboxed: " %prec 3) (percentile 0.4 t)
-
+  let asu :: U.Vector Int =
+        U.generate a identity
+  runboxed <- run "ticks unboxed" $ ticks n sumu asu
   writeFile "other/vector.md" $
-    code ["sum to " <> show a, rboxed, rstorable, runboxed]
+    code ["sum to " <> show a, rlist, rboxed, rstorable, runboxed]
 
-  (t, _) <- Perf.ticks n f a
-  putStrLn $ sformat ("Perf.Cycle.ticks n f a: " %prec 3) (percentile 0.4 t)
 
+  -- WHNF
+  let just' x
+        | fm = Just x
+        | otherwise = Nothing
+
+  rnf <- runone "tick" $ tick (fmap fMono) (just' a')
+  rwhnf <- runone "tickWHNF" $ tick (fmap fMono) (just' a')
+  rnfs <- run "ticks" $ ticks n (fmap fMono) (just' a')
+  rwhnfs <- run "ticksWHNF" $ ticksWHNF n (fmap fMono) (just' a')
+
+  rnfio <- runone "tickIO" $ tickIO (pure $ fmap fMono (just' a'))
+  rwhnfio <- runone "tickWHNFIO" $ tickWHNFIO (pure $ fmap fMono (just' a'))
+  rnfsio <- run "ticksIO" $ ticksIO n (pure $ fmap fMono (just' a'''))
+  rwhnfsio <- run "ticksWHNFIO" $ ticksWHNFIO n (pure $ fmap fMono (just' a'))
+
+  writeFile "other/whnf.md" $
+    code ["sum to " <> show a,
+          rnf, rwhnf, rnfs, rwhnfs, rnfio, rwhnfio, rnfsio, rwhnfsio]
+
+{-
   -- perf basics
   (result, cs) <- runPerfT $
-      perf "sum" cycles (pure $ foldl' (+) 0 [0..10000 :: Integer])
+      perf "sum" cycles (pure $ foldl' (+) 0 [0 .. floor a :: Integer])
   putStrLn (show (result, cs) :: Text)
+
+  -- PerfT example
+  -- prior to Perfification
+  result <- do
+      txt <- readFile "examples/examples.hs"
+      let n = Text.length txt
+      let x = foldl' (+) 0 [1..n]
+      putStrLn $ "sum of one to number of characters is: " <>
+          (show x :: Text)
+      pure (n, x)
+
+  -- post-Perfification
+  (result', ms) <- runPerfT $ do
+          txt <- perf "file read" cycles $ readFile "examples/examples.hs"
+          n <- perf "length" cycles $ pure (Text.length txt)
+          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
+          perf "print to screen" cycles $
+              putStrLn $ "sum of one to number of characters is: " <>
+              (show x :: Text)
+          pure (n, x)
+
+  when (result == result') $ print "PerfT preserving computations"
+
+  let fmt = sformat ((right 40 ' ' %. stext) %prec 3 % " " % stext)
+  writeFile "other/perf.md" $
+    "\nperf cycle measurements\n---\n" <>
+    code ((\(t,c) -> fmt t c "cycles") <$> Map.toList ms)
+-}
 
 
 code :: [Text] -> Text

@@ -5,14 +5,21 @@
 
 [repo](https://github.com/tonyday567/perf)
 
-If you want to make stuff very fast in haskell, you need to dig down below the criterion-style level of abstraction and start counting cycles using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
+Performance experiments using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
 
-This library is an experiment in measuring cycles (or ticks), and development of intuition about what is going on at the very fast level.
 
-Examples
+Benchmarks
 ===
 
-The code for all results can be found in [examples/examples.hs](examples/examples.hs).
+The code for these benchmark runs can be found in [examples/examples.hs](examples/examples.hs).
+
+Benchmarks are based on:
+
+```include
+other/run.md
+```
+
+1 cycle = 0.4 nanoseconds (on a 2.5 GHz machine by definition)
 
 tick_
 ---
@@ -35,12 +42,95 @@ ticks
 other/ticks.md
 ```
 
+ticks cost
+---
+
+Looking for hidden computation costs:
+
+```include
+other/ticksCost.md
+```
+
+tickns
+---
+
+Multiple runs summing to a series of numbers.
+
+```include
+other/tickns.md
+```
+
 vector
 ---
 
 ```include
 other/vector.md
 ```
+
+whnf
+---
+
+```include
+other/whnf.md
+```
+
+R&D, To Do
+===
+
+metal speed
+---
+
+The average cycles per (+) operation can get down to 0.7, and there are about 4 cache registers per cycle, so 2.8 low level instructions per (+).  Is this close to the metal speed?
+
+unboxed versus boxed
+---
+
+[ghc user guide](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html?highlight=inline#unboxed-type-kinds)
+
+strictness
+---
+
+[All about strictness](https://www.fpcomplete.com/blog/2017/09/all-about-strictness)
+
+sharing
+---
+
+- turn on no-full-laziness and no-cse
+- add the inline pragma to `ticks`
+
+comparative results
+
+- no-full-laziness & nocse in Perf.Cycle (mono function)
+
+```
+ticks non-memo 1.28e5
+ticks inline memo
+ticks noinline no-memo
+ticks inlinable non-memo
+ticksIO non-memo 6.48e4
+
+no-full-laziness in Perf.cycle
+
+ticks non-memo 6.51e4
+ticks inline memo
+ticksIO non-memo 1.28e5
+
+no-cse
+
+ticks memo 7.66e4
+ticks inline memo
+ticksIO nomemo 6.47e4
+```
+
+polymorphism
+---
+
+Can slow a computation down by 2x
+
+lambda expressions
+---
+
+Can really slow things down
 
 workflow
 ===

@@ -10,30 +10,32 @@
 -- The measurement unit - a 'Cycle' - is one oscillation of the chip crystal as measured by the <https://en.wikipedia.org/wiki/Time_Stamp_Counter rdtsc> instruction which inspects the TSC register.
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
---
+--  
 module Perf.Cycle
   ( -- $setup
     Cycle
   , tick_
   , warmup
   , tick
-  , app
+  , tick'
   , tickIO
   , ticks
-  , qtick
   , ticksIO
-  , tickns
-  , force
-  , replicateM'
+  , ns
+  , tickWHNF
+  , tickWHNF'
+  , tickWHNFIO
+  , ticksWHNF
+  , ticksWHNFIO
   , average
   , deciles
   , percentile
   ) where
 
 import qualified Control.Foldl as L
-import Data.List
+import Data.List as List
 import Data.TDigest
-import NumHask.Prelude hiding (force)
+import NumHask.Prelude
 import System.CPUTime.Rdtsc
 import qualified Protolude
 
@@ -44,7 +46,6 @@ import qualified Protolude
 -- >>> let a = 1000
 -- >>> let f x = foldl' (+) 0 [1 .. x]
 --
-
 
 -- | an unwrapped Word64
 type Cycle = Word64
@@ -109,77 +110,80 @@ warmup n = do
   ts <- replicateM n tick_
   pure $ average ts
 
--- | `tick f a` strictly applies a to f, and returns a (Cycle, f a)
+-- | tick where the arguments are lazy, so measurement may include evluation of thunks that may constitute f and/or a
+tick' :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tick' f a = do
+  !t <- rdtsc
+  !a' <- pure (force $ f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
+
+-- | `tick f a` strictly evaluates f and a, then deeply evaluates f a, returning a (Cycle, f a)
 --
 -- >>> _ <- warmup 100
 -- >>> (cs, _) <- tick f a
 --
--- > one tick: 197012 cycles
--- > average over 1000: 10222.79 cycles -- 10 cycles per operation
--- > [min, 30th, median, 90th, 99th, max]:
--- > 1.002e4 1.011e4 1.013e4 1.044e4 1.051e4 2.623e4
-tick :: (a -> b) -> a -> IO (Cycle, b)
-tick f a = do
-  !t <- rdtsc
-  !a' <- pure (f a)
-  !t' <- rdtsc
-  pure (t' - t, a')
+-- > sum to 1000
+-- > first measure: 1202 cycles
+-- > second measure: 18 cycles
+--
+-- Note that feeding the same computation through tick twice will tend to kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fn--full-laziness (and maybe -fno-cse).
+tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tick !f !a = tick' f a
 
--- | evaluates and measures an `IO a`
+tickNoinline :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickNoinline !f !a = tick' f a
+{-# NOINLINE tickNoinline #-}
+
+-- | measures and deeply evaluates an `IO a`
 --
 -- >>> (cs, _) <- tickIO (pure (f a))
 --
-tickIO :: IO a -> IO (Cycle, a)
+tickIO :: (NFData a) => IO a -> IO (Cycle, a)
 tickIO a = do
   t <- rdtsc
-  !a' <- a
+  !a' <- force <$> a
   t' <- rdtsc
   pure (t' - t, a')
 
--- | needs more testing
-app :: t -> () -> t
-app e () = e
-{-# NOINLINE app #-}
+tickIONoinline :: (NFData a) => IO a -> IO (Cycle, a)
+tickIONoinline = tickIO
+{-# NOINLINE tickIONoinline #-}
 
 -- | n measurements of a tick
 --
 -- returns a list of Cycles and the last evaluated f a
 --
--- GHC is very good as memoization, and any of the functions that measuring a computation multiple times are fraught.  When a computation actually gets memoized is an inexact science.  Current readings are:
+-- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline on tick to help reduce the chances of memoization, but this is an inexact science in the hands of he author, at least, so interpret with caution.
 --
--- > sum to 1000.0
--- > Perf.ticks n f a                        8.37e3 cycles
--- > Main.ticks n f a                        8.38e3 cycles
--- > Perf.ticksIO n (pure $ f a)             8.38e3 cycles
--- > Perf.qtick n f a                        8.38e3 cycles
--- > Main.qtick n f a                        8.38e3 cycles
--- > replicateM n (tick f a)                 8.37e3 cycles
--- > replicateM' n (tick f a)                9.74e3 cycles
--- > replicateM n (tickIO (pure (f a)))      1.21e4 cycles
--- > replicateM n (tick (app (f a)) ())      9.72e3 cycles
--- > replicateM n (tick identity (f n))      18.2 cycles
--- > replicateM n (tick (const (f a)) ())    9.71e3 cycles
--- > (replicateM n . tick f) <$> [1,10,100,1000,10000]:  16.3 16.2 16.3 16.2 16.2
--- > Perf.tickns n f [1,10,100,1000,10000]:  16.2 16.2 16.2 16.2 16.2
---
+-- 
 -- >>> let n = 1000
 -- >>> (cs, fa) <- ticks n f a
 --
-ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (fst <$> ts, snd $ last ts)
-{-# INLINE ticks #-}
-
--- | returns the 40th percentile measurement and the last evaluated f a
+-- Baseline speed can be highly senistive to the nature of the function trimmings.  Polymorphic functions can tend to be slightly slower, and functions with lambda expressions can experience dramatic slowdowns.
 --
--- >>> (c, fa) <- qtick n f a
+-- > fMono :: Int -> Int
+-- > fMono x = foldl' (+) 0 [1 .. x]
+-- > fPoly :: (Enum b, Num b, Additive b) => b -> b
+-- > fPoly x = foldl' (+) 0 [1 .. x]
+-- > fLambda :: Int -> Int
+-- > fLambda = \x -> foldl' (+) 0 [1 .. x]
 --
-qtick :: Int -> (a -> b) -> a -> IO (Double, b)
-qtick n f a = do
-  ts <- replicateM' n (tick f a)
-  pure (percentile 0.4 $ fst <$> ts, snd $ last ts)
-{-# INLINE qtick #-}
+-- > sum to 1000 n = 1000 prime run: 1.13e3
+-- > run                       first     2nd     3rd     4th     5th  40th %
+-- > ticks                    1.06e3     712     702     704     676    682 cycles
+-- > ticks (lambda)           1.19e3     718     682     684     678    682 cycles
+-- > ticks (poly)             1.64e3  1.34e3  1.32e3  1.32e3  1.32e3 1.31e3 cycles
+--
+ticks :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticks n0 f a = go f a n0 []
+  where
+    go f' a' n ts
+      | n <= 0 = pure (reverse ts, f a)
+      | otherwise = do
+          (t,_) <- tickNoinline f a
+          go f' a' (n - 1) (t:ts)
+{-# NOINLINE ticks #-}
 
 -- | n measuremenst of a tickIO
 --
@@ -187,34 +191,34 @@ qtick n f a = do
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
 --
-ticksIO :: Int -> IO a -> IO ([Cycle], a)
-ticksIO n a = do
-    cs <- replicateM n (tickIO a)
-    pure (fst <$> cs, last $ snd <$> cs)
-
--- | n measurements on each of a list of a's to be applied to f.
---
--- Currently memoizing it's ass off
---
--- > tickns n f [1,10,100,1000]
---
-tickns :: Int -> (a -> b) -> [a] -> IO ([[Cycle]], [b])
-tickns n f as = do
-  cs <- sequence $ ticks n f <$> as
-  pure (fst <$> cs, snd <$> cs)
-
--- | extra oomph for those hard to reach evaluations
-force :: (NFData a) => a -> a
-force x = x `deepseq` x
-
--- | a replicateM with good attributes
-replicateM' :: Monad m => Int -> m a -> m [a]
-replicateM' n op' = go n []
+-- > ticksIO                     834     752     688     714     690    709 cycles
+-- > ticksIO (lambda)            822     690     720     686     688    683 cycles
+-- > ticksIO (poly)           1.01e3     688     684     682     712    686 cycles
+ticksIO :: (NFData a) => Int -> IO a -> IO ([Cycle], a)
+ticksIO n0 a = go a n0 []
   where
-    go 0 acc = return $ reverse acc
-    go n' acc = do
-      x <- op'
-      go (n' - 1) (x : acc)
+    go a' n ts
+      | n <= 0 = do
+            a'' <- a'
+            pure (reverse ts, a'')
+      | otherwise = do
+          (t,_) <- tickIONoinline a'
+          go a' (n - 1) (t:ts)
+{-# NOINLINE ticksIO #-}
+
+-- | make a series of measurements on a list of a's to be applied to f, for a tick function.
+--
+-- Tends to be fragile to sharing issues, but very useful to determine computation Order
+--
+-- > ns ticks n f [1,10,100,1000]
+--
+-- > sum to's [1,10,100,1000]
+-- > tickns n fMono:  17.8 23.5 100 678
+--
+ns :: (NFData b) => (a -> IO ([Cycle],b)) -> [a] -> IO ([[Cycle]], [b])
+ns t as = do
+  cs <- sequence $ t <$> as
+  pure (fst <$> cs, snd <$> cs)
 
 -- | average of a Cycle foldable
 --
@@ -234,8 +238,60 @@ deciles n xs =
 
 -- | compute a percentile
 --
--- > c <- percentoile 0.4 <$> ticks n f a
+-- > c <- percentile 0.4 <$> ticks n f a
 --
 percentile :: (Functor f, Foldable f) => Double -> f Cycle -> Double
 percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
 
+
+-- | WHNF version
+tickWHNF :: (a -> b) -> a -> IO (Cycle, b)
+tickWHNF !f !a = tickWHNF' f a
+
+tickWHNFNoinline :: (a -> b) -> a -> IO (Cycle, b)
+tickWHNFNoinline !f !a = tickWHNF' f a
+{-# NOINLINE tickWHNFNoinline #-}
+
+-- | WHNF version
+tickWHNF' :: (a -> b) -> a -> IO (Cycle, b)
+tickWHNF' f a = do
+  !t <- rdtsc
+  !a' <- pure (f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
+
+-- | WHNF version
+tickWHNFIO :: IO a -> IO (Cycle, a)
+tickWHNFIO a = do
+  t <- rdtsc
+  !a' <- a
+  t' <- rdtsc
+  pure (t' - t, a')
+
+tickWHNFIONoinline :: IO a -> IO (Cycle, a)
+tickWHNFIONoinline = tickWHNFIO
+{-# NOINLINE tickWHNFIONoinline #-}
+
+-- | WHNF version
+ticksWHNF :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksWHNF n0 f a = go f a n0 []
+  where
+    go f' a' n ts
+      | n <= 0 = pure (reverse ts, f a)
+      | otherwise = do
+          (t,_) <- tickWHNFNoinline f a
+          go f' a' (n - 1) (t:ts)
+{-# NOINLINE ticksWHNF #-}
+
+-- | WHNF version
+ticksWHNFIO :: Int -> IO a -> IO ([Cycle], a)
+ticksWHNFIO n0 a = go a n0 []
+  where
+    go a' n ts
+      | n <= 0 = do
+            a'' <- a'
+            pure (reverse ts, a'')
+      | otherwise = do
+          (t,_) <- tickWHNFIONoinline a'
+          go a' (n - 1) (t:ts)
+{-# NOINLINE ticksWHNFIO #-}

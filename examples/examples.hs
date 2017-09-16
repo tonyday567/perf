@@ -4,14 +4,15 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Main where
 
-import qualified Data.List as List
 import qualified Data.Text as Text
 import Data.Text.IO (writeFile)
 import qualified Data.Vector as V
@@ -20,27 +21,20 @@ import qualified Data.Vector.Unboxed as U
 import Formatting
 import Options.Generic
 import NumHask.Prelude hiding ((%))
--- import Perf
-import Perf.Cycle
-import System.CPUTime.Rdtsc
+import Perf
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
-  , sumTo :: Maybe Double -- <?> "sum to this number"
+  , sumTo :: Maybe Int -- <?> "sum to this number"
+  , sumsTo :: Maybe [Int] -- <?> "sum to these numbers"
+  , flipMaybe :: Maybe Bool
   } deriving (Generic, Show)
+
+instance ParseField [Int]
 
 instance ParseRecord Opts
 
-ticksTest :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksTest n0 f a = go f a n0 []
-  where
-    go f a n ts
-      | n <= 0 = pure (ts, f a)
-      | otherwise = do
-          (t,_) <- tick f a
-          go f a (n - 1) (t:ts)
-
-ticksInFile :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksInFile :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticksInFile n0 f a = go f a n0 []
   where
     go f a n ts
@@ -49,31 +43,8 @@ ticksInFile n0 f a = go f a n0 []
           (t,_) <- tick f a
           go f a (n - 1) (t:ts)
 
-ticksRep :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksRep n f a = do
-    ts <- replicateM n (tick f a)
-    pure (fst <$> ts, List.last $ snd <$> ts)
-
--- | lazy version of tick
-tickLazy :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
-tickLazy f a = do
-  !t <- rdtsc
-  a' <- pure (f a)
-  !t' <- rdtsc
-  pure (t' - t, a')
-
-ticksLazy :: (NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksLazy n f a = go f a n []
-  where
-      go :: (NFData b) => (a->b) -> a -> Int -> [Cycle] -> IO ([Cycle], b)
-      go f a n ts
-        | n <= 0 = pure (ts, f a)
-        | otherwise = do
-              (t,_) <- tickLazy f a
-              go f a (n - 1) (t:ts)
-
 fLambda :: Int -> Int
-fLambda = \x -> foldl' (+) 0 $! [1 .. x]
+fLambda = \x -> foldl' (+) 0 [1 .. x]
 
 fMono :: Int -> Int
 fMono x = foldl' (+) 0 [1 .. x]
@@ -81,13 +52,33 @@ fMono x = foldl' (+) 0 [1 .. x]
 fPoly :: (Enum b, Num b, Additive b) => b -> b
 fPoly x = foldl' (+) 0 [1 .. x]
 
+
+formatone :: (Real a) => Text -> a -> Text
+formatone =
+        sformat
+          ((right 24 ' ' %. stext) %
+           (left 7 ' ' %. prec 3) % " cycles")
+
+runone :: (Real a) => Text -> IO (a, b) -> IO Text
+runone label t = formatone label . fst <$> t
+
 main :: IO ()
 main = do
   o :: Opts <- getRecord "a random bit of text"
-  let n = fromMaybe 100 (runs o)
-  let a = fromMaybe 100000 (sumTo o)
-  let !a' = fromIntegral $ floor a :: Int
-  let as = [1, 10, 100, 1000, 10000, 100000 :: Int]
+  let n = fromMaybe 1000 (runs o)
+  let a = fromMaybe 1000 (sumTo o)
+  let !a' = fromIntegral a
+  let !a'' = a'+1
+  let !a''' = a'+1
+  let as = [1, 10, 100, 1000 :: Int]
+  let fm = fromMaybe True (flipMaybe o)
+
+  writeFile "other/run.md" $
+    code
+      [ sformat ((right 24 ' ' %. stext)%prec 3)  "number of runs:" n
+      , sformat ((right 24 ' ' %. stext)%prec 3)  "accumulate to:" a
+      , sformat ((right 24 ' ' %. stext)%stext) "function:" "foldl' (+) 0"
+      ]
 
   let formatRun :: [Cycle] -> Text -> Text
       formatRun cs label =
@@ -144,52 +135,34 @@ main = do
       ]
 
   -- tick
-  (t, _) <- tick fMono a'
+  (t, resultPrime) <- tick fMono a'
+  print resultPrime
   (t2,_) <- tick fMono a'
-  (ts, _) <- ticks n fMono a'
-  let qt x = (`percentile` x) <$> [0, 0.3, 0.5, 0.9, 0.99, 1]
   writeFile "other/tick.md" $
     code
       [ "sum to " <> show a
       , "first measure: " <> show t <> " cycles"
       , "second measure: " <> show t2 <> " cycles"
-      , "average over next " <> show n <> ": " <> sformat (fixed 2) (average ts) <>
-        " cycles"
-      , "[min, 30th, median, 90th, 99th, max]:"
-      , mconcat (sformat (" " % prec 4) <$> qt ts)
       ]
 
   -- | various versions of tick
- 
-  rio <- run "ticksIO" $ ticksIO n (pure $ fMono a')
-  rpure <- run "ticksPure" $ ticks n fMono a'
-  rinline <- run "ticksInline" $ ticksInline n fMono a'
-  rnoinline <- run "ticksNoinline" $ ticksNoinline n fMono a'
-  rinfile <- run "ticksInFile" $ ticksInFile n fMono a'
-  rrep <- run "ticksRep" $ ticksRep n fMono a'
-  rioLambda <- run "ticksIO Lambda" $ ticksIO n (pure $ fLambda a')
-  rpureLambda <- run "ticksPure Lambda" $ ticks n fLambda a'
-  rinlineLambda <- run "ticksInline Lambda" $ ticksInline n fLambda a'
-  rioPoly <- run "ticksIO Poly" $ ticksIO n (pure $ fPoly a')
-  rpurePoly <- run "ticksPure Poly" $ ticks n fPoly a'
-  rinlinePoly <- run "ticksInline Poly" $ ticksInline n fPoly a'
+  rpure <- run "ticks" $ ticks n fMono a'
+  rpurePoly <- run "ticks (poly)" $ ticks n fPoly a
+  rpureLambda <- run "ticks (lambda)" $ ticks n fLambda a'
+  rio <- run "ticksIO" $ ticksIO n (pure $ fMono a'')
+  rioPoly <- run "ticksIO (poly)" $ ticksIO n (pure $ fPoly a)
+  rioLambda <- run "ticksIO (lambda)" $ ticksIO n (pure $ fLambda a')
 
   writeFile "other/ticks.md" $
     code [ "sum to " <> show a <> " n = " <> show n <> " prime run: " <>
            sformat (prec 3) t
          , formatRunHeader
-         , rio
          , rpure
-         , rinline
-         , rnoinline
-         , rinfile
-         , rrep
-         , rioLambda
          , rpureLambda
-         , rinlineLambda
-         , rioPoly
          , rpurePoly
-         , rinlinePoly
+         , rio
+         , rioLambda
+         , rioPoly
          ]
 
   -- | overall ticks cost
@@ -202,57 +175,63 @@ main = do
   gaps <- sequence $ (\a -> runGap (ticks n fPoly a) a) <$> as
   writeFile "other/ticksCost.md" $ code gaps
 
-  -- | tickns
+  -- | ns
   css <-
     fmap (fmap fst) <$>
     sequence ((replicateM n . tick fMono) <$> as)
   let r12 =
         "(replicateM n . tick fMono) <$> as: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> css))
-  (ts, _) <- tickns n fMono as
+  (ts, _) <-ns (ticks n fMono) as
   let r13 =
-        "Perf.tickns n fMono as: " <>
+        "ns (ticks n fMono) as: " <>
         mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
   writeFile "other/tickns.md" $
-    code ["sum to's " <> show as, "n = " <> show n, r12, r13]
+    code ["sum to's " <> show as, r13, r12]
 
   -- | vectors
-  let asl :: [Double]
+  let asl :: [Int]
       asl = [1 .. a]
-
-  let suml :: [Double] -> Double
+  let suml :: [Int] -> Int
       suml = foldl' (+) 0
-  
-  rlist <- run "ticksInFile list" $ ticksInFile n suml asl
-  
-  let sumv :: V.Vector Double -> Double
+  rlist <- run "ticks list" $ ticks n suml asl
+  let sumv :: V.Vector Int -> Int
       sumv = V.foldl (+) 0
-
-  let asv :: V.Vector Double =
-        (\x -> V.generate (fromIntegral $ floor x) fromIntegral) a
-
-  rboxed <- run "ticksInFile boxed" $ ticksInFile n sumv asv
-
-  let sums :: S.Vector Double -> Double
+  let asv :: V.Vector Int =
+        V.generate a identity
+  rboxed <- run "ticks boxed" $ ticks n sumv asv
+  let sums :: S.Vector Int -> Int
       sums = S.foldl (+) 0
-
-  let ass :: S.Vector Double =
-        (\x -> S.generate (fromIntegral $ floor x) fromIntegral) a
-
-  rstorable <- run "ticksInFile storable" $ ticksInFile n sums ass
-
-  let sumu :: U.Vector Double -> Double
+  let ass :: S.Vector Int =
+        S.generate a identity
+  rstorable <- run "ticks storable" $ ticks n sums ass
+  let sumu :: U.Vector Int -> Int
       sumu = U.foldl (+) 0
-
-  let asu :: U.Vector Double =
-        (\x -> U.generate (fromIntegral $ floor x) fromIntegral) a
-
-  runboxed <- run "ticksInFile unboxed" $ ticksInFile n sumu asu
-
-
+  let asu :: U.Vector Int =
+        U.generate a identity
+  runboxed <- run "ticks unboxed" $ ticks n sumu asu
   writeFile "other/vector.md" $
     code ["sum to " <> show a, rlist, rboxed, rstorable, runboxed]
 
+
+  -- WHNF
+  let just' x
+        | fm = Just x
+        | otherwise = Nothing
+
+  rnf <- runone "tick" $ tick (fmap fMono) (just' a')
+  rwhnf <- runone "tickWHNF" $ tick (fmap fMono) (just' a')
+  rnfs <- run "ticks" $ ticks n (fmap fMono) (just' a')
+  rwhnfs <- run "ticksWHNF" $ ticksWHNF n (fmap fMono) (just' a')
+
+  rnfio <- runone "tickIO" $ tickIO (pure $ fmap fMono (just' a'))
+  rwhnfio <- runone "tickWHNFIO" $ tickWHNFIO (pure $ fmap fMono (just' a'))
+  rnfsio <- run "ticksIO" $ ticksIO n (pure $ fmap fMono (just' a'''))
+  rwhnfsio <- run "ticksWHNFIO" $ ticksWHNFIO n (pure $ fmap fMono (just' a'))
+
+  writeFile "other/whnf.md" $
+    code ["sum to " <> show a,
+          rnf, rwhnf, rnfs, rwhnfs, rnfio, rwhnfio, rnfsio, rwhnfsio]
 
 {-
   -- perf basics

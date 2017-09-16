@@ -1,5 +1,5 @@
 name: perf
-version: 0.2.0
+version: 0.3.0
 synopsis:
   low-level performance statistics
 description:
@@ -65,13 +65,11 @@ executable perf-examples
     examples.hs
   build-depends:
     base >= 4.7 && < 4.11,
-    containers,
     formatting,
     numhask,
     optparse-generic,
     perf,
     protolude,
-    rdtsc,
     text,
     vector
   default-extensions:

@@ -234,3 +234,133 @@ hp2ps -e8in -c examples/examples.hp # constructors
 examples/examples +RTS -s - additional memory
 examples/examples +RTS -xt -hy
 ```
+
+8. read core
+
+```
+    stack exec ghc-core -- --no-cast --no-asm --no-syntax examples/simplest.hs >> other/simplest.core
+
+    alias ghci-core="stack ghci -- -ddump-simpl -dsuppress-idinfo -dsuppress-coercions -dsuppress-type-applications -dsuppress-uniques -dsuppress-module-prefixes"
+```
+
+simplest core dump (cleaned up)
+
+```
+==================== Tidy Core ====================
+Result size of Tidy Core = {terms: 22, types: 31, coercions: 9}
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule2 :: TrName
+$trModule2 = TrNameS "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule1 :: TrName
+$trModule1 = TrNameS "Main"#
+
+-- RHS size: {terms: 3, types: 0, coercions: 0}
+$trModule :: Module
+$trModule = Module $trModule2 $trModule1
+
+-- RHS size: {terms: 4, types: 7, coercions: 0}
+main1
+  :: State# RealWorld -> (# State# RealWorld, () #)
+main1 =
+  \ (s_a1o2 [OS=OneShot] :: State# RealWorld) ->
+    (# s_a1o2, () #)
+
+-- RHS size: {terms: 1, types: 0, coercions: 3}
+main :: IO ()
+main = main1 `cast` ...
+
+-- RHS size: {terms: 2, types: 1, coercions: 3}
+main2
+  :: State# RealWorld -> (# State# RealWorld, () #)
+main2 = runMainIO1 @ () (main1 `cast` ...)
+
+-- RHS size: {terms: 1, types: 0, coercions: 3}
+:main :: IO ()
+:main = main2 `cast` ...
+```
+
+simplest core dump (full)
+
+```
+[1 of 1] Compiling Main             ( examples/simplest.hs, examples/simplest.o )
+
+==================== Tidy Core ====================
+Result size of Tidy Core = {terms: 22, types: 31, coercions: 9}
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule2 :: TrName
+[GblId,
+
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 30 20}]
+$trModule2 = TrNameS "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule1 :: TrName
+[GblId,
+
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 30 20}]
+$trModule1 = TrNameS "Main"#
+
+-- RHS size: {terms: 3, types: 0, coercions: 0}
+$trModule :: Module
+[GblId,
+
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+$trModule = Module $trModule2 $trModule1
+
+-- RHS size: {terms: 4, types: 7, coercions: 0}
+main1
+  :: State# RealWorld -> (# State# RealWorld, () #)
+[GblId,
+ Arity=1,
+
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=False)
+         Tmpl= \ (s_a1o2 [Occ=Once, OS=OneShot]
+                    :: State# RealWorld) ->
+                 (# s_a1o2, () #)}]
+main1 =
+  \ (s_a1o2 [OS=OneShot] :: State# RealWorld) ->
+    (# s_a1o2, () #)
+
+-- RHS size: {terms: 1, types: 0, coercions: 3}
+main :: IO ()
+[GblId,
+ Arity=1,
+
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+         Tmpl= main1 `cast` ...}]
+main = main1 `cast` ...
+
+-- RHS size: {terms: 2, types: 1, coercions: 3}
+main2
+  :: State# RealWorld -> (# State# RealWorld, () #)
+[GblId,
+ Arity=1,
+
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+main2 = runMainIO1 @ () (main1 `cast` ...)
+
+-- RHS size: {terms: 1, types: 0, coercions: 3}
+:main :: IO ()
+[GblId,
+ Arity=1,
+
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+         Tmpl= main2 `cast` ...}]
+:main = main2 `cast` ...
+
+Linking examples/simplest ...
+```

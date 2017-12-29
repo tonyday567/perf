@@ -127,7 +127,7 @@ tick' f a = do
 -- > first measure: 1202 cycles
 -- > second measure: 18 cycles
 --
--- Note that feeding the same computation through tick twice will tend to kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fn--full-laziness (and maybe -fno-cse).
+-- Note that feeding the same computation through tick twice will tend to kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fno-full-laziness (and maybe -fno-cse).
 tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
 tick !f !a = tick' f a
 
@@ -238,11 +238,10 @@ deciles n xs =
 
 -- | compute a percentile
 --
--- > c <- percentile 0.4 <$> ticks n f a
+-- > c <- percentile 0.4 . fst <$> ticks n f a
 --
 percentile :: (Functor f, Foldable f) => Double -> f Cycle -> Double
 percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
-
 
 -- | WHNF version
 tickWHNF :: (a -> b) -> a -> IO (Cycle, b)

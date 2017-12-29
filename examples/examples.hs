@@ -22,6 +22,7 @@ import Formatting
 import Options.Generic
 import NumHask.Prelude hiding ((%))
 import Perf
+import Data.Scientific
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
@@ -52,15 +53,20 @@ fMono x = foldl' (+) 0 [1 .. x]
 fPoly :: (Enum b, Num b, Additive b) => b -> b
 fPoly x = foldl' (+) 0 [1 .. x]
 
+prec :: Int -> Format r (Scientific -> r)
+prec n = scifmt Exponent (Just n)
 
-formatone :: (Real a) => Text -> a -> Text
-formatone =
+int2Sci :: ToInteger a => a -> Scientific
+int2Sci n = scientific (fromIntegral n) 0
+
+formatone :: (ToInteger a) => Text -> Int -> a -> Text
+formatone t p x =
         sformat
           ((right 24 ' ' %. stext) %
-           (left 7 ' ' %. prec 3) % " cycles")
+           (left 8 ' ' %. prec p) % " cycles") t (int2Sci x)
 
-runone :: (Real a) => Text -> IO (a, b) -> IO Text
-runone label t = formatone label . fst <$> t
+runone :: (ToInteger a) => Text -> Int -> IO (a, b) -> IO Text
+runone label p t = formatone label p . fst <$> t
 
 main :: IO ()
 main = do
@@ -75,20 +81,21 @@ main = do
 
   writeFile "other/run.md" $
     code
-      [ sformat ((right 24 ' ' %. stext)%prec 3)  "number of runs:" n
-      , sformat ((right 24 ' ' %. stext)%prec 3)  "accumulate to:" a
+      [ sformat ((right 24 ' ' %. stext)%prec 1)  "number of runs:" (int2Sci n)
+      , sformat ((right 24 ' ' %. stext)%prec 1)  "accumulate to:" (int2Sci a)
       , sformat ((right 24 ' ' %. stext)%stext) "function:" "foldl' (+) 0"
       ]
 
-  let formatRun :: [Cycle] -> Text -> Text
-      formatRun cs label =
+  let formatRun :: [Cycle] -> Text -> Int -> Text
+      formatRun cs label p =
         sformat
           ((right 24 ' ' %. stext) % stext %
-           (left 7 ' ' %. prec 3) % " cycles")
+           (left 7 ' ' %. prec p) % " cycles")
           label
-          (Text.intercalate " " $ sformat (left 7 ' ' %. prec 3) <$>
+          (Text.intercalate " " $ sformat (left 7 ' ' %. prec p) .
+           int2Sci <$>
            take 5 cs)
-          (percentile 0.4 cs)
+          (fromFloatDigits $ percentile 0.4 cs)
 
   let formatRunHeader =
         sformat
@@ -107,7 +114,7 @@ main = do
           "5th"
           "40th %"
 
-  let run label t = (`formatRun` label) . fst <$> t
+  let run label p t = (\x -> formatRun x label p) . fst <$> t
 
   _ <- warmup 100
 
@@ -131,7 +138,7 @@ main = do
       , "99th perc:  " <> sformat (fixed 2) tick99
       , "40th perc:  " <> sformat (fixed 2) tick40
       , "[min, 10th, 20th, .. 90th, max]:"
-      , mconcat (sformat (" " % prec 4) <$> qticks)
+      , mconcat (sformat (" " % prec 4) . fromFloatDigits <$> qticks)
       ]
 
   -- tick
@@ -146,16 +153,16 @@ main = do
       ]
 
   -- | various versions of tick
-  rpure <- run "ticks" $ ticks n fMono a'
-  rpurePoly <- run "ticks (poly)" $ ticks n fPoly a
-  rpureLambda <- run "ticks (lambda)" $ ticks n fLambda a'
-  rio <- run "ticksIO" $ ticksIO n (pure $ fMono a'')
-  rioPoly <- run "ticksIO (poly)" $ ticksIO n (pure $ fPoly a)
-  rioLambda <- run "ticksIO (lambda)" $ ticksIO n (pure $ fLambda a')
+  rpure <- run "ticks" 2 $ ticks n fMono a'
+  rpurePoly <- run "ticks (poly)" 2 $ ticks n fPoly a
+  rpureLambda <- run "ticks (lambda)" 2 $ ticks n fLambda a'
+  rio <- run "ticksIO" 2 $ ticksIO n (pure $ fMono a'')
+  rioPoly <- run "ticksIO (poly)" 2 $ ticksIO n (pure $ fPoly a)
+  rioLambda <- run "ticksIO (lambda)" 2 $ ticksIO n (pure $ fLambda a')
 
   writeFile "other/ticks.md" $
     code [ "sum to " <> show a <> " n = " <> show n <> " prime run: " <>
-           sformat (prec 3) t
+           sformat (prec 3) (int2Sci t)
          , formatRunHeader
          , rpure
          , rpureLambda
@@ -170,7 +177,7 @@ main = do
       formatGap a (co, (ci, _)) =
           sformat
           ("n = " %(left 7 ' ' %. prec 3)%" outside: "%(left 7 ' ' %. prec 3)%" inside: "%(left 7 ' ' %. prec 3)%" gap: "%(left 7 ' ' %. prec 3))
-          a co (sum ci) (co - sum ci)
+          (int2Sci a) (int2Sci co) (int2Sci $ sum ci) (int2Sci $ co - sum ci)
   let runGap t a = formatGap a <$> tickIO t
   gaps <- sequence $ (\a -> runGap (ticks n fPoly a) a) <$> as
   writeFile "other/ticksCost.md" $ code gaps
@@ -181,11 +188,11 @@ main = do
     sequence ((replicateM n . tick fMono) <$> as)
   let r12 =
         "(replicateM n . tick fMono) <$> as: " <>
-        mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> css))
+        mconcat (sformat (" " %prec 3) <$> (fromFloatDigits . percentile 0.4 <$> css))
   (ts, _) <-ns (ticks n fMono) as
   let r13 =
         "ns (ticks n fMono) as: " <>
-        mconcat (sformat (" " %prec 3) <$> (percentile 0.4 <$> ts))
+        mconcat (sformat (" " %prec 3) <$> (fromFloatDigits . percentile 0.4 <$> ts))
   writeFile "other/tickns.md" $
     code ["sum to's " <> show as, r13, r12]
 
@@ -194,22 +201,22 @@ main = do
       asl = [1 .. a]
   let suml :: [Int] -> Int
       suml = foldl' (+) 0
-  rlist <- run "ticks list" $ ticks n suml asl
+  rlist <- run "ticks list" 2 $ ticks n suml asl
   let sumv :: V.Vector Int -> Int
       sumv = V.foldl (+) 0
   let asv :: V.Vector Int =
         V.generate a identity
-  rboxed <- run "ticks boxed" $ ticks n sumv asv
+  rboxed <- run "ticks boxed" 2 $ ticks n sumv asv
   let sums :: S.Vector Int -> Int
       sums = S.foldl (+) 0
   let ass :: S.Vector Int =
         S.generate a identity
-  rstorable <- run "ticks storable" $ ticks n sums ass
+  rstorable <- run "ticks storable" 2 $ ticks n sums ass
   let sumu :: U.Vector Int -> Int
       sumu = U.foldl (+) 0
   let asu :: U.Vector Int =
         U.generate a identity
-  runboxed <- run "ticks unboxed" $ ticks n sumu asu
+  runboxed <- run "ticks unboxed" 2 $ ticks n sumu asu
   writeFile "other/vector.md" $
     code ["sum to " <> show a, rlist, rboxed, rstorable, runboxed]
 
@@ -219,15 +226,15 @@ main = do
         | fm = Just x
         | otherwise = Nothing
 
-  rnf <- runone "tick" $ tick (fmap fMono) (just' a')
-  rwhnf <- runone "tickWHNF" $ tick (fmap fMono) (just' a')
-  rnfs <- run "ticks" $ ticks n (fmap fMono) (just' a')
-  rwhnfs <- run "ticksWHNF" $ ticksWHNF n (fmap fMono) (just' a')
+  rnf <- runone "tick" 2 $ tick (fmap fMono) (just' a')
+  rwhnf <- runone "tickWHNF" 2 $ tick (fmap fMono) (just' a')
+  rnfs <- run "ticks" 2 $ ticks n (fmap fMono) (just' a')
+  rwhnfs <- run "ticksWHNF" 2 $ ticksWHNF n (fmap fMono) (just' a')
 
-  rnfio <- runone "tickIO" $ tickIO (pure $ fmap fMono (just' a'))
-  rwhnfio <- runone "tickWHNFIO" $ tickWHNFIO (pure $ fmap fMono (just' a'))
-  rnfsio <- run "ticksIO" $ ticksIO n (pure $ fmap fMono (just' a'''))
-  rwhnfsio <- run "ticksWHNFIO" $ ticksWHNFIO n (pure $ fmap fMono (just' a'))
+  rnfio <- runone "tickIO" 2 $ tickIO (pure $ fmap fMono (just' a'))
+  rwhnfio <- runone "tickWHNFIO" 2 $ tickWHNFIO (pure $ fmap fMono (just' a'))
+  rnfsio <- run "ticksIO" 2 $ ticksIO n (pure $ fmap fMono (just' a'''))
+  rwhnfsio <- run "ticksWHNFIO" 2 $ ticksWHNFIO n (pure $ fmap fMono (just' a'))
 
   writeFile "other/whnf.md" $
     code ["sum to " <> show a,

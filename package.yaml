@@ -1,5 +1,5 @@
 name: perf
-version: '0.3.0'
+version: '0.3.1.0'
 synopsis: low-level performance statistics
 description: ! '
 
@@ -52,6 +52,7 @@ executables:
     - numhask
     - optparse-generic
     - perf
+    - scientific
     - text
     - vector
 tests:

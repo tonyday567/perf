@@ -21,8 +21,8 @@ The code for these benchmark runs can be found in
 
 Benchmarks are based on:
 
-    number of runs:         1.00e3
-    accumulate to:          1.00e3
+    number of runs:         1.0e3
+    accumulate to:          1.0e3
     function:               foldl' (+) 0
 
 1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
@@ -30,44 +30,44 @@ Benchmarks are based on:
 tick\_
 ------
 
-    one tick_: 16 cycles
-    next 10: [14,16,16,16,16,16,16,16,16,16]
-    average over 1m: 18.37 cycles
-    99.999% perc: 20,841
-    99.9% perc: 50.59
-    99th perc:  24.72
-    40th perc:  17.17
+    one tick_: 224 cycles
+    next 10: [22,24,24,24,24,24,24,22,24,24]
+    average over 1m: 19.29 cycles
+    99.999% perc: 32,441
+    99.9% perc: 54.06
+    99th perc:  25.16
+    40th perc:  17.18
     [min, 10th, 20th, .. 90th, max]:
-     12.00 15.28 15.93 16.58 17.17 17.67 18.17 18.67 19.38 20.49 3.656e4
+     1.2000e1 1.5244e1 1.5883e1 1.6522e1 1.7181e1 1.7897e1 1.8613e1 1.9713e1 2.1372e1 2.3428e1 8.0698e4
 
 tick
 ----
 
     sum to 1000
-    first measure: 1020 cycles
-    second measure: 16 cycles
+    first measure: 1954 cycles
+    second measure: 2730 cycles
 
 ticks
 -----
 
-    sum to 1000 n = 1000 prime run: 1.02e3
+    sum to 1000 n = 1000 prime run: 1.954e3
     run                       first     2nd     3rd     4th     5th  40th %
-    ticks                    7.80e3  1.42e3  1.33e3  1.33e3  1.34e3    688 cycles
-    ticks (lambda)              868  1.36e3  1.32e3  1.32e3  1.32e3 1.32e3 cycles
-    ticks (poly)             1.17e3     740     720     690     726    690 cycles
-    ticksIO                  1.21e3     736     724     700     698    695 cycles
-    ticksIO (lambda)            800     728     690     720     694    691 cycles
-    ticksIO (poly)              910     710     740     692     722    695 cycles
+    ticks                    2.53e3  1.59e3  1.55e3  1.55e3  1.57e3 1.61e3 cycles
+    ticks (lambda)           2.00e3  1.67e3  1.57e3  1.58e3  1.63e3 1.54e3 cycles
+    ticks (poly)             2.32e3  1.68e3  1.63e3  1.64e3  1.63e3 1.61e3 cycles
+    ticksIO                  1.92e3  1.66e3  1.59e3  1.55e3  1.54e3 1.59e3 cycles
+    ticksIO (lambda)         1.69e3  1.57e3  1.55e3  1.55e3  1.54e3 1.60e3 cycles
+    ticksIO (poly)           1.87e3  1.62e3  1.65e3  1.65e3  1.66e3 1.60e3 cycles
 
 ticks cost
 ----------
 
 Looking for hidden computation costs:
 
-    n =    1.00 outside:  7.88e4 inside:  2.58e4 gap:  5.30e4
-    n =    10.0 outside:  7.66e4 inside:  3.61e4 gap:  4.04e4
-    n =     100 outside:  1.59e5 inside:  1.19e5 gap:  4.02e4
-    n =  1.00e3 outside:  7.40e5 inside:  6.99e5 gap:  4.14e4
+    n = 1.000e0 outside: 1.787e5 inside: 3.391e4 gap: 1.448e5
+    n = 1.000e1 outside: 1.178e5 inside: 5.839e4 gap: 5.941e4
+    n = 1.000e2 outside: 3.282e5 inside: 2.691e5 gap: 5.904e4
+    n = 1.000e3 outside: 2.253e6 inside: 2.187e6 gap: 6.562e4
 
 tickns
 ------
@@ -75,30 +75,30 @@ tickns
 Multiple runs summing to a series of numbers.
 
     sum to's [1,10,100,1000]
-    ns (ticks n fMono) as:  23.9 33.0 113 689
-    (replicateM n . tick fMono) <$> as:  15.7 17.1 92.0 673
+    ns (ticks n fMono) as:  3.311e1 5.766e1 2.465e2 1.910e3
+    (replicateM n . tick fMono) <$> as:  2.374e1 2.849e1 2.079e2 9.660e2
 
 vector
 ------
 
     sum to 1000
-    ticks list               5.93e4  2.23e4  5.20e4  1.75e4  1.75e4 1.45e4 cycles
-    ticks boxed              1.34e4  8.23e3  8.00e3  7.74e3  7.82e3 6.25e3 cycles
-    ticks storable           5.17e3  1.53e3  1.46e3  1.45e3  1.45e3 1.45e3 cycles
-    ticks unboxed            2.62e3  1.99e3  1.97e3  1.92e3  1.93e3 1.93e3 cycles
+    ticks list               2.71e4  2.06e4  1.98e4  1.96e4  2.03e4 1.59e4 cycles
+    ticks boxed              7.39e3  6.88e3  6.86e3  6.83e3  6.83e3 6.96e3 cycles
+    ticks storable           2.18e3  1.81e3  1.75e3  1.76e3  1.74e3 1.58e3 cycles
+    ticks unboxed            2.58e3  2.10e3  2.05e3  2.01e3  2.00e3 2.02e3 cycles
 
 whnf
 ----
 
     sum to 1000
-    tick                     2.96e3 cycles
-    tickWHNF                    388 cycles
-    ticks                    1.53e3  1.05e3  1.01e3  1.05e3  1.01e3 1.01e3 cycles
-    ticksWHNF                  80.0    24.0    30.0    24.0    26.0   25.3 cycles
-    tickIO                   1.05e3 cycles
-    tickWHNFIO                 24.0 cycles
-    ticksIO                  1.80e3  1.15e3  1.02e3  1.05e3  1.02e3 1.01e3 cycles
-    ticksWHNFIO                 128    46.0    24.0    24.0    24.0   20.5 cycles
+    tick                      1.35e3 cycles
+    tickWHNF                  1.86e3 cycles
+    ticks                    2.68e3  1.40e3  1.35e3  1.33e3  1.33e3 1.40e3 cycles
+    ticksWHNF                6.00e1  1.80e1  1.80e1  1.80e1  2.00e1 2.11e1 cycles
+    tickIO                    2.34e3 cycles
+    tickWHNFIO                7.20e1 cycles
+    ticksIO                  2.12e3  1.40e3  1.36e3  1.36e3  1.43e3 1.64e3 cycles
+    ticksWHNFIO              1.38e2  4.00e1  2.00e1  2.00e1  1.80e1 1.88e1 cycles
 
 R&D, To Do
 ==========
@@ -270,3 +270,129 @@ A performance checklist
 
     examples/examples +RTS -s - additional memory
     examples/examples +RTS -xt -hy
+
+8.  read core
+
+<!-- -->
+
+        stack exec ghc-core -- --no-cast --no-asm --no-syntax examples/simplest.hs >> other/simplest.core
+
+        alias ghci-core="stack ghci -- -ddump-simpl -dsuppress-idinfo -dsuppress-coercions -dsuppress-type-applications -dsuppress-uniques -dsuppress-module-prefixes"
+
+simplest core dump (cleaned up)
+
+    ==================== Tidy Core ====================
+    Result size of Tidy Core = {terms: 22, types: 31, coercions: 9}
+
+    -- RHS size: {terms: 2, types: 0, coercions: 0}
+    $trModule2 :: TrName
+    $trModule2 = TrNameS "main"#
+
+    -- RHS size: {terms: 2, types: 0, coercions: 0}
+    $trModule1 :: TrName
+    $trModule1 = TrNameS "Main"#
+
+    -- RHS size: {terms: 3, types: 0, coercions: 0}
+    $trModule :: Module
+    $trModule = Module $trModule2 $trModule1
+
+    -- RHS size: {terms: 4, types: 7, coercions: 0}
+    main1
+      :: State# RealWorld -> (# State# RealWorld, () #)
+    main1 =
+      \ (s_a1o2 [OS=OneShot] :: State# RealWorld) ->
+        (# s_a1o2, () #)
+
+    -- RHS size: {terms: 1, types: 0, coercions: 3}
+    main :: IO ()
+    main = main1 `cast` ...
+
+    -- RHS size: {terms: 2, types: 1, coercions: 3}
+    main2
+      :: State# RealWorld -> (# State# RealWorld, () #)
+    main2 = runMainIO1 @ () (main1 `cast` ...)
+
+    -- RHS size: {terms: 1, types: 0, coercions: 3}
+    :main :: IO ()
+    :main = main2 `cast` ...
+
+simplest core dump (full)
+
+    [1 of 1] Compiling Main             ( examples/simplest.hs, examples/simplest.o )
+
+    ==================== Tidy Core ====================
+    Result size of Tidy Core = {terms: 22, types: 31, coercions: 9}
+
+    -- RHS size: {terms: 2, types: 0, coercions: 0}
+    $trModule2 :: TrName
+    [GblId,
+
+     Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 30 20}]
+    $trModule2 = TrNameS "main"#
+
+    -- RHS size: {terms: 2, types: 0, coercions: 0}
+    $trModule1 :: TrName
+    [GblId,
+
+     Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 30 20}]
+    $trModule1 = TrNameS "Main"#
+
+    -- RHS size: {terms: 3, types: 0, coercions: 0}
+    $trModule :: Module
+    [GblId,
+
+     Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+    $trModule = Module $trModule2 $trModule1
+
+    -- RHS size: {terms: 4, types: 7, coercions: 0}
+    main1
+      :: State# RealWorld -> (# State# RealWorld, () #)
+    [GblId,
+     Arity=1,
+
+     Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True,
+             Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=False)
+             Tmpl= \ (s_a1o2 [Occ=Once, OS=OneShot]
+                        :: State# RealWorld) ->
+                     (# s_a1o2, () #)}]
+    main1 =
+      \ (s_a1o2 [OS=OneShot] :: State# RealWorld) ->
+        (# s_a1o2, () #)
+
+    -- RHS size: {terms: 1, types: 0, coercions: 3}
+    main :: IO ()
+    [GblId,
+     Arity=1,
+
+     Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True,
+             Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+             Tmpl= main1 `cast` ...}]
+    main = main1 `cast` ...
+
+    -- RHS size: {terms: 2, types: 1, coercions: 3}
+    main2
+      :: State# RealWorld -> (# State# RealWorld, () #)
+    [GblId,
+     Arity=1,
+
+     Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+    main2 = runMainIO1 @ () (main1 `cast` ...)
+
+    -- RHS size: {terms: 1, types: 0, coercions: 3}
+    :main :: IO ()
+    [GblId,
+     Arity=1,
+
+     Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+             WorkFree=True, Expandable=True,
+             Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+             Tmpl= main2 `cast` ...}]
+    :main = main2 `cast` ...
+
+    Linking examples/simplest ...

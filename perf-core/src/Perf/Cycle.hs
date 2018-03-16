@@ -1,4 +1,3 @@
--- {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -37,7 +36,6 @@ import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 
 -- $setup
--- >>> :set -XNoImplicitPrelude
 -- >>> import Perf.Cycle
 -- >>> let n = 1000
 -- >>> let a = 1000
@@ -259,26 +257,3 @@ ticksWHNFIO n0 a = go a n0 []
 {-# NOINLINE ticksWHNFIO #-}
 
 
-
-
--- 
-
--- instance AdditiveMagma Cycle where
---   plus = (Protolude.+)
-
--- instance AdditiveUnital Cycle where
---   zero = 0
-
--- instance AdditiveAssociative Cycle
-
--- instance AdditiveCommutative Cycle
-
--- instance Additive Cycle
-
--- instance AdditiveInvertible Cycle where
---   negate = Protolude.negate
-
--- instance AdditiveGroup Cycle
-
--- instance ToInteger Cycle where
---     toInteger = Protolude.toInteger

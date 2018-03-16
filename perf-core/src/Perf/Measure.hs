@@ -1,6 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE BangPatterns #-}
--- {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -160,24 +159,3 @@ cycles = Measure m0 start stop
       t <- rdtsc
       return $ t - a
 
-
-
-
--- 
-
--- instance AdditiveMagma NominalDiffTime where
---   plus = (P.+)
-
--- instance AdditiveUnital NominalDiffTime where
---   zero = 0
-
--- instance AdditiveAssociative NominalDiffTime
-
--- instance AdditiveCommutative NominalDiffTime
-
--- instance Additive NominalDiffTime
-
--- instance AdditiveInvertible NominalDiffTime where
---   negate = P.negate
-
--- instance AdditiveGroup NominalDiffTime

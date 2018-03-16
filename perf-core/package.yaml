@@ -1,11 +1,12 @@
 name: perf-core
 version: '0.1'
-synopsis: Low-level performance statistics. 
+synopsis: Low-level run time measurement. 
 description: ! '
   A set of tools to accurately measure time performance of Haskell programs. 
  
   perf-core aims to be lightweight by having minimal dependencies on standard libraries.
 
+  See the Perf module for an example and full API documentation.
 '
 category: project
 author: Tony Day, Marco Zocca

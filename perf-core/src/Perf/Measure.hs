@@ -62,13 +62,14 @@ data Measure m b = forall a. (Additive b) => Measure
   , poststep :: a -> m b
   }
 
+
 -- | Measure a single effect.
 --
 -- >>> r <- runMeasure count (pure "joy")
 -- >>> r
 -- (1,"joy")
 --
-runMeasure :: MonadIO m => Measure m b -> m a -> m (b, a)
+runMeasure :: Monad m => Measure m b -> m a -> m (b, a)
 runMeasure (Measure _ pre post) a = do
   p <- pre
   !a' <- a
@@ -81,7 +82,7 @@ runMeasure (Measure _ pre post) a = do
 -- >>> r
 -- (1,"joys")
 --
-runMeasureN :: MonadIO m => Int -> Measure m b -> m a -> m (b, a)
+runMeasureN :: Monad m => Int -> Measure m b -> m a -> m (b, a)
 runMeasureN n (Measure _ pre post) a = do
   p <- pre
   replicateM_ (n - 1) a
@@ -94,10 +95,8 @@ runMeasureN n (Measure _ pre post) a = do
 -- >>> r <- cost count
 -- >>> r
 -- 1
-cost :: MonadIO m => Measure m b -> m b
-cost (Measure _ pre post) = do
-  p <- pre
-  post p
+cost :: Monad m => Measure m b -> m b
+cost (Measure _ pre post) = pre >>= post 
 
 -- | a measure using 'getCPUTime' from System.CPUTime (unit is picoseconds)
 --
@@ -130,7 +129,7 @@ realtime = Measure m0 start stop
       t <- getCurrentTime
       return $ diffUTCTime t a
 
--- | a measure used to count iterations
+-- | a 'Measure' used to count iterations
 --
 -- >>> r <- runMeasure count (pure ())
 -- >>> r
@@ -143,7 +142,7 @@ count = Measure m0 start stop
     start = return ()
     stop () = return 1
 
--- | a Measure using the 'rdtsc' chip set (units are in cycles)
+-- | a 'Measure' using the 'rdtsc' CPU register (units are in cycles)
 --
 -- >>> r <- runMeasureN 1000 cycles (pure ())
 -- 

@@ -1,13 +1,20 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | 'PerfT' is a monad transformer designed to collect performance information.
--- The transformer can be used to add performance measurent to an existing code base using 'Measure's.
+-- | == Introduction
+-- 
+-- 'perf' provides high-resolution measurements of the runtime of Haskell functions. It does so by reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture.
 --
--- For example :
+-- With 'perf' the user may measure both pure and effectful functions, as shown in the Example below. Every piece of code the user may want to profile is passed as an argument to the 'perf' function, along with a text label (that will be displayed in the final summary) and the measurement function (e.g. 'cycles', 'cputime' or 'realtime').
 --
--- >   -- prior to Perfification
+--'PerfT' is a monad transformer designed to collect performance information.
+-- The transformer can be used to add performance measurent to existing code using 'Measure's.
+--
+-- == Example :
+--
+-- Code block to be profiled :
+-- 
 -- >   result <- do
 -- >       txt <- readFile "examples/examples.hs"
 -- >       let n = Text.length txt
@@ -16,7 +23,7 @@
 -- >           (show x :: Text)
 -- >       pure (n, x)
 --
--- And here's the code after 'Perf'ification, measuring performance of the components.
+-- The same code, instrumented with 'perf' :
 --
 -- >   (result', ms) <- runPerfT $ do
 -- >           txt <- perf "file read" cycles $ readFile "examples/examples.hs"
@@ -34,6 +41,9 @@
 -- > print to screen                         1.06e5 cycles
 -- > sum                                     8.12e3 cycles
 --
+-- == Note on RDTSC
+--
+-- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and flucturations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
 module Perf
   ( PerfT
   , Perf
@@ -59,6 +69,8 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 import Perf.Cycle
 import Perf.Measure
+
+
 
 -- | PerfT is polymorphic in the type of measurement being performed.
 -- The monad stores and produces a Map of labelled measurement values

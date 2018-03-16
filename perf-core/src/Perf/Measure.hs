@@ -17,8 +17,6 @@ module Perf.Measure
   )
   where
 
-import Control.Monad.IO.Class (MonadIO(..))
-
 import Data.Time.Clock
 import GHC.Word (Word64)
 import Control.Monad (replicateM_)

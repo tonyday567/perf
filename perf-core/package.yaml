@@ -1,0 +1,43 @@
+name: perf-core
+version: '0.1'
+synopsis: Low-level run time measurement. 
+description: ! '
+  A set of tools to accurately measure time performance of Haskell programs. 
+ 
+  perf-core aims to be lightweight by having minimal dependencies on standard libraries.
+
+  See the Perf module for an example and full API documentation.
+'
+category: project
+author: Tony Day, Marco Zocca
+maintainer: tonyday567@gmail.com
+copyright: Tony Day
+license: BSD3
+github: tonyday567/perf
+extra-source-files:
+- stack.yaml
+- CHANGELOG.md
+library:
+  source-dirs: src
+  exposed-modules:
+  - Perf
+  - Perf.Measure
+  - Perf.Cycle
+  dependencies:
+  - base >=4.7 && <4.11
+  - containers
+  - deepseq
+  - foldl
+  - rdtsc
+  - text
+  - transformers
+  - time
+tests:
+  test:
+    main: LibSpec.hs
+    source-dirs: test
+    dependencies:
+    - base >=4.7 && <5
+    - doctest
+    - perf-core
+    - text

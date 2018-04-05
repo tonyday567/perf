@@ -1,6 +1,6 @@
-<meta charset="utf-8"> <link rel="stylesheet" href="https://tonyday567.github.io/other/lhs.css"> <link href="https://fonts.googleapis.com/css?family=Inconsolata|Lora|Raleway" rel="stylesheet">
+<meta charset="utf-8"> <link rel="stylesheet" href="other/lhs.css">
 <script type="text/javascript" async
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
 </script>
 <h1 id="perf"><a href="https://tonyday567.github.io/perf/index.html">perf</a></h1>
 <p><a href="https://travis-ci.org/tonyday567/perf"><img src="https://travis-ci.org/tonyday567/perf.svg" alt="Build Status" /></a> <a href="https://hackage.haskell.org/package/perf"><img src="https://img.shields.io/hackage/v/perf.svg" alt="Hackage" /></a> <a href="http://stackage.org/lts/package/perf"><img src="https://www.stackage.org/package/perf/badge/lts" alt="lts" /></a> <a href="http://stackage.org/nightly/package/perf"><img src="https://www.stackage.org/package/perf/badge/nightly" alt="nightly" /></a></p>
@@ -14,55 +14,55 @@ accumulate to:          1.0e3
 function:               foldl&#39; (+) 0</code></pre>
 <p>1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).</p>
 <h2 id="tick_">tick_</h2>
-<pre><code>one tick_: 224 cycles
-next 10: [22,24,24,24,24,24,24,22,24,24]
-average over 1m: 19.29 cycles
-99.999% perc: 32,441
-99.9% perc: 54.06
-99th perc:  25.16
-40th perc:  17.18
+<pre><code>one tick_: 52 cycles
+next 10: [18,18,18,18,20,18,20,20,20,20]
+average over 1m: 19.33 cycles
+99.999% perc: 1,492
+99.9% perc: 54.44
+99th perc:  25.39
+40th perc:  17.89
 [min, 10th, 20th, .. 90th, max]:
- 1.2000e1 1.5244e1 1.5883e1 1.6522e1 1.7181e1 1.7897e1 1.8613e1 1.9713e1 2.1372e1 2.3428e1 8.0698e4</code></pre>
+ 1.2000e1 1.5571e1 1.6497e1 1.7279e1 1.7889e1 1.8499e1 1.9220e1 2.0440e1 2.1988e1 2.4333e1 3.2970e4</code></pre>
 <h2 id="tick">tick</h2>
 <pre><code>sum to 1000
-first measure: 1954 cycles
-second measure: 2730 cycles</code></pre>
+first measure: 992 cycles
+second measure: 996 cycles</code></pre>
 <h2 id="ticks">ticks</h2>
-<pre><code>sum to 1000 n = 1000 prime run: 1.954e3
+<pre><code>sum to 1000 n = 1000 prime run: 9.920e2
 run                       first     2nd     3rd     4th     5th  40th %
-ticks                    2.53e3  1.59e3  1.55e3  1.55e3  1.57e3 1.61e3 cycles
-ticks (lambda)           2.00e3  1.67e3  1.57e3  1.58e3  1.63e3 1.54e3 cycles
-ticks (poly)             2.32e3  1.68e3  1.63e3  1.64e3  1.63e3 1.61e3 cycles
-ticksIO                  1.92e3  1.66e3  1.59e3  1.55e3  1.54e3 1.59e3 cycles
-ticksIO (lambda)         1.69e3  1.57e3  1.55e3  1.55e3  1.54e3 1.60e3 cycles
-ticksIO (poly)           1.87e3  1.62e3  1.65e3  1.65e3  1.66e3 1.60e3 cycles</code></pre>
+ticks                    1.86e3  1.37e3  1.34e3  1.40e3  1.32e3 1.39e3 cycles
+ticks (lambda)           1.50e3  1.35e3  1.33e3  1.32e3  1.32e3 1.39e3 cycles
+ticks (poly)             1.40e3  1.40e3  1.37e3  1.39e3  1.39e3 1.39e3 cycles
+ticksIO                  1.87e3  1.45e3  1.41e3  1.43e3  1.33e3 1.33e3 cycles
+ticksIO (lambda)         1.55e3  1.38e3  1.38e3  1.33e3  1.33e3 1.33e3 cycles
+ticksIO (poly)           1.59e3  1.39e3  1.43e3  1.43e3  1.33e3 1.33e3 cycles</code></pre>
 <h2 id="ticks-cost">ticks cost</h2>
 <p>Looking for hidden computation costs:</p>
-<pre><code>n = 1.000e0 outside: 1.787e5 inside: 3.391e4 gap: 1.448e5
-n = 1.000e1 outside: 1.178e5 inside: 5.839e4 gap: 5.941e4
-n = 1.000e2 outside: 3.282e5 inside: 2.691e5 gap: 5.904e4
-n = 1.000e3 outside: 2.253e6 inside: 2.187e6 gap: 6.562e4</code></pre>
+<pre><code>n = 1.000e0 outside: 7.499e4 inside: 3.102e4 gap: 4.396e4
+n = 1.000e1 outside: 1.574e5 inside: 1.198e5 gap: 3.768e4
+n = 1.000e2 outside: 2.100e5 inside: 1.736e5 gap: 3.636e4
+n = 1.000e3 outside: 1.434e6 inside: 1.397e6 gap: 3.706e4</code></pre>
 <h2 id="tickns">tickns</h2>
 <p>Multiple runs summing to a series of numbers.</p>
 <pre><code>sum to&#39;s [1,10,100,1000]
-ns (ticks n fMono) as:  3.311e1 5.766e1 2.465e2 1.910e3
-(replicateM n . tick fMono) &lt;$&gt; as:  2.374e1 2.849e1 2.079e2 9.660e2</code></pre>
+ns (ticks n fMono) as:  2.217e1 3.572e1 1.740e2 1.394e3
+(replicateM n . tick fMono) &lt;$&gt; as:  1.582e1 1.977e1 1.403e2 1.296e3</code></pre>
 <h2 id="vector">vector</h2>
 <pre><code>sum to 1000
-ticks list               2.71e4  2.06e4  1.98e4  1.96e4  2.03e4 1.59e4 cycles
-ticks boxed              7.39e3  6.88e3  6.86e3  6.83e3  6.83e3 6.96e3 cycles
-ticks storable           2.18e3  1.81e3  1.75e3  1.76e3  1.74e3 1.58e3 cycles
-ticks unboxed            2.58e3  2.10e3  2.05e3  2.01e3  2.00e3 2.02e3 cycles</code></pre>
+ticks list               4.07e4  2.44e4  2.37e4  2.40e4  1.34e5 1.36e4 cycles
+ticks boxed              9.34e3  8.47e3  8.45e3  8.43e3  8.38e3 8.40e3 cycles
+ticks storable           2.35e3  1.67e3  1.67e3  1.65e3  1.68e3 1.65e3 cycles
+ticks unboxed            3.38e3  3.07e3  3.04e3  3.04e3  3.02e3 3.02e3 cycles</code></pre>
 <h2 id="whnf">whnf</h2>
 <pre><code>sum to 1000
-tick                      1.35e3 cycles
-tickWHNF                  1.86e3 cycles
-ticks                    2.68e3  1.40e3  1.35e3  1.33e3  1.33e3 1.40e3 cycles
-ticksWHNF                6.00e1  1.80e1  1.80e1  1.80e1  2.00e1 2.11e1 cycles
-tickIO                    2.34e3 cycles
-tickWHNFIO                7.20e1 cycles
-ticksIO                  2.12e3  1.40e3  1.36e3  1.36e3  1.43e3 1.64e3 cycles
-ticksWHNFIO              1.38e2  4.00e1  2.00e1  2.00e1  1.80e1 1.88e1 cycles</code></pre>
+tick                      8.70e2 cycles
+tickWHNF                  1.13e3 cycles
+ticks                    3.07e3  1.86e3  1.58e3  1.56e3  1.61e3 1.63e3 cycles
+ticksWHNF                7.00e1  2.00e1  2.00e1  2.00e1  2.00e1 2.17e1 cycles
+tickIO                    1.06e4 cycles
+tickWHNFIO                1.86e2 cycles
+ticksIO                  2.28e3  1.75e3  1.67e3  1.56e3  1.56e3 1.63e3 cycles
+ticksWHNFIO              4.52e2  6.00e1  3.40e1  3.20e1  3.00e1 2.82e1 cycles</code></pre>
 <h1 id="rd-to-do">R&amp;D, To Do</h1>
 <h2 id="metal-speed">metal speed</h2>
 <p>The average cycles per (+) operation can get down to 0.7, and there are about 4 cache registers per cycle, so 2.8 low level instructions per (+). Is this close to the metal speed?</p>
@@ -101,7 +101,9 @@ ticksIO nomemo 6.47e4</code></pre>
 <h2 id="lambda-expressions">lambda expressions</h2>
 <p>Can really slow things down</p>
 <h1 id="workflow">workflow</h1>
-<pre><code>stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i other/header.md examples/bench.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o readme.md --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
+<pre><code>cd numhask-analysis
+
+stack build --test --exec &quot;$(stack path --local-install-root)/bin/perf-examples&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i ../other/header.md examples/bench.md ../other/footer.md -t html -o ../index.html --filter pandoc-include --mathjax&quot; --exec &quot;$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o ../readme.md --filter pandoc-include --mathjax&quot; --file-watch</code></pre>
 <p>solo experiments:</p>
 <pre><code>stack exec &quot;ghc&quot; -- -O2 -rtsopts examples/summing.lhs
 ./examples/summing +RTS -s -RTS --runs 10000 --sumTo 1000 --chart --chartName other/sum1e3.svg --truncAt 4</code></pre>

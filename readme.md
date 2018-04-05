@@ -17,7 +17,12 @@ Benchmarks
 ==========
 
 The code for these benchmark runs can be found in
-[examples/examples.hs](examples/examples.hs).
+[perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs). To create this readme
+locally run:
+
+    cd numhask-analysis
+
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o ../readme.md --filter pandoc-include --mathjax"
 
 Benchmarks are based on:
 
@@ -30,44 +35,44 @@ Benchmarks are based on:
 tick\_
 ------
 
-    one tick_: 224 cycles
-    next 10: [22,24,24,24,24,24,24,22,24,24]
-    average over 1m: 19.29 cycles
-    99.999% perc: 32,441
-    99.9% perc: 54.06
-    99th perc:  25.16
-    40th perc:  17.18
+    one tick_: 74 cycles
+    next 10: [24,22,22,22,24,24,24,22,22,22]
+    average over 1m: 17.75 cycles
+    99.999% perc: 23,605
+    99.9% perc: 75.83
+    99th perc:  24.90
+    40th perc:  16.14
     [min, 10th, 20th, .. 90th, max]:
-     1.2000e1 1.5244e1 1.5883e1 1.6522e1 1.7181e1 1.7897e1 1.8613e1 1.9713e1 2.1372e1 2.3428e1 8.0698e4
+     1.2000e1 1.4801e1 1.5350e1 1.5744e1 1.6138e1 1.6532e1 1.6926e1 1.7633e1 1.8414e1 1.9761e1 6.1758e4
 
 tick
 ----
 
     sum to 1000
-    first measure: 1954 cycles
-    second measure: 2730 cycles
+    first measure: 2830 cycles
+    second measure: 1244 cycles
 
 ticks
 -----
 
-    sum to 1000 n = 1000 prime run: 1.954e3
+    sum to 1000 n = 1000 prime run: 2.830e3
     run                       first     2nd     3rd     4th     5th  40th %
-    ticks                    2.53e3  1.59e3  1.55e3  1.55e3  1.57e3 1.61e3 cycles
-    ticks (lambda)           2.00e3  1.67e3  1.57e3  1.58e3  1.63e3 1.54e3 cycles
-    ticks (poly)             2.32e3  1.68e3  1.63e3  1.64e3  1.63e3 1.61e3 cycles
-    ticksIO                  1.92e3  1.66e3  1.59e3  1.55e3  1.54e3 1.59e3 cycles
-    ticksIO (lambda)         1.69e3  1.57e3  1.55e3  1.55e3  1.54e3 1.60e3 cycles
-    ticksIO (poly)           1.87e3  1.62e3  1.65e3  1.65e3  1.66e3 1.60e3 cycles
+    ticks                    2.83e3  1.93e3  1.93e3  2.01e3  1.90e3 2.00e3 cycles
+    ticks (lambda)           2.05e3  2.00e3  1.99e3  2.01e3  1.98e3 2.00e3 cycles
+    ticks (poly)             2.28e3  2.05e3  2.03e3  2.03e3  2.00e3 2.02e3 cycles
+    ticksIO                  2.66e3  1.99e3  1.96e3  2.01e3  1.91e3 1.57e3 cycles
+    ticksIO (lambda)         1.78e3  1.59e3  1.54e3  1.63e3  1.54e3 1.55e3 cycles
+    ticksIO (poly)           1.80e3  1.60e3  1.58e3  1.58e3  1.60e3 1.55e3 cycles
 
 ticks cost
 ----------
 
 Looking for hidden computation costs:
 
-    n = 1.000e0 outside: 1.787e5 inside: 3.391e4 gap: 1.448e5
-    n = 1.000e1 outside: 1.178e5 inside: 5.839e4 gap: 5.941e4
-    n = 1.000e2 outside: 3.282e5 inside: 2.691e5 gap: 5.904e4
-    n = 1.000e3 outside: 2.253e6 inside: 2.187e6 gap: 6.562e4
+    n = 1.000e0 outside: 9.147e4 inside: 3.565e4 gap: 5.582e4
+    n = 1.000e1 outside: 1.101e5 inside: 5.713e4 gap: 5.297e4
+    n = 1.000e2 outside: 2.983e5 inside: 2.462e5 gap: 5.213e4
+    n = 1.000e3 outside: 2.248e6 inside: 2.187e6 gap: 6.014e4
 
 tickns
 ------
@@ -75,30 +80,30 @@ tickns
 Multiple runs summing to a series of numbers.
 
     sum to's [1,10,100,1000]
-    ns (ticks n fMono) as:  3.311e1 5.766e1 2.465e2 1.910e3
-    (replicateM n . tick fMono) <$> as:  2.374e1 2.849e1 2.079e2 9.660e2
+    ns (ticks n fMono) as:  3.155e1 5.502e1 2.443e2 2.004e3
+    (replicateM n . tick fMono) <$> as:  2.338e1 2.339e1 1.316e2 9.640e2
 
 vector
 ------
 
     sum to 1000
-    ticks list               2.71e4  2.06e4  1.98e4  1.96e4  2.03e4 1.59e4 cycles
-    ticks boxed              7.39e3  6.88e3  6.86e3  6.83e3  6.83e3 6.96e3 cycles
-    ticks storable           2.18e3  1.81e3  1.75e3  1.76e3  1.74e3 1.58e3 cycles
-    ticks unboxed            2.58e3  2.10e3  2.05e3  2.01e3  2.00e3 2.02e3 cycles
+    ticks list               2.62e4  1.85e4  1.83e4  1.87e4  1.88e4 1.44e4 cycles
+    ticks boxed              7.66e3  6.83e3  6.86e3  6.81e3  6.76e3 6.02e3 cycles
+    ticks storable           2.70e3  1.48e3  1.47e3  1.48e3  1.43e3 1.41e3 cycles
+    ticks unboxed            2.99e3  2.64e3  2.62e3  2.61e3  2.61e3 2.60e3 cycles
 
 whnf
 ----
 
     sum to 1000
-    tick                      1.35e3 cycles
-    tickWHNF                  1.86e3 cycles
-    ticks                    2.68e3  1.40e3  1.35e3  1.33e3  1.33e3 1.40e3 cycles
-    ticksWHNF                6.00e1  1.80e1  1.80e1  1.80e1  2.00e1 2.11e1 cycles
-    tickIO                    2.34e3 cycles
-    tickWHNFIO                7.20e1 cycles
-    ticksIO                  2.12e3  1.40e3  1.36e3  1.36e3  1.43e3 1.64e3 cycles
-    ticksWHNFIO              1.38e2  4.00e1  2.00e1  2.00e1  1.80e1 1.88e1 cycles
+    tick                      1.34e3 cycles
+    tickWHNF                  1.71e3 cycles
+    ticks                    4.07e3  2.53e3  2.43e3  2.54e3  2.54e3 2.02e3 cycles
+    ticksWHNF                8.40e1  2.60e1  2.60e1  2.60e1  2.40e1 2.68e1 cycles
+    tickIO                    1.39e4 cycles
+    tickWHNFIO                7.38e2 cycles
+    ticksIO                  2.82e3  2.04e3  2.00e3  1.96e3  1.92e3 2.03e3 cycles
+    ticksWHNFIO              4.92e2  4.40e1  3.80e1  3.80e1  3.40e1 3.26e1 cycles
 
 R&D, To Do
 ==========
@@ -162,12 +167,8 @@ lambda expressions
 
 Can really slow things down
 
-workflow
-========
-
-    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/header.md examples/bench.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o readme.md --filter pandoc-include --mathjax" --file-watch
-
-solo experiments:
+solo experiment recipe:
+-----------------------
 
     stack exec "ghc" -- -O2 -rtsopts examples/summing.lhs
     ./examples/summing +RTS -s -RTS --runs 10000 --sumTo 1000 --chart --chartName other/sum1e3.svg --truncAt 4

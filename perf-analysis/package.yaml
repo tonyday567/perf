@@ -1,0 +1,37 @@
+name: perf-analysis
+version: '0.0.1.0'
+synopsis: analysis example using perf
+description: ! '
+  Analytical tools to use with perf.
+'
+category: performance
+author: Tony Day
+maintainer: tonyday567@gmail.com
+copyright: Tony Day
+license: BSD3
+github: tonyday567/perf/perf-analysis
+extra-source-files:
+  - stack.yaml
+executables:
+  perf-examples:
+    main: examples.hs
+    source-dirs: examples
+    ghc-options:
+      - -Wall
+      - -Wcompat
+      - -Wincomplete-record-updates
+      - -Wincomplete-uni-patterns
+      - -Wredundant-constraints
+      - -rtsopts
+      - -O2
+    dependencies:
+      - base >=4.7 && <4.12
+      - deepseq
+      - formatting
+      - optparse-generic
+      - perf
+      - protolude
+      - scientific
+      - tdigest
+      - text
+      - vector

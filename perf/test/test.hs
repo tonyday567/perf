@@ -2,14 +2,13 @@
 
 module Main where
 
-import Protolude
 import Test.DocTest
 
 main :: IO ()
 main = do
-  putStrLn ("Perf.Cycle DocTest" :: Text)
+  putStrLn "Perf.Cycle DocTest"
   doctest ["src/Perf/Cycle.hs"]
-  putStrLn ("Perf.Measure DocTest" :: Text)
+  putStrLn "Perf.Measure DocTest"
   doctest ["src/Perf/Measure.hs"]
-  putStrLn ("Perf DocTest" :: Text)
+  putStrLn "Perf DocTest"
   doctest ["src/Perf.hs"]

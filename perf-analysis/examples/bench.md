@@ -11,7 +11,13 @@ Performance experiments using the [rdtsc](https://en.wikipedia.org/wiki/Time_Sta
 Benchmarks
 ===
 
-The code for these benchmark runs can be found in [examples/examples.hs](examples/examples.hs).
+The code for these benchmark runs can be found in [examples/examples.hs](examples/examples.hs). To create this readme locally run:
+
+```
+cd numhask-analysis
+
+stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o ../readme.md --filter pandoc-include --mathjax"
+```
 
 Benchmarks are based on:
 
@@ -132,14 +138,8 @@ lambda expressions
 
 Can really slow things down
 
-workflow
-===
-
-```
-stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/header.md examples/bench.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o readme.md --filter pandoc-include --mathjax" --file-watch
-```
-
-solo experiments:
+solo experiment recipe:
+---
 
 ```
 stack exec "ghc" -- -O2 -rtsopts examples/summing.lhs

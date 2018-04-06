@@ -5,3 +5,4 @@ perf-analysis/other/*.md
 .DS_Store
 perf/perf.cabal
 perf-analysis/perf-analysis.cabal
+/other/*.md

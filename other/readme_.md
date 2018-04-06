@@ -1,77 +1,41 @@
-[perf](https://tonyday567.github.io/perf/index.html)
+perf
 ===
 
-[![Build Status](https://travis-ci.org/tonyday567/perf.svg)](https://travis-ci.org/tonyday567/perf) [![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![lts](https://www.stackage.org/package/perf/badge/lts)](http://stackage.org/lts/package/perf) [![nightly](https://www.stackage.org/package/perf/badge/nightly)](http://stackage.org/nightly/package/perf)
+[![Build
+Status](https://travis-ci.org/tonyday567/perf.svg)](https://travis-ci.org/tonyday567/perf)
 
-[repo](https://github.com/tonyday567/perf)
+Low-level performance measurement for haskell using the
+[rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on
+x86.
 
-Performance experiments using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
-
-
-Benchmarks
+libraries
 ===
 
-The code for these benchmark runs can be found in [examples/examples.hs](examples/examples.hs).
-
-Benchmarks are based on:
-
-```include
-other/run.md
-```
-
-1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
-
-tick_
+perf
 ---
 
-```include
-other/tick_.md
-```
+Core functionality.
 
-tick
+[![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf)
+[![lts](https://www.stackage.org/package/perf/badge/lts)](http://stackage.org/lts/package/perf)
+[![nightly](https://www.stackage.org/package/perf/badge/nightly)](http://stackage.org/nightly/package/perf)
+
+perf-analysis
 ---
 
-```include
-other/tick.md
+Analysis using perf. Code for the benchmark runs can be found in
+[perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs). To create this readme
+locally run:
+
+```
+stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax"
 ```
 
-ticks
----
+benchmarks
+===
 
 ```include
-other/ticks.md
-```
-
-ticks cost
----
-
-Looking for hidden computation costs:
-
-```include
-other/ticksCost.md
-```
-
-tickns
----
-
-Multiple runs summing to a series of numbers.
-
-```include
-other/tickns.md
-```
-
-vector
----
-
-```include
-other/vector.md
-```
-
-whnf
----
-
-```include
-other/whnf.md
+perf-analysis/examples/bench.md
 ```
 
 R&D, To Do
@@ -132,14 +96,8 @@ lambda expressions
 
 Can really slow things down
 
-workflow
-===
-
-```
-stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/header.md examples/bench.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o readme.md --filter pandoc-include --mathjax" --file-watch
-```
-
-solo experiments:
+solo experiment recipe:
+---
 
 ```
 stack exec "ghc" -- -O2 -rtsopts examples/summing.lhs
@@ -364,3 +322,6 @@ main2 = runMainIO1 @ () (main1 `cast` ...)
 
 Linking examples/simplest ...
 ```
+
+
+

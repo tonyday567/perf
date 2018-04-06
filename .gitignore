@@ -1,5 +1,8 @@
 /.stack-work/
+*/.stack-work/
 TAGS
-other/*.md
+perf-analysis/other/*.md
 .DS_Store
-perf.cabal
+perf/perf.cabal
+perf-analysis/perf-analysis.cabal
+/other/*.md

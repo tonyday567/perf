@@ -1,8 +1,8 @@
 resolver: nightly-2018-04-05
 
 packages:
-  - perf
-  - perf-analysis
+  - .
+  - ../perf
 
 extra-deps:
   - rdtsc-1.3.0.1

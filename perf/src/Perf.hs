@@ -57,20 +57,18 @@ module Perf
   )
   where
 
-import Data.Semigroup
-import Data.Foldable (foldl')
-
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT(..), evalStateT, runStateT, execStateT, get, put )
 import Data.Functor.Identity
-import qualified Data.Text as T
-
-import qualified Data.Map as Map
 import Perf.Cycle
 import Perf.Measure
+import qualified Data.Map as Map
+import qualified Data.Text as T
 
-
+-- $setup
+-- >>> import Perf.Cycle
+-- >>> import Data.Foldable (foldl')
 
 -- | PerfT is polymorphic in the type of measurement being performed.
 -- The monad stores and produces a Map of labelled measurement values
@@ -95,7 +93,7 @@ perf label m a =
 
 -- | Lift a monadic computation to a PerfT m, and carry out the computation multiple times.
 perfN ::
-     (MonadIO m, Semigroup b, Monoid b)
+     (MonadIO m, Monoid b)
   => Int
   -> T.Text
   -> Measure m b

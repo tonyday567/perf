@@ -31,12 +31,12 @@ module Perf.Cycle
 import Control.DeepSeq (NFData(..), force)
 import qualified Control.Foldl as L (fold, sum, premap, genericLength)
 import Control.Monad (replicateM)
-import Data.Foldable (foldl')
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 
 -- $setup
 -- >>> import Perf.Cycle
+-- >>> import Data.Foldable (foldl')
 -- >>> let n = 1000
 -- >>> let a = 1000
 -- >>> let f x = foldl' (+) 0 [1 .. x]
@@ -44,8 +44,6 @@ import System.CPUTime.Rdtsc
 
 -- | an unwrapped Word64
 type Cycle = Word64
-
-
 
 -- | tick_ measures the number of cycles it takes to read the rdtsc chip twice: the difference is then how long it took to read the clock the second time.
 --
@@ -190,7 +188,7 @@ ticksIO n0 a = go a n0 []
 -- > sum to's [1,10,100,1000]
 -- > tickns n fMono:  17.8 23.5 100 678
 --
-ns :: NFData b => (a -> IO ([Cycle],b)) -> [a] -> IO ([[Cycle]], [b])
+ns :: (a -> IO ([Cycle],b)) -> [a] -> IO ([[Cycle]], [b])
 ns t as = do
   cs <- sequence $ t <$> as
   pure (fst <$> cs, snd <$> cs)
@@ -201,8 +199,6 @@ ns t as = do
 --
 average :: (Foldable f) => f Cycle -> Double
 average = L.fold (L.premap fromIntegral ((/) <$> L.sum <*> L.genericLength))
-
-
 
 -- | WHNF version
 tickWHNF :: (a -> b) -> a -> IO (Cycle, b)

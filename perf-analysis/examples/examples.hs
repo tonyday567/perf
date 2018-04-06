@@ -1,7 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -10,19 +9,37 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Main where
 
+import Protolude hiding ((%))
 import qualified Data.Text as Text
-import Data.Text.IO (writeFile)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
 import Formatting
 import Options.Generic
-import NumHask.Prelude hiding ((%))
 import Perf
 import Data.Scientific
+import Data.TDigest
+import Control.DeepSeq
+
+-- | compute deciles
+--
+-- > c5 <- decile 5 <$> ticks n f a
+--
+deciles :: (Functor f, Foldable f) => Int -> f Cycle -> [Double]
+deciles n xs =
+  (\x -> fromMaybe 0 $ quantile x (tdigest (fromIntegral <$> xs) :: TDigest 25)) <$>
+  ((/ fromIntegral n) . fromIntegral <$> [0 .. n]) :: [Double]
+
+-- | compute a percentile
+--
+-- > c <- percentile 0.4 . fst <$> ticks n f a
+--
+percentile :: (Functor f, Foldable f) => Double -> f Cycle -> Double
+percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
 
 data Opts = Opts
   { runs :: Maybe Int -- <?> "number of runs"
@@ -50,22 +67,22 @@ fLambda = \x -> foldl' (+) 0 [1 .. x]
 fMono :: Int -> Int
 fMono x = foldl' (+) 0 [1 .. x]
 
-fPoly :: (Enum b, Num b, Additive b) => b -> b
+fPoly :: (Enum b, Num b) => b -> b
 fPoly x = foldl' (+) 0 [1 .. x]
 
 prec :: Int -> Format r (Scientific -> r)
 prec n = scifmt Exponent (Just n)
 
-int2Sci :: ToInteger a => a -> Scientific
+int2Sci :: (Integral a) => a -> Scientific
 int2Sci n = scientific (fromIntegral n) 0
 
-formatone :: (ToInteger a) => Text -> Int -> a -> Text
+formatone :: (Integral a) => Text -> Int -> a -> Text
 formatone t p x =
         sformat
           ((right 24 ' ' %. stext) %
            (left 8 ' ' %. prec p) % " cycles") t (int2Sci x)
 
-runone :: (ToInteger a) => Text -> Int -> IO (a, b) -> IO Text
+runone :: (Integral a) => Text -> Int -> IO (a, b) -> IO Text
 runone label p t = formatone label p . fst <$> t
 
 main :: IO ()
@@ -249,7 +266,7 @@ main = do
   -- PerfT example
   -- prior to Perfification
   result <- do
-      txt <- readFile "examples/examples.hs"
+      txt <- readFile "other/examples.hs"
       let n = Text.length txt
       let x = foldl' (+) 0 [1..n]
       putStrLn $ "sum of one to number of characters is: " <>
@@ -258,7 +275,7 @@ main = do
 
   -- post-Perfification
   (result', ms) <- runPerfT $ do
-          txt <- perf "file read" cycles $ readFile "examples/examples.hs"
+          txt <- perf "file read" cycles $ readFile "other/examples.hs"
           n <- perf "length" cycles $ pure (Text.length txt)
           x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
           perf "print to screen" cycles $

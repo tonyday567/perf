@@ -1,23 +1,36 @@
-[perf](https://tonyday567.github.io/perf/index.html)
-====================================================
+perf
+====
 
 [![Build
 Status](https://travis-ci.org/tonyday567/perf.svg)](https://travis-ci.org/tonyday567/perf)
+
+Low-level performance measurement for haskell using the
+[rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on
+x86.
+
+libraries
+=========
+
+perf
+----
+
+Core functionality.
+
 [![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf)
 [![lts](https://www.stackage.org/package/perf/badge/lts)](http://stackage.org/lts/package/perf)
 [![nightly](https://www.stackage.org/package/perf/badge/nightly)](http://stackage.org/nightly/package/perf)
 
-[repo](https://github.com/tonyday567/perf)
+perf-analysis
+-------------
 
-Performance experiments using the
-[rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on
-x86.
+Analysis using perf. Code for the benchmark runs can be found in
+[perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs).
+To create this readme locally run:
 
-Benchmarks
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax"
+
+benchmarks
 ==========
-
-The code for these benchmark runs can be found in
-[examples/examples.hs](examples/examples.hs).
 
 Benchmarks are based on:
 
@@ -30,44 +43,44 @@ Benchmarks are based on:
 tick\_
 ------
 
-    one tick_: 224 cycles
-    next 10: [22,24,24,24,24,24,24,22,24,24]
-    average over 1m: 19.29 cycles
-    99.999% perc: 32,441
-    99.9% perc: 54.06
-    99th perc:  25.16
-    40th perc:  17.18
+    one tick_: 36 cycles
+    next 10: [18,16,16,16,16,16,16,16,16,16]
+    average over 1m: 17.89 cycles
+    99.999% perc: 11,913
+    99.9% perc: 50.13
+    99th perc:  34.58
+    40th perc:  16.26
     [min, 10th, 20th, .. 90th, max]:
-     1.2000e1 1.5244e1 1.5883e1 1.6522e1 1.7181e1 1.7897e1 1.8613e1 1.9713e1 2.1372e1 2.3428e1 8.0698e4
+     1.2000e1 1.4979e1 1.5417e1 1.5838e1 1.6260e1 1.6681e1 1.7205e1 1.8049e1 1.8892e1 2.2513e1 3.5790e4
 
 tick
 ----
 
     sum to 1000
-    first measure: 1954 cycles
-    second measure: 2730 cycles
+    first measure: 886 cycles
+    second measure: 1040 cycles
 
 ticks
 -----
 
-    sum to 1000 n = 1000 prime run: 1.954e3
+    sum to 1000 n = 1000 prime run: 8.860e2
     run                       first     2nd     3rd     4th     5th  40th %
-    ticks                    2.53e3  1.59e3  1.55e3  1.55e3  1.57e3 1.61e3 cycles
-    ticks (lambda)           2.00e3  1.67e3  1.57e3  1.58e3  1.63e3 1.54e3 cycles
-    ticks (poly)             2.32e3  1.68e3  1.63e3  1.64e3  1.63e3 1.61e3 cycles
-    ticksIO                  1.92e3  1.66e3  1.59e3  1.55e3  1.54e3 1.59e3 cycles
-    ticksIO (lambda)         1.69e3  1.57e3  1.55e3  1.55e3  1.54e3 1.60e3 cycles
-    ticksIO (poly)           1.87e3  1.62e3  1.65e3  1.65e3  1.66e3 1.60e3 cycles
+    ticks                    1.87e3  1.36e3  1.41e3  1.38e3  1.32e3 1.40e3 cycles
+    ticks (lambda)           1.32e3  1.39e3  1.45e3  1.41e3  1.44e3 1.40e3 cycles
+    ticks (poly)             1.45e3  1.33e3  1.43e3  1.38e3  1.41e3 1.40e3 cycles
+    ticksIO                  1.83e3  1.49e3  1.41e3  1.33e3  1.42e3 1.34e3 cycles
+    ticksIO (lambda)         1.49e3  1.38e3  1.39e3  1.40e3  1.33e3 1.33e3 cycles
+    ticksIO (poly)           1.61e3  1.38e3  1.36e3  1.36e3  1.39e3 1.33e3 cycles
 
 ticks cost
 ----------
 
 Looking for hidden computation costs:
 
-    n = 1.000e0 outside: 1.787e5 inside: 3.391e4 gap: 1.448e5
-    n = 1.000e1 outside: 1.178e5 inside: 5.839e4 gap: 5.941e4
-    n = 1.000e2 outside: 3.282e5 inside: 2.691e5 gap: 5.904e4
-    n = 1.000e3 outside: 2.253e6 inside: 2.187e6 gap: 6.562e4
+    n = 1.000e0 outside: 6.181e4 inside: 2.333e4 gap: 3.848e4
+    n = 1.000e1 outside: 4.014e5 inside: 3.721e4 gap: 3.642e5
+    n = 1.000e2 outside: 2.130e5 inside: 1.753e5 gap: 3.774e4
+    n = 1.000e3 outside: 1.436e6 inside: 1.397e6 gap: 3.951e4
 
 tickns
 ------
@@ -75,30 +88,30 @@ tickns
 Multiple runs summing to a series of numbers.
 
     sum to's [1,10,100,1000]
-    ns (ticks n fMono) as:  3.311e1 5.766e1 2.465e2 1.910e3
-    (replicateM n . tick fMono) <$> as:  2.374e1 2.849e1 2.079e2 9.660e2
+    ns (ticks n fMono) as:  2.169e1 3.820e1 1.686e2 1.325e3
+    (replicateM n . tick fMono) <$> as:  1.581e1 1.579e1 9.148e1 6.702e2
 
 vector
 ------
 
     sum to 1000
-    ticks list               2.71e4  2.06e4  1.98e4  1.96e4  2.03e4 1.59e4 cycles
-    ticks boxed              7.39e3  6.88e3  6.86e3  6.83e3  6.83e3 6.96e3 cycles
-    ticks storable           2.18e3  1.81e3  1.75e3  1.76e3  1.74e3 1.58e3 cycles
-    ticks unboxed            2.58e3  2.10e3  2.05e3  2.01e3  2.00e3 2.02e3 cycles
+    ticks list               2.39e4  1.62e4  1.57e4  1.62e4  1.62e4 1.44e4 cycles
+    ticks boxed              6.61e3  5.97e3  5.83e3  5.80e3  5.83e3 5.98e3 cycles
+    ticks storable           1.75e3  1.52e3  1.33e3  1.43e3  1.45e3 1.41e3 cycles
+    ticks unboxed            2.95e3  2.63e3  2.60e3  2.67e3  2.59e3 2.60e3 cycles
 
 whnf
 ----
 
     sum to 1000
-    tick                      1.35e3 cycles
-    tickWHNF                  1.86e3 cycles
-    ticks                    2.68e3  1.40e3  1.35e3  1.33e3  1.33e3 1.40e3 cycles
-    ticksWHNF                6.00e1  1.80e1  1.80e1  1.80e1  2.00e1 2.11e1 cycles
-    tickIO                    2.34e3 cycles
-    tickWHNFIO                7.20e1 cycles
-    ticksIO                  2.12e3  1.40e3  1.36e3  1.36e3  1.43e3 1.64e3 cycles
-    ticksWHNFIO              1.38e2  4.00e1  2.00e1  2.00e1  1.80e1 1.88e1 cycles
+    tick                      7.32e2 cycles
+    tickWHNF                  9.60e2 cycles
+    ticks                    2.35e3  1.44e3  1.37e3  1.34e3  1.40e3 1.40e3 cycles
+    ticksWHNF                5.60e1  1.60e1  1.80e1  1.80e1  2.00e1 1.84e1 cycles
+    tickIO                    9.49e3 cycles
+    tickWHNFIO                1.36e2 cycles
+    ticksIO                  2.10e3  1.36e3  1.36e3  1.40e3  1.34e3 1.41e3 cycles
+    ticksWHNFIO              4.48e2  6.60e1  3.00e1  2.80e1  2.60e1 2.28e1 cycles
 
 R&D, To Do
 ==========
@@ -162,12 +175,8 @@ lambda expressions
 
 Can really slow things down
 
-workflow
-========
-
-    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/header.md examples/bench.md other/footer.md -t html -o index.html --filter pandoc-include --mathjax" --exec "$(stack path --local-bin)/pandoc -f markdown -i examples/bench.md -t markdown -o readme.md --filter pandoc-include --mathjax" --file-watch
-
-solo experiments:
+solo experiment recipe:
+-----------------------
 
     stack exec "ghc" -- -O2 -rtsopts examples/summing.lhs
     ./examples/summing +RTS -s -RTS --runs 10000 --sumTo 1000 --chart --chartName other/sum1e3.svg --truncAt 4

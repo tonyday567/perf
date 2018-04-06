@@ -25,8 +25,12 @@ addons:
     packages:
       - libgmp-dev
 
+env:
+  - PACKAGEDIR="perf"
+  - PACKAGEDIR="perf-analysis"
+
 before_install:
-  cd perf
+  - cd ${PACKAGEDIR}
 
 install:
   # Download and unpack the stack executable
@@ -38,6 +42,4 @@ install:
 
 script:
   # Build the package, its tests, and its docs and run the tests
-  - stack --no-terminal test --haddock --no-haddock-deps
-  - cd perf-core/
   - stack --no-terminal test --haddock --no-haddock-deps

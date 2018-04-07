@@ -61,6 +61,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT(..), evalStateT, runStateT, execStateT, get, put )
 import Data.Functor.Identity
+import Data.Monoid ((<>))
 import Perf.Cycle
 import Perf.Measure
 import qualified Data.Map as Map

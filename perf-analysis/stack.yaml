@@ -6,6 +6,6 @@ packages:
 
 extra-deps:
   - rdtsc-1.3.0.1
-  - tdigest-0.1
+  - tdigest-0.2
 
 allow-newer: true

@@ -16,6 +16,7 @@ module Perf.Cycle
   , tick
   , tick'
   , tickIO
+  , tickNoinline
   , ticks
   , ticksIO
   , ns
@@ -83,26 +84,24 @@ warmup n = do
   ts <- replicateM n tick_
   pure $ average ts
 
--- | tick where the arguments are lazy, so measurement may include evluation of thunks that may constitute f and/or a
+-- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
 tick' :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
 tick' f a = do
   !t <- rdtsc
   !a' <- pure (force $ f a)
   !t' <- rdtsc
   pure (t' - t, a')
+{-# INLINE tick' #-}
 
 -- | `tick f a` strictly evaluates f and a, then deeply evaluates f a, returning a (Cycle, f a)
 --
 -- >>> _ <- warmup 100
 -- >>> (cs, _) <- tick f a
 --
--- > sum to 1000
--- > first measure: 1202 cycles
--- > second measure: 18 cycles
---
--- Note that feeding the same computation through tick twice will tend to kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fno-full-laziness (and maybe -fno-cse).
+-- Note that feeding the same computation through tick twice may kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fno-full-laziness (and maybe -fno-cse).
 tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
 tick !f !a = tick' f a
+{-# INLINE tick #-}
 
 tickNoinline :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
 tickNoinline !f !a = tick' f a
@@ -127,13 +126,14 @@ tickIONoinline = tickIO
 --
 -- returns a list of Cycles and the last evaluated f a
 --
--- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline on tick to help reduce the chances of memoization, but this is an inexact science in the hands of he author, at least, so interpret with caution.
+-- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline version of to help reduce the chances of memoization, but this is an inexact science in the hands of he author, at least, so interpret with caution.
+-- The use of noinline interposes an extra function call, which can highly skew very fast computations.
 --
 -- 
 -- >>> let n = 1000
 -- >>> (cs, fa) <- ticks n f a
 --
--- Baseline speed can be highly senistive to the nature of the function trimmings.  Polymorphic functions can tend to be slightly slower, and functions with lambda expressions can experience dramatic slowdowns.
+-- Baseline speed can be highly sensitive to the nature of the function trimmings.  Polymorphic functions can tend to be slightly slower, and functions with lambda expressions can experience dramatic slowdowns.
 --
 -- > fMono :: Int -> Int
 -- > fMono x = foldl' (+) 0 [1 .. x]
@@ -141,12 +141,6 @@ tickIONoinline = tickIO
 -- > fPoly x = foldl' (+) 0 [1 .. x]
 -- > fLambda :: Int -> Int
 -- > fLambda = \x -> foldl' (+) 0 [1 .. x]
---
--- > sum to 1000 n = 1000 prime run: 1.13e3
--- > run                       first     2nd     3rd     4th     5th  40th %
--- > ticks                    1.06e3     712     702     704     676    682 cycles
--- > ticks (lambda)           1.19e3     718     682     684     678    682 cycles
--- > ticks (poly)             1.64e3  1.34e3  1.32e3  1.32e3  1.32e3 1.31e3 cycles
 --
 ticks :: NFData b => Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticks n0 f a = go f a n0 []
@@ -164,9 +158,6 @@ ticks n0 f a = go f a n0 []
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
 --
--- > ticksIO                     834     752     688     714     690    709 cycles
--- > ticksIO (lambda)            822     690     720     686     688    683 cycles
--- > ticksIO (poly)           1.01e3     688     684     682     712    686 cycles
 ticksIO :: (NFData a) => Int -> IO a -> IO ([Cycle], a)
 ticksIO n0 a = go a n0 []
   where
@@ -185,22 +176,19 @@ ticksIO n0 a = go a n0 []
 --
 -- > ns ticks n f [1,10,100,1000]
 --
--- > sum to's [1,10,100,1000]
--- > tickns n fMono:  17.8 23.5 100 678
---
 ns :: (a -> IO ([Cycle],b)) -> [a] -> IO ([[Cycle]], [b])
 ns t as = do
   cs <- sequence $ t <$> as
   pure (fst <$> cs, snd <$> cs)
 
--- | average of a Cycle foldable
+-- | average of an Integral foldable
 --
 -- > cAv <- average <$> ticks n f a
 --
-average :: (Foldable f) => f Cycle -> Double
+average :: (Integral a, Foldable f) => f a -> Double
 average = L.fold (L.premap fromIntegral ((/) <$> L.sum <*> L.genericLength))
 
--- | WHNF version
+-- | WHNF versions
 tickWHNF :: (a -> b) -> a -> IO (Cycle, b)
 tickWHNF !f !a = tickWHNF' f a
 
@@ -251,5 +239,3 @@ ticksWHNFIO n0 a = go a n0 []
           (t,_) <- tickWHNFIONoinline a'
           go a' (n - 1) (t:ts)
 {-# NOINLINE ticksWHNFIO #-}
-
-

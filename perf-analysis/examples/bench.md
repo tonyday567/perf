@@ -1,12 +1,17 @@
-Benchmarks are based on:
+
+
+
+All measurements in cycles.
+1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
+
+run
+---
 
 ```include
 other/run.md
 ```
 
-1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
-
-tick_
+tick callibration
 ---
 
 ```include

@@ -27,60 +27,69 @@ Analysis using perf. Code for the benchmark runs can be found in
 [perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs).
 To create this readme locally run:
 
-    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax"
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax" --exec "vmd readme.md"
 
 benchmarks
 ==========
 
-Benchmarks are based on:
+All measurements in cycles. 1 cycle = 0.38 𝛈s (Based on my 2.6GHz
+machine, by definition).
 
-    number of runs:         1.0e3
-    accumulate to:          1.0e3
+run
+---
+
+    number of runs:           1.00e3
+    accumulate to:            1.00e3
     function:               foldl' (+) 0
 
-1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
+tick callibration
+-----------------
 
-tick\_
-------
-
-    one tick_: 36 cycles
-    next 10: [18,16,16,16,16,16,16,16,16,16]
-    average over 1m: 17.89 cycles
-    99.999% perc: 11,913
-    99.9% perc: 50.13
-    99th perc:  34.58
-    40th perc:  16.26
-    [min, 10th, 20th, .. 90th, max]:
-     1.2000e1 1.4979e1 1.5417e1 1.5838e1 1.6260e1 1.6681e1 1.7205e1 1.8049e1 1.8892e1 2.2513e1 3.5790e4
+    pre warmup: 88 cycles
+    one tick_: 46 cycles
+    next 10: [16,14,16,16,16,16,16,16,16,16]
+    average over 1m: 16.22 cycles
+    99.999% perc: 206
+    99.9% perc: 48.39
+    99th perc:  18.95
+    40th perc:  15.74
+    [min, 20th, .. 80th, max]:
+     1.2000e1 1.5129e1 1.5737e1 1.6346e1 1.6955e1 1.5300e4
 
 tick
 ----
 
     sum to 1000
-    first measure: 886 cycles
-    second measure: 1040 cycles
+    first measure: 968 cycles
+    second measure: 1520 cycles
+    third measure: 912 cycles
+    tick': 906 cycles
+    tickIO: 1140 cycles
+    tick * 10: [736,676,674,672,698,674,702,674,698,672]
+    tickIO * 10: [736,688,676,672,718,702,696,676,702,674]
+    tick * 10: [674,720,674,700,674,698,672,696,670,702]
 
 ticks
 -----
 
-    sum to 1000 n = 1000 prime run: 8.860e2
-    run                       first     2nd     3rd     4th     5th  40th %
-    ticks                    1.87e3  1.36e3  1.41e3  1.38e3  1.32e3 1.40e3 cycles
-    ticks (lambda)           1.32e3  1.39e3  1.45e3  1.41e3  1.44e3 1.40e3 cycles
-    ticks (poly)             1.45e3  1.33e3  1.43e3  1.38e3  1.41e3 1.40e3 cycles
-    ticksIO                  1.83e3  1.49e3  1.41e3  1.33e3  1.42e3 1.34e3 cycles
-    ticksIO (lambda)         1.49e3  1.38e3  1.39e3  1.40e3  1.33e3 1.33e3 cycles
-    ticksIO (poly)           1.61e3  1.38e3  1.36e3  1.36e3  1.39e3 1.33e3 cycles
+    acc = 1000 n = 1000
+    run                        first      2nd      3rd   median      av.
+    monomorphic               2.20e3   1.45e3   1.42e3   1.41e3   1.41e3
+    includes lambda           1.40e3   1.37e3   1.32e3   1.32e3   1.33e3
+    polymorphic               1.37e3   1.40e3   1.41e3   1.40e3   1.58e3
+    ticksIO mono              1.90e3   1.45e3   1.37e3   1.35e3   1.36e3
+    ticksIO lambda            1.49e3   1.48e3   1.33e3   1.39e3   1.38e3
+    ticksIO poly              8.29e3   1.40e3   1.33e3   1.36e3   1.36e3
 
 ticks cost
 ----------
 
 Looking for hidden computation costs:
 
-    n = 1.000e0 outside: 6.181e4 inside: 2.333e4 gap: 3.848e4
-    n = 1.000e1 outside: 4.014e5 inside: 3.721e4 gap: 3.642e5
-    n = 1.000e2 outside: 2.130e5 inside: 1.753e5 gap: 3.774e4
-    n = 1.000e3 outside: 1.436e6 inside: 1.397e6 gap: 3.951e4
+    n = 1.000e0 outside: 6.235e4 inside: 2.385e4 gap: 3.850e4
+    n = 1.000e1 outside: 7.522e4 inside: 3.857e4 gap: 3.665e4
+    n = 1.000e2 outside: 2.122e5 inside: 1.753e5 gap: 3.687e4
+    n = 1.000e3 outside: 1.369e6 inside: 1.331e6 gap: 3.802e4
 
 tickns
 ------
@@ -88,30 +97,30 @@ tickns
 Multiple runs summing to a series of numbers.
 
     sum to's [1,10,100,1000]
-    ns (ticks n fMono) as:  2.169e1 3.820e1 1.686e2 1.325e3
-    (replicateM n . tick fMono) <$> as:  1.581e1 1.579e1 9.148e1 6.702e2
+    ns (ticks n fMono) as:  2.289e1 3.803e1 1.715e2 1.326e3
+    (replicateM n . tick fMono) <$> as:  1.571e1 2.229e1 1.494e2 1.303e3
 
 vector
 ------
 
     sum to 1000
-    ticks list               2.39e4  1.62e4  1.57e4  1.62e4  1.62e4 1.44e4 cycles
-    ticks boxed              6.61e3  5.97e3  5.83e3  5.80e3  5.83e3 5.98e3 cycles
-    ticks storable           1.75e3  1.52e3  1.33e3  1.43e3  1.45e3 1.41e3 cycles
-    ticks unboxed            2.95e3  2.63e3  2.60e3  2.67e3  2.59e3 2.60e3 cycles
+    ticks list                2.74e4   1.58e4   1.57e4   1.30e4   1.35e4
+    ticks boxed               6.47e3   5.91e3   5.92e3   6.01e3   5.99e3
+    ticks storable            1.83e3   1.99e3   1.96e3   1.96e3   2.06e3
+    ticks unboxed             2.16e3   1.83e3   1.80e3   1.97e3   1.96e3
 
 whnf
 ----
 
     sum to 1000
-    tick                      7.32e2 cycles
-    tickWHNF                  9.60e2 cycles
-    ticks                    2.35e3  1.44e3  1.37e3  1.34e3  1.40e3 1.40e3 cycles
-    ticksWHNF                5.60e1  1.60e1  1.80e1  1.80e1  2.00e1 1.84e1 cycles
-    tickIO                    9.49e3 cycles
-    tickWHNFIO                1.36e2 cycles
-    ticksIO                  2.10e3  1.36e3  1.36e3  1.40e3  1.34e3 1.41e3 cycles
-    ticksWHNFIO              4.48e2  6.60e1  3.00e1  2.80e1  2.60e1 2.28e1 cycles
+    tick                      1.62e3
+    tickWHNF                  1.83e3
+    ticks                     3.21e3   1.99e3   1.66e3   1.40e3   1.41e3
+    ticksWHNF                 5.60e1   1.80e1   1.80e1   1.75e1   1.83e1
+    tickIO                    9.80e2
+    tickWHNFIO                1.80e1
+    ticksIO                   1.81e3   1.45e3   1.38e3   1.40e3   1.49e3
+    ticksWHNFIO               1.08e2   2.00e1   2.00e1   1.67e1   1.83e1
 
 R&D, To Do
 ==========

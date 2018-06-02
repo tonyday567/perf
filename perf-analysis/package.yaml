@@ -1,5 +1,5 @@
 name: perf-analysis
-version: '0.0.1.0'
+version: '0.0.1.1'
 synopsis: analysis example using perf
 description: ! '
   Analytical tools to use with perf.
@@ -18,7 +18,7 @@ library:
     - Perf.Analysis
   dependencies:
     - base >=4.7 && <4.12
-    - perf
+    - perf >= 0.4.1.0
     - deepseq
     - formatting
     - protolude
@@ -44,7 +44,7 @@ executables:
       - deepseq
       - formatting
       - optparse-generic
-      - perf
+      - perf >= 0.4.1.0
       - perf-analysis
       - protolude
       - scientific

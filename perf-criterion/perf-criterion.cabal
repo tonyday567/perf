@@ -1,0 +1,44 @@
+-- This file has been generated from package.yaml by hpack version 0.28.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: a32151df0a5d7ce71ea857fa147f51ef6b3755a3648d450886e80829b0834e30
+
+name:           perf-criterion
+version:        0.0.0.1
+synopsis:       See readme.md
+description:    See readme.md for description.
+category:       project
+homepage:       https://github.com/tonyday567/perf-criterion#readme
+bug-reports:    https://github.com/tonyday567/perf-criterion/issues
+author:         Tony Day
+maintainer:     tonyday567@gmail.com
+copyright:      Tony Day (c) 2017
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+extra-source-files:
+    readme.md
+    stack.yaml
+
+source-repository head
+  type: git
+  location: https://github.com/tonyday567/perf-criterion
+
+executable perf-criterion
+  main-is: perf-criterion.lhs
+  other-modules:
+      Paths_perf_criterion
+  hs-source-dirs:
+      app
+  default-extensions: NegativeLiterals NoImplicitPrelude OverloadedStrings UnicodeSyntax
+  ghc-options: -funbox-strict-fields -fforce-recomp -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , criterion
+    , optparse-generic
+    , perf
+    , perf-analysis
+    , protolude
+  default-language: Haskell2010

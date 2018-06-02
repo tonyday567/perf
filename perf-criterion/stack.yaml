@@ -1,0 +1,9 @@
+resolver: nightly-2018-05-30
+
+packages:
+  - .
+  - ../perf
+  - ../perf-analysis
+
+extra-deps: []
+

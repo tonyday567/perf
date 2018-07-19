@@ -62,6 +62,13 @@ formatInt label p x =
           ((right 24 ' ' %. stext) %
            (left 8 ' ' %. prec p)) label (int2Sci x)
 
+-- | format an Integral as a Scientific with a label and precision
+formatDouble :: (Integral a) => Text -> Int -> a -> Text
+formatDouble label p x =
+        sformat
+          ((right 24 ' ' %. stext) %
+           (left 8 ' ' %. prec p)) label (int2Sci x)
+
 -- | format the first 5 results, and then the 40th percentile
 formatRun :: (Integral a) => Text -> Int -> [a] -> Text
 formatRun label p xs =

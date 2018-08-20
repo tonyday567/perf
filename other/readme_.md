@@ -127,15 +127,21 @@ time
 space
 ---
 
-- [Chasing space leaks in shake](http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html)
 
-- [Space leak zoo](http://blog.ezyang.com/2011/05/space-leak-zoo/)
+```
+stack build --profile --executable-profiling --library-profiling
+
+stack exec -- example +RTS -p
+
+./mytest +RTS -M4m -RTS
+
+```
+
+- https://github.com/ndmitchell/spaceleak
+- https://stackoverflow.com/questions/42353661/may-i-limit-memory-usage-per-function-monad-thread-in-haskell
+
 
 - [Anatomy of a thunk leak](http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/)
-
-- [An insufficiently lazy map](http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/)
-
-- [Pinpointing space leaks in big programs](http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/)
 
 memoization
 ---

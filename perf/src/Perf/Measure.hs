@@ -112,8 +112,6 @@ cputime = Measure 0 start stop
       t <- getCPUTime
       return $ t - a
 
-
-
 -- | a measure using 'getCurrentTime' (unit is 'NominalDiffTime' which prints as seconds)
 --
 -- >>> r <- runMeasure realtime (pure $ foldl' (+) 0 [0..1000])

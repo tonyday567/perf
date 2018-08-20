@@ -18,6 +18,23 @@ default-extensions:
   - UnicodeSyntax
 dependencies:
   - base >=4.7 && <5
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Perf.Criterion
+  dependencies:
+    - base >=4.7 && <4.12
+    - containers
+    - criterion
+    - criterion-measurement
+    - deepseq
+    - text
+    - formatting
+    - scientific
+    - perf
+    - perf-analysis
+
 executables:
   perf-criterion:
     main: perf-criterion.lhs
@@ -34,3 +51,9 @@ executables:
       - perf
       - perf-analysis
       - criterion
+      - criterion-measurement
+      - deepseq
+      - perf-criterion
+      - text
+      - formatting
+      - scientific

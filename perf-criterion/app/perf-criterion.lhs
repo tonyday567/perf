@@ -29,13 +29,17 @@
 - [optparse-generic](https://www.stackage.org/package/optparse-generic)
 
 \begin{code}
-import Protolude
+import Protolude hiding ((%))
 import Options.Generic
 import Perf
 import Criterion
 import Criterion.Main
+import Criterion.Measurement
 import Perf.Analysis
+import qualified Perf.Criterion as C
 import Prelude (error)
+import Formatting
+import Data.Scientific
 \end{code}
 
 code
@@ -55,43 +59,66 @@ fib m | m < 0     = error "negative!"
     go 1 = 1
     go n = go (n - 1) + go (n - 2)
 
+-- | average time and cycles
+formatRun' :: (Integral a) => Text -> Int -> [a] -> Text
+formatRun' label p xs =
+  sformat
+  ((right 24 ' ' %. stext) %
+    (left 9 ' ' %. prec p) %
+    (left 9 ' ' %. prec p))
+  label
+  (fromFloatDigits $ av $ ns <$> xs)
+  (fromFloatDigits $ average xs)
+  where
+    ns = ((1e-9 :: Double)*) . (0.38*) . fromIntegral
+    av xs = sum xs / fromIntegral (length xs)
+
+
 -- Our benchmark harness.
 main = do
   let n = 1000
   defaultMain
-    [ bgroup "fib"
-      [ bench "1"  $ whnf fib 1
-      , bench "5"  $ whnf fib 5
-      , bench "9"  $ whnf fib 9
-      , bench "11" $ whnf fib 11
-      ]
-    , bgroup "fibnf"
+    [
+      bgroup "fib nf"
       [ bench "1"  $ nf fib 1
       , bench "5"  $ nf fib 5
       , bench "9"  $ nf fib 9
       , bench "11" $ nf fib 11
       ]
     ]
+
   _ <- warmup 100
+
+  -- sequence . replicate n memo'izes
   t1 <- sequence $ replicate 10 (tick fib 1)
   t5 <- sequence $ replicate 10 (tick fib 5)
   t9 <- sequence $ replicate 10 (tick fib 9)
   t11 <- sequence $ replicate 10 (tick fib 11)
+
+  -- but ticks seems a-ok
   (ts1, _) <- ticks n fib 1
   (ts5, _) <- ticks n fib 5
   (ts9, _) <- ticks n fib 9
   (ts11, _) <- ticks n fib 11
 
+  -- perf-criterion
+  pc1 <- C.criNF n fib 1
+  pc5 <- C.criNF n fib 5
+  pc9 <- C.criNF n fib 9
+  pc11 <- C.criNF n fib 11
+
+
+
   writeFile "other/answer.md" $
     code
-      [ "fib 1 * 10:" <> show (fst <$> t1)
-      , "fib 5 * 10: " <> show (fst <$> t5)
-      , "fib 9 * 10: " <> show (fst <$> t9)
-      , "fib 11 * 10: " <> show (fst <$> t11)
-      , formatRun "fib 1" 2 $ ts1
-      , formatRun "fib 5" 2 $ ts5
-      , formatRun "fib 9" 2 $ ts9
-      , formatRun "fib 11" 2 $ ts11
+      [ formatRun' "fib 1 (ns)" 2 $ ts1
+      , formatRun' "fib 5 (ns)" 2 $ ts5
+      , formatRun' "fib 9 (ns)" 2 $ ts9
+      , formatRun' "fib 11 (ns)" 2 $ ts11
+      , C.formatRun "cri: fib 1 (ns)" 2 $ pc1
+      , C.formatRun "fib 5 (ns)" 2 $ pc5
+      , C.formatRun "fib 9 (ns)" 2 $ pc9
+      , C.formatRun "fib 11 (ns)" 2 $ pc11
       ]
 
 data Opts w = Opts

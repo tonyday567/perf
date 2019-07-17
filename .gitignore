@@ -6,3 +6,5 @@ perf-analysis/other/*.md
 perf/perf.cabal
 perf-analysis/perf-analysis.cabal
 /other/*.md
+/perf-analysis/dist-newstyle/
+/perf-criterion/dist-newstyle/

@@ -47,6 +47,6 @@ test-suite test
       test
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
   build-depends:
-      base >=4.7 && <4.12
+      base >=4.7 && <5
     , doctest
   default-language: Haskell2010

@@ -24,7 +24,7 @@ library
       src
   default-extensions: NegativeLiterals NoImplicitPrelude OverloadedStrings UnicodeSyntax
   build-depends:
-      base >=4.7 && <4.12
+      base >=4.7 && <5
     , containers
     , criterion
     , criterion-measurement

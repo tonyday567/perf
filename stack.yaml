@@ -4,11 +4,13 @@ packages:
   - perf
   - perf-analysis
   - perf-criterion
-  - ../readme-lhs
+  # - ../readme-lhs
 
 extra-deps:
   # - readme-lhs-0.2.0
   - rdtsc-1.3.0.1
   - tdigest-0.2
+  - git: https://github.com/tonyday567/readme-lhs.git
+    commit: a48c5414051f9833b84ec5a20108a0b641b21a10
 
 allow-newer: true

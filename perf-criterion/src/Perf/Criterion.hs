@@ -18,18 +18,27 @@ criNF n a b = do
       return m
 
 -- | format the cputime and cycle criterion measures
-formatCriRun :: Int -> Text -> Measured -> [Text]
-formatCriRun p label m =
+criRun :: Int -> Text -> Measured -> [Text]
+criRun p label m =
   [ label
   , formatF p (measCpuTime (rescale m))
   , formatI p $ measCycles (rescale m)]
 
-formatCriRuns :: Int -> [(Text, Measured)] -> Block
-formatCriRuns p runs =
+-- | format cpu versus gc timings
+criSpeed :: Int -> Text -> Measured -> [Text]
+criSpeed p label m =
+  [ label
+  , formatF p (measCpuTime (rescale m))
+  , formatF p (measMutatorCpuSeconds (rescale m))
+  , formatF p (measGcCpuSeconds (rescale m))
+  , formatI p $ measCycles (rescale m)
+  ]
+
+formatCriRuns :: (Int -> Text -> Measured -> [Text]) -> Int -> [(Text, Measured)] -> Block
+formatCriRuns r p runs =
   table
   mempty
   ["run", "cputimes", "cycles"]
   [AlignLeft, AlignRight, AlignRight]
   []
-  (fmap (\(l,m) -> formatCriRun p l m) runs)
-
+  (fmap (\(l,m) -> r p l m) runs)

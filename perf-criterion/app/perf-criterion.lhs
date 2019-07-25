@@ -99,7 +99,7 @@ criterion runs
       , ("fib 9 (ns)", ts9)
       , ("fib 11 (ns)", ts11)
       ]
-    output "criterion_runs" $ Native $ (:[]) $ C.formatCriRuns 3
+    output "criterion_runs" $ Native $ (:[]) $ C.formatCriRuns C.criSpeed 3
       [ ("fib 1 (ns)", pc1)
       , ("fib 5 (ns)", pc5)
       , ("fib 9 (ns)", pc9)

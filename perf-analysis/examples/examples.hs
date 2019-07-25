@@ -13,12 +13,12 @@
 
 module Main where
 
-import Data.Scientific
+import Readme.Lhs
 import Formatting
 import Options.Generic
 import Perf
 import Perf.Analysis
-import Protolude hiding ((%))
+import Protolude
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Vector as V
@@ -63,15 +63,6 @@ main = do
   let !n = fromMaybe 1000 (runs o)
   let !a = fromMaybe 1000 (sumTo o)
   let !as = [1, 10, 100, 1000 :: Int]
-
-  writeFile "other/run.md" $
-    code
-      [ formatInt "number of runs:" 2 n
-      , formatInt "accumulate to:" 2 a
-      , sformat ((right 24 ' ' %. stext)%stext) "function:" "foldl' (+) 0"
-      ]
-
-  -- | tick_ testing
   prewarmup <- tick_
   _ <- warmup 100
   onetick <- tick_
@@ -83,138 +74,6 @@ main = do
   let tick99999 = percentile 0.99999 manyticks
   let tick99 = percentile 0.99 manyticks
   let tick40 = percentile 0.4 manyticks
-  writeFile "other/tick_.md" $
-    code
-      [ "pre warmup: " <> show prewarmup <> " cycles"
-      , "one tick_: " <> show onetick <> " cycles"
-      , "next 10: " <> show ticks'
-      , "average over 1m: " <> sformat (fixed 2) avticks <> " cycles"
-      , "99.999% perc: " <> sformat commas (floor tick99999 :: Integer)
-      , "99.9% perc: " <> sformat (fixed 2) tick999
-      , "99th perc:  " <> sformat (fixed 2) tick99
-      , "40th perc:  " <> sformat (fixed 2) tick40
-      , "[min, 20th, .. 80th, max]:"
-      , mconcat (sformat (" " % prec 4) . fromFloatDigits <$> qticks)
-      ]
-
-  -- | tick tests
-  (t, resultPrime) <- tick fMono a
-  print resultPrime
-  (t2,_) <- tick fMono a
-  (t3,_) <- tick fMono a
-  (t',_) <- tick' fMono a
-  (tio,_) <- tickIO (pure $ fMono a)
-  -- mystery: if tickNoinline is used at all, all tick computations slow down
-  -- by a factor of 2 (or by a function call)
-  -- (tn,_) <- tickNoinline fMono a
-  t10 <- sequence $ replicate 10 (tick fMono a)
-  t10io <- sequence $ replicate 10 (tickIO $ pure (fMono a))
-  -- t10n <- sequence $ replicate 10 (tickNoinline fMono a)
-  t10' <- sequence $ replicate 10 (tick fMono a)
-  writeFile "other/tick.md" $
-    code
-      [ "sum to " <> show a
-      , "first measure: " <> show t <> " cycles"
-      , "second measure: " <> show t2 <> " cycles"
-      , "third measure: " <> show t3 <> " cycles"
-      , "tick': " <> show t' <> " cycles"
-      , "tickIO: " <> show tio <> " cycles"
-      -- , "tickNoinline: " <> show tn <> " cycles"
-      , "tick * 10: " <> show (fst <$> t10)
-      , "tickIO * 10: " <> show (fst <$> t10io)
-      -- , "tickNoinline * 10: " <> show (fst <$> t10n)
-      , "tick * 10: " <> show (fst <$> t10')
-      ]
-
-  -- | ticks and ticksIO
-  (rpure, _) <- ticks n fMono a
-  (rpurePoly, _) <- ticks n fPoly a
-  (rpureLambda, _) <- ticks n fLambda a
-  (rio, _) <- ticksIO n (pure $ fMono a)
-  (rioPoly, _) <- ticksIO n (pure $ fPoly a)
-  (rioLambda, _) <- ticksIO n (pure $ fLambda a)
-
-  writeFile "other/ticks.md" $
-    code [ "acc = " <> show a <> " n = " <> show n
-         , formatRunHeader
-         , formatRun "monomorphic" 2 $ rpure
-         , formatRun "includes lambda" 2 $ rpureLambda
-         , formatRun "polymorphic" 2 $ rpurePoly
-         , formatRun "ticksIO mono" 2 $ rio
-         , formatRun "ticksIO lambda" 2 $ rioLambda
-         , formatRun "ticksIO poly" 2 $ rioPoly
-         ]
-
-  gaps <- sequence $ (\a -> formatGap a <$> tickIO (ticks n fPoly a)) <$> as
-  writeFile "other/ticksCost.md" $ code gaps
-
-  -- | ns testing
-  css <-
-    fmap (fmap fst) <$>
-    sequence ((replicateM n . tick fMono) <$> as)
-  let r12 =
-        "(replicateM n . tick fMono) <$> as: " <>
-        mconcat (sformat (" " %prec 3) <$>
-                 (fromFloatDigits . percentile 0.4 <$> css))
-  (ts, _) <- ns (ticks n fMono) as
-  let r13 =
-        "ns (ticks n fMono) as: " <>
-        mconcat (sformat (" " %prec 3) <$>
-                 (fromFloatDigits . percentile 0.4 <$> ts))
-  writeFile "other/tickns.md" $
-    code ["sum to's " <> show as, r13, r12]
-
-  -- | vectors
-  let asl :: [Int]
-      asl = [1 .. a]
-  let suml :: [Int] -> Int
-      suml = foldl' (+) 0
-  (rlist, _) <- ticks n suml asl
-  let sumv :: V.Vector Int -> Int
-      sumv = V.foldl (+) 0
-  let asv :: V.Vector Int =
-        V.generate a identity
-  (rboxed, _) <- ticks n sumv asv
-  let sums :: S.Vector Int -> Int
-      sums = S.foldl (+) 0
-  let ass :: S.Vector Int =
-        S.generate a identity
-  (rstorable, _) <- ticks n sums ass
-  let sumu :: U.Vector Int -> Int
-      sumu = U.foldl (+) 0
-  let asu :: U.Vector Int =
-        U.generate a identity
-  (runboxed, _) <- ticks n sumu asu
-  writeFile "other/vector.md" $
-    code
-    [ "sum to " <> show a
-    , formatRun "ticks list" 2 $ rlist
-    , formatRun "ticks boxed" 2 $ rboxed
-    , formatRun "ticks storable" 2 $ rstorable
-    , formatRun "ticks unboxed" 2 $ runboxed
-    ]
-
-  -- WHNF
-  (rnf, _) <- tick (fmap fMono) (Just a)
-  (rwhnf, _) <- tick (fmap fMono) (Just a)
-  (rnfs, _) <- ticks n (fmap fMono) (Just a)
-  (rwhnfs, _) <- ticksWHNF n (fmap fMono) (Just a)
-  (rnfio, _) <- tickIO (pure $ fmap fMono (Just a))
-  (rwhnfio, _) <- tickWHNFIO (pure $ fmap fMono (Just a))
-  (rnfsio, _) <- ticksIO n (pure $ fmap fMono (Just a))
-  (rwhnfsio, _) <- ticksWHNFIO n (pure $ fmap fMono (Just a))
-
-  writeFile "other/whnf.md" $ code
-    [ "sum to " <> show a
-    , formatInt "tick" 2 $ rnf
-    , formatInt "tickWHNF" 2 $ rwhnf
-    , formatRun "ticks" 2 rnfs
-    , formatRun "ticksWHNF" 2 rwhnfs
-    , formatInt "tickIO" 2 rnfio
-    , formatInt "tickWHNFIO" 2 rwhnfio
-    , formatRun "ticksIO" 2 rnfsio
-    , formatRun "ticksWHNFIO" 2 rwhnfsio
-    ]
 
   -- perf basics
   (result, cs) <- runPerfT $
@@ -243,8 +102,165 @@ main = do
 
   when (result == result') $ print "PerfT has no effect on original computation"
 
-  let fmt = sformat ((right 40 ' ' %. stext) %prec 3 % " " % stext)
-  writeFile "other/perf.md" $
-    "\nperf cycle measurements\n---\n" <>
-    code ((\(t,c) -> fmt t (int2Sci c) "cycles") <$> Map.toList ms)
+  -- | tick tests
+  (t, resultPrime) <- tick fMono a
+  print resultPrime
+  (t2,_) <- tick fMono a
+  (t3,_) <- tick fMono a
+  (t',_) <- tick' fMono a
+  (tio,_) <- tickIO (pure $ fMono a)
+  -- mystery: if tickNoinline is used at all, all tick computations slow down
+  -- by a factor of 2 (or by a function call)
+  -- (tn,_) <- tickNoinline fMono a
+  t10 <- sequence $ replicate 10 (tick fMono a)
+  t10io <- sequence $ replicate 10 (tickIO $ pure (fMono a))
+  -- t10n <- sequence $ replicate 10 (tickNoinline fMono a)
+  t10' <- sequence $ replicate 10 (tick fMono a)
 
+  -- | ticks and ticksIO
+  (rpure, _) <- ticks n fMono a
+  (rpurePoly, _) <- ticks n fPoly a
+  (rpureLambda, _) <- ticks n fLambda a
+  (rio, _) <- ticksIO n (pure $ fMono a)
+  (rioPoly, _) <- ticksIO n (pure $ fPoly a)
+  (rioLambda, _) <- ticksIO n (pure $ fLambda a)
+
+  -- | gaps
+  gaps <- sequence $ (tickIO . ticks n fPoly) <$> as
+
+  -- | ns testing
+  css <-
+    fmap (fmap fst) <$>
+    sequence ((replicateM n . tick fMono) <$> as)
+  (ts, _) <- ns (ticks n fMono) as
+
+  -- | vectors
+  let asl :: [Int]
+      asl = [1 .. a]
+  let suml :: [Int] -> Int
+      suml = foldl' (+) 0
+  (rlist, _) <- ticks n suml asl
+  let sumv :: V.Vector Int -> Int
+      sumv = V.foldl (+) 0
+  let asv :: V.Vector Int =
+        V.generate a identity
+  (rboxed, _) <- ticks n sumv asv
+  let sums :: S.Vector Int -> Int
+      sums = S.foldl (+) 0
+  let ass :: S.Vector Int =
+        S.generate a identity
+  (rstorable, _) <- ticks n sums ass
+  let sumu :: U.Vector Int -> Int
+      sumu = U.foldl (+) 0
+  let asu :: U.Vector Int =
+        U.generate a identity
+  (runboxed, _) <- ticks n sumu asu
+
+  -- WHNF
+  (rnf, _) <- tick (fmap fMono) (Just a)
+  (rwhnf, _) <- tick (fmap fMono) (Just a)
+  (rnfs, _) <- ticks n (fmap fMono) (Just a)
+  (rwhnfs, _) <- ticksWHNF n (fmap fMono) (Just a)
+  (rnfio, _) <- tickIO (pure $ fmap fMono (Just a))
+  (rwhnfio, _) <- tickWHNFIO (pure $ fmap fMono (Just a))
+  (rnfsio, _) <- ticksIO n (pure $ fmap fMono (Just a))
+  (rwhnfsio, _) <- ticksWHNFIO n (pure $ fmap fMono (Just a))
+
+  void $ runOutput
+    ("other/readme_.md", GitHubMarkdown)
+    ("readme.md", GitHubMarkdown) $ do
+
+    output "run" $ Native $ (:[]) $ table
+      "run details"
+      []
+      [AlignLeft, AlignRight]
+      [0, 0]
+      [ ["number of runs", formatI 2 n]
+      , ["accumulate to", formatI 2 a]
+      , ["function", "foldl' (+) 0"]
+      ]
+
+    output "tick_" $ Native $ (:[]) $ table mempty ["stat", "cycles"] mempty mempty
+      [ ["pre warmup", show prewarmup]
+      , ["one tick_", show onetick]
+      , ["next 10", show ticks']
+      , ["average over one million", sformat (fixed 2) avticks]
+      , ["99.999% perc", sformat commas (floor tick99999 :: Integer)]
+      , ["99.9% perc", sformat (fixed 2) tick999]
+      , ["99th perc", sformat (fixed 2) tick99]
+      , ["40th perc", sformat (fixed 2) tick40]
+      , ["[min, 20th, .. 80th, max]",
+         Text.intercalate " " (formatF 4 <$> qticks)]
+      ]
+
+    output "tick" $ Native
+      [ plain ("sum to " <> show a)
+      , table mempty ["stat", "cycles"] mempty mempty
+        [ ["first measure", show t]
+        , ["second measure", show t2]
+        , ["third measure", show t3]
+        , ["tick'", show t']
+        , ["tickIO", show tio]
+        , ["tick * 10", show (fst <$> t10)]
+        , ["tickIO * 10", show (fst <$> t10io)]
+        , ["tick' * 10", show (fst <$> t10')]
+        ]
+      ]
+
+    output "ticks" $ Native [formatRuns 3 2
+      [ ("monomorphic", rpure)
+      , ("includes lambda", rpureLambda)
+      , ("polymorphic", rpurePoly)
+      , ("ticksIO mono", rio)
+      , ("ticksIO lambda", rioLambda)
+      , ("ticksIO poly", rioPoly)
+      ]]
+
+
+
+    output "gaps" $ Native $ (:[]) $ table mempty
+      ["number runs", "outside cycles", "inside cycles", "gap"]
+      mempty mempty
+      (zipWith (\a (co, (ci, _)) ->
+                  [ formatI 1 a
+                  , formatI 3 co
+                  , formatI 3 (sum ci)
+                  , formatI 3 (co - sum ci)
+                  ]) as gaps)
+
+    output "tickns" $ Native
+      [ table mempty (["sum to:"] <> (show <$> as)) mempty mempty
+        [ ["(replicateM n . tick fMono) <$> as"] <>
+          (formatF 3 . percentile 0.5 <$> css)
+        , ["ns (ticks n fMono) as"] <>
+          (formatF 3 . percentile 0.5 <$> ts)
+        ]
+      ]
+
+    output "vector" $ Native $ [plain ("sum to " <> show a)] <>
+      [formatRuns 3 2 
+      [ ("ticks list", rlist)
+      , ("ticks boxed", rboxed)
+      , ("ticks storable", rstorable)
+      , ("ticks unboxed", runboxed)
+      ]]
+
+    output "whnf" $ Native
+      [ plain ("sum to " <> show a)
+      , table mempty ["function", "cycles"] mempty mempty
+        [ ["tick", formatI 3 rnf]
+        , ["tickWHNF", formatI 3 rwhnf]
+        , formatRun "ticks" 3 3 rnfs
+        , formatRun "ticksWHNF" 3 3 rwhnfs
+        , ["tickIO", formatI 3 rnfio]
+        , ["tickWHNFIO", formatI 3 rwhnfio]
+        , formatRun "ticksIO" 3 3 rnfsio
+        , formatRun "ticksWHNFIO" 3 3 rwhnfsio
+        ]
+      ]
+
+    output "perf" $ Native
+      [ plain "perf cycle measurements"
+      , table mempty ["effect", "cycles"] mempty mempty
+        ((\(t,c) -> [t, formatI 3 c]) <$> Map.toList ms)
+      ]

@@ -1,14 +1,7 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
 {-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | analytical functionality for perf
 module Perf.Analysis where
@@ -17,8 +10,8 @@ import Data.Scientific
 import Data.TDigest
 import Formatting
 import Perf
-import Protolude hiding ((%))
-import qualified Data.Text as Text
+import Protolude
+import Readme.Lhs hiding (Format)
 
 -- | compute deciles
 --
@@ -55,58 +48,48 @@ prec n = scifmt Exponent (Just n)
 int2Sci :: (Integral a) => a -> Scientific
 int2Sci n = scientific (fromIntegral n) 0
 
--- | format an Integral as a Scientific with a label and precision
-formatInt :: (Integral a) => Text -> Int -> a -> Text
-formatInt label p x =
-        sformat
-          ((right 24 ' ' %. stext) %
-           (left 8 ' ' %. prec p)) label (int2Sci x)
+-- | format an Integral as a Scientific with a precision
+formatI :: (Integral a) => Int -> a -> Text
+formatI p x = sformat (prec p) (int2Sci x)
 
--- | format an Integral as a Scientific with a label and precision
-formatDouble :: (Integral a) => Text -> Int -> a -> Text
-formatDouble label p x =
-        sformat
-          ((right 24 ' ' %. stext) %
-           (left 8 ' ' %. prec p)) label (int2Sci x)
+-- | format an Integral as a Scientific with a precision
+formatF :: (RealFloat a) => Int -> a -> Text
+formatF p x = sformat (prec p) (fromFloatDigits x)
 
--- | format the first 5 results, and then the 40th percentile
-formatRun :: (Integral a) => Text -> Int -> [a] -> Text
-formatRun label p xs =
-  sformat
-  ((right 24 ' ' %. stext) % stext %
-    (left 9 ' ' %. prec p) %
-    (left 9 ' ' %. prec p))
-  label
-  (Text.intercalate " " $ sformat (left 8 ' ' %. prec p) .
-    int2Sci <$>
-    take 3 xs)
-  (fromFloatDigits $ percentile 0.5 xs)
-  (fromFloatDigits $ average xs)
+-- | format the first few results, the median and average
+formatRun :: (Integral a) => Text -> Int -> Int -> [a] -> [Text]
+formatRun label n p xs =
+  [ label] <>
+  (formatI p <$> take n xs) <>
+  [ formatF p $ average xs
+  , formatF p $ percentile 0.5 xs
+  ]
 
--- | header for formatRun
-formatRunHeader :: Text
-formatRunHeader =
-  sformat
-  ((right 24 ' ' %. stext) %
-    (left 8 ' ' %. stext) %
-    (left 9 ' ' %. stext) %
-    (left 9 ' ' %. stext) %
-    (left 9 ' ' %. stext) %
-    (left 9 ' ' %. stext))
-  "run"
-  "first"
-  "2nd"
-  "3rd"
-  "median"
-  "av."
+-- | average and time
+formatRunTime :: (Integral a) => Text -> Double -> Int -> [a] -> [Text]
+formatRunTime label npc p xs =
+  [ label] <>
+  [ formatF p $ npc * average xs
+  , formatF p $ average xs
+  ]
 
--- | format a tick result with an inside and outside measurement
-formatGap :: (Integral a) => Int -> (a, ([a],b)) -> Text
-formatGap a (co, (ci, _)) =
-  sformat
-  ("n = " %(left 7 ' ' %. prec 3)%" outside: "%(left 7 ' ' %. prec 3)%" inside: "%(left 7 ' ' %. prec 3)%" gap: "%(left 7 ' ' %. prec 3))
-  (int2Sci a) (int2Sci co) (int2Sci $ sum ci) (int2Sci $ co - sum ci)
+formatRuns :: (Integral a) => Int -> Int -> [(Text, [a])] -> Block
+formatRuns n p runs =
+  table
+  mempty
+  (["run"] <>
+   take n (["first", "second", "third"] <> ((<>"th") . show <$> [4::Int ..])) <>
+    ["average", "median"])
+  ([AlignLeft] <> replicate (n+2) AlignRight)
+  (replicate (n+3) 0)
+  (fmap (\(l,as) -> formatRun l n p as) runs)
 
--- | place markdown backtics around text
-code :: [Text] -> Text
-code cs = "\n```\n" <> Text.intercalate "\n" cs <> "\n```\n"
+formatRunsTime :: (Integral a) => Double -> Int -> [(Text, [a])] -> Block
+formatRunsTime npc p runs =
+  table
+  mempty
+  ["run", "cputime", "cycles"]
+  [AlignLeft, AlignRight, AlignRight]
+  []
+  (fmap (\(l,as) -> formatRunTime l npc p as) runs)
+

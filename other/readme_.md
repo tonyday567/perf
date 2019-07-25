@@ -24,18 +24,83 @@ perf-analysis
 ---
 
 Analysis using perf. Code for the benchmark runs can be found in
-[perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs). To create this readme
-locally run:
+[perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs). To create this readme locally run:
 
 ```
-stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax" --exec "vmd readme.md"
+stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --file-watch
 ```
+
+perf-criterion
+-------------
+
+Comparison with criterion. See [criterion.md](criterion.md).
+To create this locally run:
+
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-criterion" --file-watch
 
 benchmarks
 ===
 
-```include
-perf-analysis/examples/bench.md
+All measurements in cycles.
+1 cycle = 0.38 𝛈s (Based on my 2.6GHz machine, by definition).
+
+run
+---
+
+```{.output .run}
+
+```
+
+tick callibration
+---
+
+```{.output .tick_}
+```
+
+tick
+---
+
+```{.output .tick}
+```
+
+ticks
+---
+
+```{.output .ticks}
+```
+
+gaps
+---
+
+Looking for hidden computation costs:
+
+```{.output .gaps}
+```
+
+tickns
+---
+
+Multiple runs summing to a series of numbers.
+
+```{.output .tickns}
+```
+
+vector
+---
+
+```{.output .vector}
+```
+
+whnf
+---
+
+```{.output .whnf}
+```
+
+perf
+---
+
+```{.output .perf}
 ```
 
 R&D, To Do

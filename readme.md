@@ -27,7 +27,15 @@ Analysis using perf. Code for the benchmark runs can be found in
 [perf-analysis/examples/examples.hs](perf-analysis/examples/examples.hs).
 To create this readme locally run:
 
-    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --exec "$(stack path --local-bin)/pandoc -f markdown -i other/readme_.md -t markdown -o readme.md --filter pandoc-include --mathjax" --exec "vmd readme.md"
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --file-watch
+
+perf-criterion
+-------------
+
+Comparison with criterion. See [criterion.md](criterion.md).
+To create this readme locally run:
+
+    stack build --test --exec "$(stack path --local-install-root)/bin/criterion" --file-watch
 
 benchmarks
 ==========
@@ -38,89 +46,116 @@ machine, by definition).
 run
 ---
 
-    number of runs:           1.00e3
-    accumulate to:            1.00e3
-    function:               foldl' (+) 0
+|                |              |
+|:---------------|-------------:|
+| number of runs |        1.00e3|
+| accumulate to  |        1.00e3|
+| function       |  foldl' (+) 0|
 
 tick callibration
 -----------------
 
-    pre warmup: 88 cycles
-    one tick_: 46 cycles
-    next 10: [16,14,16,16,16,16,16,16,16,16]
-    average over 1m: 16.22 cycles
-    99.999% perc: 206
-    99.9% perc: 48.39
-    99th perc:  18.95
-    40th perc:  15.74
-    [min, 20th, .. 80th, max]:
-     1.2000e1 1.5129e1 1.5737e1 1.6346e1 1.6955e1 1.5300e4
+| stat                        | cycles                                                |
+|-----------------------------|-------------------------------------------------------|
+| pre warmup                  | 152                                                   |
+| one tick\_                  | 72                                                    |
+| next 10                     | \[24,24,24,24,24,24,22,22,20,22\]                     |
+| average over one million    | 16.95                                                 |
+| 99.999% perc                | 119                                                   |
+| 99.9% perc                  | 53.42                                                 |
+| 99th perc                   | 24.67                                                 |
+| 40th perc                   | 15.99                                                 |
+| \[min, 20th, .. 80th, max\] | 1.2000e1 1.5301e1 1.5993e1 1.6686e1 1.7953e1 9.9716e4 |
 
 tick
 ----
 
-    sum to 1000
-    first measure: 968 cycles
-    second measure: 1520 cycles
-    third measure: 912 cycles
-    tick': 906 cycles
-    tickIO: 1140 cycles
-    tick * 10: [736,676,674,672,698,674,702,674,698,672]
-    tickIO * 10: [736,688,676,672,718,702,696,676,702,674]
-    tick * 10: [674,720,674,700,674,698,672,696,670,702]
+sum to 1000
+
+| stat           | cycles                                                |
+|----------------|-------------------------------------------------------|
+| first measure  | 2644                                                  |
+| second measure | 1344                                                  |
+| third measure  | 904                                                   |
+| tick'          | 874                                                   |
+| tickIO         | 1106                                                  |
+| tick \* 10     | \[1376,1334,1310,1308,1306,1308,1310,1306,1306,1308\] |
+| tickIO \* 10   | \[1400,1336,1310,1310,1310,1312,1306,1306,1308,1310\] |
+| tick' \* 10    | \[1306,1308,1312,1306,1306,1304,1304,1304,1312,1308\] |
 
 ticks
 -----
 
-    acc = 1000 n = 1000
-    run                        first      2nd      3rd   median      av.
-    monomorphic               2.20e3   1.45e3   1.42e3   1.41e3   1.41e3
-    includes lambda           1.40e3   1.37e3   1.32e3   1.32e3   1.33e3
-    polymorphic               1.37e3   1.40e3   1.41e3   1.40e3   1.58e3
-    ticksIO mono              1.90e3   1.45e3   1.37e3   1.35e3   1.36e3
-    ticksIO lambda            1.49e3   1.48e3   1.33e3   1.39e3   1.38e3
-    ticksIO poly              8.29e3   1.40e3   1.33e3   1.36e3   1.36e3
+| run             |   first|  second|   third|  average|  median|
+|:----------------|-------:|-------:|-------:|--------:|-------:|
+| monomorphic     |  2.98e3|  2.00e3|  1.98e3|   1.96e3|  1.96e3|
+| includes lambda |  1.96e3|  1.96e3|  1.96e3|   1.97e3|  1.96e3|
+| polymorphic     |  1.96e3|  1.95e3|  1.96e3|   1.96e3|  1.96e3|
+| ticksIO mono    |  2.45e3|  2.01e3|  1.97e3|   2.18e3|  1.96e3|
+| ticksIO lambda  |  2.13e3|  2.03e3|  2.00e3|   1.96e3|  1.96e3|
+| ticksIO poly    |  1.49e3|  1.39e3|  1.33e3|   1.38e3|  1.38e3|
 
-ticks cost
-----------
+gaps
+----
 
 Looking for hidden computation costs:
 
-    n = 1.000e0 outside: 6.235e4 inside: 2.385e4 gap: 3.850e4
-    n = 1.000e1 outside: 7.522e4 inside: 3.857e4 gap: 3.665e4
-    n = 1.000e2 outside: 2.122e5 inside: 1.753e5 gap: 3.687e4
-    n = 1.000e3 outside: 1.369e6 inside: 1.331e6 gap: 3.802e4
+| number runs | outside cycles | inside cycles | gap     |
+|-------------|----------------|---------------|---------|
+| 1.0e0       | 6.902e4        | 2.823e4       | 4.079e4 |
+| 1.0e1       | 1.744e6        | 1.668e6       | 7.554e4 |
+| 1.0e2       | 2.660e5        | 2.264e5       | 3.955e4 |
+| 1.0e3       | 2.000e6        | 1.959e6       | 4.100e4 |
 
 tickns
 ------
 
 Multiple runs summing to a series of numbers.
 
-    sum to's [1,10,100,1000]
-    ns (ticks n fMono) as:  2.289e1 3.803e1 1.715e2 1.326e3
-    (replicateM n . tick fMono) <$> as:  1.571e1 2.229e1 1.494e2 1.303e3
+| sum to:                                  | 1       | 10      | 100     | 1000    |
+|------------------------------------------|---------|---------|---------|---------|
+| (replicateM n . tick fMono) &lt;$&gt; as | 1.603e1 | 1.868e1 | 1.527e2 | 1.308e3 |
+| ns (ticks n fMono) as                    | 2.283e1 | 4.406e1 | 2.261e2 | 1.957e3 |
 
 vector
 ------
 
-    sum to 1000
-    ticks list                2.74e4   1.58e4   1.57e4   1.30e4   1.35e4
-    ticks boxed               6.47e3   5.91e3   5.92e3   6.01e3   5.99e3
-    ticks storable            1.83e3   1.99e3   1.96e3   1.96e3   2.06e3
-    ticks unboxed             2.16e3   1.83e3   1.80e3   1.97e3   1.96e3
+sum to 1000
+
+| run            |   first|  second|   third|  average|  median|
+|:---------------|-------:|-------:|-------:|--------:|-------:|
+| ticks list     |  3.10e4|  2.00e4|  1.31e6|   1.77e4|  1.50e4|
+| ticks boxed    |  6.23e3|  5.85e3|  5.84e3|   5.95e3|  5.98e3|
+| ticks storable |  3.16e3|  2.64e3|  2.63e3|   2.74e3|  2.60e3|
+| ticks unboxed  |  2.28e3|  1.83e3|  1.78e3|   2.03e3|  1.97e3|
 
 whnf
 ----
 
-    sum to 1000
-    tick                      1.62e3
-    tickWHNF                  1.83e3
-    ticks                     3.21e3   1.99e3   1.66e3   1.40e3   1.41e3
-    ticksWHNF                 5.60e1   1.80e1   1.80e1   1.75e1   1.83e1
-    tickIO                    9.80e2
-    tickWHNFIO                1.80e1
-    ticksIO                   1.81e3   1.45e3   1.38e3   1.40e3   1.49e3
-    ticksWHNFIO               1.08e2   2.00e1   2.00e1   1.67e1   1.83e1
+sum to 1000
+
+| function    | cycles  |         |         |         |         |
+|-------------|---------|---------|---------|---------|---------|
+| tick        | 9.500e2 |         |         |         |         |
+| tickWHNF    | 1.182e3 |         |         |         |         |
+| ticks       | 3.208e3 | 1.998e3 | 1.968e3 | 1.967e3 | 1.964e3 |
+| ticksWHNF   | 2.940e2 | 2.000e1 | 1.800e1 | 1.894e1 | 1.780e1 |
+| tickIO      | 9.600e2 |         |         |         |         |
+| tickWHNFIO  | 1.400e1 |         |         |         |         |
+| ticksIO     | 1.812e3 | 1.370e3 | 1.328e3 | 1.385e3 | 1.377e3 |
+| ticksWHNFIO | 1.100e2 | 2.000e1 | 1.560e2 | 1.777e1 | 1.647e1 |
+
+perf
+----
+
+perf cycle measurements
+
+| effect          | cycles  |
+|-----------------|---------|
+| file read       | 1.260e5 |
+| length          | 1.608e4 |
+| print to screen | 3.215e4 |
+| sum             | 1.072e4 |
 
 R&D, To Do
 ==========
@@ -216,37 +251,35 @@ time
 space
 -----
 
--   [Chasing space leaks in
-    shake](http://neilmitchell.blogspot.com.au/2013/02/chasing-space-leak-in-shake.html)
+    stack build --profile --executable-profiling --library-profiling
 
--   [Space leak zoo](http://blog.ezyang.com/2011/05/space-leak-zoo/)
+    stack exec -- example +RTS -p
+
+    ./mytest +RTS -M4m -RTS
+
+-   <a href="https://github.com/ndmitchell/spaceleak" class="uri">https://github.com/ndmitchell/spaceleak</a>
+-   <a href="https://stackoverflow.com/questions/42353661/may-i-limit-memory-usage-per-function-monad-thread-in-haskell" class="uri">https://stackoverflow.com/questions/42353661/may-i-limit-memory-usage-per-function-monad-thread-in-haskell</a>
 
 -   [Anatomy of a thunk
     leak](http://blog.ezyang.com/2011/05/anatomy-of-a-thunk-leak/)
 
--   [An insufficiently lazy
-    map](http://blog.ezyang.com/2011/05/an-insufficiently-lazy-map/)
-
--   [Pinpointing space leaks in big
-    programs](http://blog.ezyang.com/2011/06/pinpointing-space-leaks-in-big-programs/)
-
 memoization
 -----------
 
-http://okmij.org/ftp/Haskell/\#memo-off
+<a href="http://okmij.org/ftp/Haskell/#memo-off" class="uri">http://okmij.org/ftp/Haskell/#memo-off</a>
 
 cache cycle estimates
 ---------------------
 
-  Cache               Cycles
-  ------------------- ----------------
-  register            4 per cycle
-  L1 Cache access     3-4 cycles
-  L2 Cache access     11-12 cycles
-  L3 unified access   30 - 40
-  DRAM hit            195 cycles
-  L1 miss             40 cycles
-  L2 miss             &gt;600 cycles
+| Cache             | Cycles         |
+|-------------------|----------------|
+| register          | 4 per cycle    |
+| L1 Cache access   | 3-4 cycles     |
+| L2 Cache access   | 11-12 cycles   |
+| L3 unified access | 30 - 40        |
+| DRAM hit          | 195 cycles     |
+| L1 miss           | 40 cycles      |
+| L2 miss           | &gt;600 cycles |
 
 A performance checklist
 -----------------------
@@ -257,9 +290,9 @@ A performance checklist
 
     stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp
 
-2.  check GC `examples/examples +RTS -s`
+1.  check GC `examples/examples +RTS -s`
 
-3.  enabling profiling
+2.  enabling profiling
 
 -   a normal ghc:
     `stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp`
@@ -268,10 +301,10 @@ A performance checklist
 -   if template haskell:
     `stack ghc -- --make examples/examples.hs -rtsopts -fforce-recomp -prof -auto -auto-all -osuf p_o`
 
-4.  create an examples.prof on execution:
+1.  create an examples.prof on execution:
     `time examples/examples +RTS -p`
 
-5.  space
+2.  space
 
 <!-- -->
 
@@ -280,16 +313,16 @@ A performance checklist
     hp2ps -e8in -c examples/examples.hy # types
     hp2ps -e8in -c examples/examples.hp # constructors
 
-6.  check strictness pragmas
+1.  check strictness pragmas
 
-7.  space leaks
+2.  space leaks
 
 <!-- -->
 
     examples/examples +RTS -s - additional memory
     examples/examples +RTS -xt -hy
 
-8.  read core
+1.  read core
 
 <!-- -->
 

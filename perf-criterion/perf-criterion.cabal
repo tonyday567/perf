@@ -1,11 +1,3 @@
-cabal-version: >= 1.10
-
--- This file has been generated from package.yaml by hpack version 0.29.6.
---
--- see: https://github.com/sol/hpack
---
--- hash: 3db38929e71fa3d4fa8b0aa29a9b2fee4e7db20f9c87839dcc3c70970c582d45
-
 name:           perf-criterion
 version:        0.0.0.1
 synopsis:       See readme.md
@@ -19,9 +11,7 @@ copyright:      Tony Day (c) 2017
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
-extra-source-files:
-    readme.md
-    stack.yaml
+cabal-version: 2.0
 
 source-repository head
   type: git
@@ -30,8 +20,6 @@ source-repository head
 library
   exposed-modules:
       Perf.Criterion
-  other-modules:
-      Paths_perf_criterion
   hs-source-dirs:
       src
   default-extensions: NegativeLiterals NoImplicitPrelude OverloadedStrings UnicodeSyntax
@@ -46,12 +34,11 @@ library
     , perf-analysis
     , scientific
     , text
+    , readme-lhs
   default-language: Haskell2010
 
 executable perf-criterion
   main-is: perf-criterion.lhs
-  other-modules:
-      Paths_perf_criterion
   hs-source-dirs:
       app
   default-extensions: NegativeLiterals NoImplicitPrelude OverloadedStrings UnicodeSyntax
@@ -69,4 +56,5 @@ executable perf-criterion
     , protolude
     , scientific
     , text
+    , readme-lhs
   default-language: Haskell2010

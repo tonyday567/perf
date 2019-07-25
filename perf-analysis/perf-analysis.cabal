@@ -1,0 +1,58 @@
+name:           perf-analysis
+version:        0.0.1.1
+synopsis:       analysis example using perf
+description:     Analytical tools to use with perf. 
+category:       performance
+homepage:       https://github.com/tonyday567/perf#readme
+bug-reports:    https://github.com/tonyday567/perf/issues
+author:         Tony Day
+maintainer:     tonyday567@gmail.com
+copyright:      Tony Day
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  2.0
+
+source-repository head
+  type: git
+  location: https://github.com/tonyday567/perf
+  subdir: perf-analysis
+
+library
+  exposed-modules:
+      Perf.Analysis
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <4.12
+    , deepseq
+    , formatting
+    , perf >=0.4.1.0
+    , protolude
+    , scientific
+    , tdigest
+    , text
+    , vector
+    , readme-lhs
+  default-language: Haskell2010
+
+executable perf-examples
+  main-is: examples.hs
+  hs-source-dirs:
+      examples
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -rtsopts -O2
+  build-depends:
+      base >=4.7 && <4.12
+    , containers
+    , deepseq
+    , formatting
+    , optparse-generic
+    , perf >=0.4.1.0
+    , perf-analysis
+    , protolude
+    , scientific
+    , tdigest
+    , text
+    , vector
+    , readme-lhs
+  default-language: Haskell2010

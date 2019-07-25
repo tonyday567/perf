@@ -1,10 +1,5 @@
-/.stack-work/
 */.stack-work/
+/.stack-work/
+*/dist-newstyle/
 TAGS
-perf-analysis/other/*.md
 .DS_Store
-perf/perf.cabal
-perf-analysis/perf-analysis.cabal
-/other/*.md
-/perf-analysis/dist-newstyle/
-/perf-criterion/dist-newstyle/

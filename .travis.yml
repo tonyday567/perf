@@ -1,45 +1,63 @@
-# This is the simple Travis configuration, which is intended for use
-# on applications which do not require cross-platform and
-# multiple-GHC-version support. For more information and other
-# options, see:
-#
-# https://docs.haskellstack.org/en/stable/travis_ci/
-#
-# Copy these contents into the root directory of your Github project in a file
-# named .travis.yml
+language: haskell
+dist: trusty
 
-# Use new container infrastructure to enable caching
-sudo: false
-
-# Do not choose a language; we provide our own build tools.
-language: generic
-
-# Caching so the next build will be fast too.
 cache:
   directories:
   - $HOME/.stack
+  - $TRAVIS_BUILD_DIR/.stack-work
+  - $TRAVIS_BUILD_DIR/dist-newstyle
 
-# Ensure necessary system libraries are present
-addons:
-  apt:
-    packages:
-      - libgmp-dev
+cabal: "2.4"
 
-env:
-  - PACKAGEDIR="perf"
-  - PACKAGEDIR="perf-analysis"
+matrix:
+  include:
+    - env: BUILD=cabal
+      ghc: "8.6.5"
+    - env: BUILD=stack ARGS="--resolver lts-13.29 --system-ghc"
+      ghc: "8.6.5"
+      # a -Werror build that is allowed to fail
+    - env: BUILD=werror ARGS="--resolver lts-13.29 --system-ghc"
+      ghc: "8.6.5"
+    - env: BUILD=stack ARGS="--resolver nightly --system-ghc"
+      ghc: "8.6.5"
 
-before_install:
-  - cd ${PACKAGEDIR}
+  allow_failures:
+    - env: BUILD=stack ARGS="--resolver nightly --system-ghc"
+    - env: BUILD=werror ARGS="--resolver lts-13.29 --system-ghc"
+    - env: BUILD=cabal
 
 install:
-  # Download and unpack the stack executable
-  - mkdir -p ~/.local/bin
-  - export PATH=$HOME/.local/bin:$PATH
-  - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-  # Build dependencies
-  - stack --no-terminal --install-ghc test --only-dependencies
+- |
+  case "$BUILD" in
+    cabal)
+      cabal --version
+      ghc --version
+      ;;
+    stack|werror)
+      ghc --version
+      PATH=$HOME/.local/bin:$PATH
+      mkdir -p ~/.local/bin
+      if [ `uname` = "Darwin" ]
+      then
+        travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+      else
+        travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+      fi
+      ;;
+  esac
 
 script:
-  # Build the package, its tests, and its docs and run the tests
-  - stack --no-terminal test --haddock --no-haddock-deps
+- |
+  case "$BUILD" in
+    cabal)
+      cabal v2-update
+      cabal v2-build all
+      cabal v2-test all --enable-test
+      ;;
+    stack)
+      stack --no-terminal $ARGS test --haddock --no-haddock-deps
+      ;;
+    werror)
+      stack --no-terminal $ARGS test --haddock --no-haddock-deps --ghc-options -Werror --ghc-options -Wcompat --ghc-options -Wincomplete-record-updates --ghc-options -Wincomplete-uni-patterns --ghc-options -Wredundant-constraints
+      ;;
+  esac

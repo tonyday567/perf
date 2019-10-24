@@ -25,14 +25,12 @@ library
       src
   build-depends:
       base >=4.7 && <5
-    , deepseq
     , formatting
     , perf >=0.4.1.0
     , protolude
     , scientific
     , tdigest
     , text
-    , vector
     , readme-lhs
   default-language: Haskell2010
 
@@ -50,8 +48,6 @@ executable perf-examples
     , perf >=0.4.1.0
     , perf-analysis
     , protolude
-    , scientific
-    , tdigest
     , text
     , vector
     , readme-lhs

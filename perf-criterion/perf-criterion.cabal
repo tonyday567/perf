@@ -25,12 +25,9 @@ library
   default-extensions: NegativeLiterals NoImplicitPrelude OverloadedStrings UnicodeSyntax
   build-depends:
       base >=4.7 && <5
-    , containers
-    , criterion
     , criterion-measurement
     , deepseq
     , formatting
-    , perf
     , perf-analysis
     , scientific
     , text
@@ -47,14 +44,10 @@ executable perf-criterion
       base >=4.7 && <5
     , criterion
     , criterion-measurement
-    , deepseq
     , formatting
-    , optparse-generic
     , perf
     , perf-analysis
     , perf-criterion
     , protolude
-    , scientific
-    , text
     , readme-lhs
   default-language: Haskell2010

@@ -1,5 +1,5 @@
 name:           perf-analysis
-version:        0.0.1.1
+version:        0.1.0.0
 synopsis:       analysis example using perf
 description:     Analytical tools to use with perf. 
 category:       performance

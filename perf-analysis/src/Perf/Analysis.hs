@@ -48,13 +48,26 @@ prec n = scifmt Exponent (Just n)
 int2Sci :: (Integral a) => a -> Scientific
 int2Sci n = scientific (fromIntegral n) 0
 
+formatSecs :: (RealFloat a) => Int -> a -> Text
+formatSecs p s
+    | s < 0      = "-" <> formatSecs p (-s)
+    | s >= 1     = formatFixed p s <> " s"
+    | s >= 1e-3  = formatFixed p (s*1e3) <> " ms"
+    | s >= 1e-6  = formatFixed p (s*1e6)  <> " μs"
+    | s >= 1e-9  = formatFixed p (s*1e9) <> " ns"
+    | otherwise  = formatFixed p (s*1e12) <> " ps"
+
 -- | format an Integral as a Scientific with a precision
 formatI :: (Integral a) => Int -> a -> Text
 formatI p x = sformat (prec p) (int2Sci x)
 
--- | format an Integral as a Scientific with a precision
+-- | format a Float as a Scientific with a precision
 formatF :: (RealFloat a) => Int -> a -> Text
 formatF p x = sformat (prec p) (fromFloatDigits x)
+
+-- | format a Float as a Scientific with a precision
+formatFixed :: (RealFloat a) => Int -> a -> Text
+formatFixed p x = sformat (fixed p) (fromFloatDigits x)
 
 -- | format the first few results, the median and average
 formatRun :: (Integral a) => Text -> Int -> Int -> [a] -> [Text]

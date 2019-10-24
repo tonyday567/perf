@@ -21,8 +21,14 @@ criNF n a b = do
 criRun :: Int -> Text -> Measured -> [Text]
 criRun p label m =
   [ label
-  , formatF p (measCpuTime (rescale m))
-  , formatI p $ measCycles (rescale m)]
+  , formatSecs p cpus
+  , formatI p cs
+  , formatF p npc
+  ]
+  where
+    cpus = measCpuTime (rescale m)
+    cs = measCycles (rescale m)
+    npc = cpus / fromIntegral cs * 1e9
 
 -- | format cpu versus gc timings
 criSpeed :: Int -> Text -> Measured -> [Text]
@@ -38,7 +44,7 @@ formatCriRuns :: (Int -> Text -> Measured -> [Text]) -> Int -> [(Text, Measured)
 formatCriRuns r p runs =
   table
   mempty
-  ["run", "cputimes", "cycles"]
+  ["run", "cputimes", "cycles", "nanos per cycle"]
   [AlignLeft, AlignRight, AlignRight]
   []
   (fmap (\(l,m) -> r p l m) runs)

@@ -30,12 +30,12 @@ To create this readme locally run:
     stack build --test --exec "$(stack path --local-install-root)/bin/perf-examples" --file-watch
 
 perf-criterion
--------------
+--------------
 
-Comparison with criterion. See [criterion.md](criterion.md).
-To create this readme locally run:
+Comparison with criterion. See [criterion.md](criterion.md). To create
+this locally run:
 
-    stack build --test --exec "$(stack path --local-install-root)/bin/criterion" --file-watch
+    stack build --test --exec "$(stack path --local-install-root)/bin/perf-criterion" --file-watch
 
 benchmarks
 ==========
@@ -57,15 +57,15 @@ tick callibration
 
 | stat                        | cycles                                                |
 |-----------------------------|-------------------------------------------------------|
-| pre warmup                  | 152                                                   |
-| one tick\_                  | 72                                                    |
-| next 10                     | \[24,24,24,24,24,24,22,22,20,22\]                     |
-| average over one million    | 16.95                                                 |
-| 99.999% perc                | 119                                                   |
-| 99.9% perc                  | 53.42                                                 |
-| 99th perc                   | 24.67                                                 |
-| 40th perc                   | 15.99                                                 |
-| \[min, 20th, .. 80th, max\] | 1.2000e1 1.5301e1 1.5993e1 1.6686e1 1.7953e1 9.9716e4 |
+| pre warmup                  | 150                                                   |
+| one tick\_                  | 50                                                    |
+| next 10                     | \[16,22,20,18,18,18,22,22,20,18\]                     |
+| average over one million    | 16.79                                                 |
+| 99.999% perc                | 15,533                                                |
+| 99.9% perc                  | 48.41                                                 |
+| 99th perc                   | 20.65                                                 |
+| 40th perc                   | 15.87                                                 |
+| \[min, 20th, .. 80th, max\] | 1.2000e1 1.5224e1 1.5865e1 1.6506e1 1.7412e1 8.2632e4 |
 
 tick
 ----
@@ -74,26 +74,26 @@ sum to 1000
 
 | stat           | cycles                                                |
 |----------------|-------------------------------------------------------|
-| first measure  | 2644                                                  |
-| second measure | 1344                                                  |
-| third measure  | 904                                                   |
-| tick'          | 874                                                   |
-| tickIO         | 1106                                                  |
-| tick \* 10     | \[1376,1334,1310,1308,1306,1308,1310,1306,1306,1308\] |
-| tickIO \* 10   | \[1400,1336,1310,1310,1310,1312,1306,1306,1308,1310\] |
-| tick' \* 10    | \[1306,1308,1312,1306,1306,1304,1304,1304,1312,1308\] |
+| first measure  | 3686                                                  |
+| second measure | 1508                                                  |
+| third measure  | 748                                                   |
+| tick'          | 732                                                   |
+| tickIO         | 1196                                                  |
+| tick \* 10     | \[1384,1348,1310,1310,1312,1314,1312,1308,1308,1308\] |
+| tickIO \* 10   | \[1398,1336,1308,1334,1306,1308,1306,1304,1308,1308\] |
+| tick' \* 10    | \[1308,1304,1312,1304,1302,1302,1302,1310,1304,1302\] |
 
 ticks
 -----
 
 | run             |   first|  second|   third|  average|  median|
 |:----------------|-------:|-------:|-------:|--------:|-------:|
-| monomorphic     |  2.98e3|  2.00e3|  1.98e3|   1.96e3|  1.96e3|
-| includes lambda |  1.96e3|  1.96e3|  1.96e3|   1.97e3|  1.96e3|
-| polymorphic     |  1.96e3|  1.95e3|  1.96e3|   1.96e3|  1.96e3|
-| ticksIO mono    |  2.45e3|  2.01e3|  1.97e3|   2.18e3|  1.96e3|
-| ticksIO lambda  |  2.13e3|  2.03e3|  2.00e3|   1.96e3|  1.96e3|
-| ticksIO poly    |  1.49e3|  1.39e3|  1.33e3|   1.38e3|  1.38e3|
+| monomorphic     |  2.93e3|  1.98e3|  1.95e3|   2.07e3|  1.96e3|
+| includes lambda |  1.96e3|  1.96e3|  1.96e3|   1.96e3|  1.96e3|
+| polymorphic     |  1.96e3|  1.96e3|  1.96e3|   1.97e3|  1.96e3|
+| ticksIO mono    |  2.66e3|  2.03e3|  1.99e3|   1.96e3|  1.96e3|
+| ticksIO lambda  |  1.14e4|  1.99e3|  1.99e3|   1.97e3|  1.96e3|
+| ticksIO poly    |  1.52e3|  1.38e3|  1.35e3|   1.38e3|  1.38e3|
 
 gaps
 ----
@@ -102,20 +102,20 @@ Looking for hidden computation costs:
 
 | number runs | outside cycles | inside cycles | gap     |
 |-------------|----------------|---------------|---------|
-| 1.0e0       | 6.902e4        | 2.823e4       | 4.079e4 |
-| 1.0e1       | 1.744e6        | 1.668e6       | 7.554e4 |
-| 1.0e2       | 2.660e5        | 2.264e5       | 3.955e4 |
-| 1.0e3       | 2.000e6        | 1.959e6       | 4.100e4 |
+| 1.0e0       | 6.552e4        | 2.521e4       | 4.031e4 |
+| 1.0e1       | 1.705e6        | 1.637e6       | 6.752e4 |
+| 1.0e2       | 2.636e5        | 2.246e5       | 3.902e4 |
+| 1.0e3       | 1.997e6        | 1.956e6       | 4.082e4 |
 
 tickns
 ------
 
 Multiple runs summing to a series of numbers.
 
-| sum to:                                  | 1       | 10      | 100     | 1000    |
-|------------------------------------------|---------|---------|---------|---------|
-| (replicateM n . tick fMono) &lt;$&gt; as | 1.603e1 | 1.868e1 | 1.527e2 | 1.308e3 |
-| ns (ticks n fMono) as                    | 2.283e1 | 4.406e1 | 2.261e2 | 1.957e3 |
+| sum to:                              | 1       | 10      | 100     | 1000    |
+|--------------------------------------|---------|---------|---------|---------|
+| (replicateM n . tick fMono) \<$\> as | 1.601e1 | 1.854e1 | 1.526e2 | 1.307e3 |
+| ns (ticks n fMono) as                | 2.327e1 | 4.282e1 | 2.252e2 | 1.957e3 |
 
 vector
 ------
@@ -124,10 +124,10 @@ sum to 1000
 
 | run            |   first|  second|   third|  average|  median|
 |:---------------|-------:|-------:|-------:|--------:|-------:|
-| ticks list     |  3.10e4|  2.00e4|  1.31e6|   1.77e4|  1.50e4|
-| ticks boxed    |  6.23e3|  5.85e3|  5.84e3|   5.95e3|  5.98e3|
-| ticks storable |  3.16e3|  2.64e3|  2.63e3|   2.74e3|  2.60e3|
-| ticks unboxed  |  2.28e3|  1.83e3|  1.78e3|   2.03e3|  1.97e3|
+| ticks list     |  2.45e4|  1.78e4|  1.40e6|   1.65e4|  1.42e4|
+| ticks boxed    |  6.51e3|  5.93e3|  5.89e3|   5.97e3|  5.99e3|
+| ticks storable |  2.93e3|  2.64e3|  2.64e3|   2.64e3|  2.60e3|
+| ticks unboxed  |  2.16e3|  1.80e3|  1.78e3|   1.96e3|  1.96e3|
 
 whnf
 ----
@@ -136,14 +136,14 @@ sum to 1000
 
 | function    | cycles  |         |         |         |         |
 |-------------|---------|---------|---------|---------|---------|
-| tick        | 9.500e2 |         |         |         |         |
-| tickWHNF    | 1.182e3 |         |         |         |         |
-| ticks       | 3.208e3 | 1.998e3 | 1.968e3 | 1.967e3 | 1.964e3 |
-| ticksWHNF   | 2.940e2 | 2.000e1 | 1.800e1 | 1.894e1 | 1.780e1 |
-| tickIO      | 9.600e2 |         |         |         |         |
-| tickWHNFIO  | 1.400e1 |         |         |         |         |
-| ticksIO     | 1.812e3 | 1.370e3 | 1.328e3 | 1.385e3 | 1.377e3 |
-| ticksWHNFIO | 1.100e2 | 2.000e1 | 1.560e2 | 1.777e1 | 1.647e1 |
+| tick        | 8.680e2 |         |         |         |         |
+| tickWHNF    | 1.126e3 |         |         |         |         |
+| ticks       | 2.864e3 | 1.996e3 | 2.004e3 | 1.968e3 | 1.965e3 |
+| ticksWHNF   | 6.200e1 | 1.800e1 | 1.800e1 | 1.825e1 | 1.741e1 |
+| tickIO      | 9.540e2 |         |         |         |         |
+| tickWHNFIO  | 1.600e1 |         |         |         |         |
+| ticksIO     | 1.636e3 | 1.354e3 | 1.328e3 | 1.381e3 | 1.381e3 |
+| ticksWHNFIO | 7.800e1 | 2.000e1 | 1.800e1 | 1.807e1 | 1.687e1 |
 
 perf
 ----
@@ -152,9 +152,9 @@ perf cycle measurements
 
 | effect          | cycles  |
 |-----------------|---------|
-| file read       | 1.260e5 |
-| length          | 1.608e4 |
-| print to screen | 3.215e4 |
+| file read       | 2.455e5 |
+| length          | 1.607e4 |
+| print to screen | 3.723e4 |
 | sum             | 1.072e4 |
 
 R&D, To Do
@@ -258,6 +258,7 @@ space
     ./mytest +RTS -M4m -RTS
 
 -   <a href="https://github.com/ndmitchell/spaceleak" class="uri">https://github.com/ndmitchell/spaceleak</a>
+
 -   <a href="https://stackoverflow.com/questions/42353661/may-i-limit-memory-usage-per-function-monad-thread-in-haskell" class="uri">https://stackoverflow.com/questions/42353661/may-i-limit-memory-usage-per-function-monad-thread-in-haskell</a>
 
 -   [Anatomy of a thunk
@@ -271,15 +272,15 @@ memoization
 cache cycle estimates
 ---------------------
 
-| Cache             | Cycles         |
-|-------------------|----------------|
-| register          | 4 per cycle    |
-| L1 Cache access   | 3-4 cycles     |
-| L2 Cache access   | 11-12 cycles   |
-| L3 unified access | 30 - 40        |
-| DRAM hit          | 195 cycles     |
-| L1 miss           | 40 cycles      |
-| L2 miss           | &gt;600 cycles |
+| Cache             | Cycles       |
+|-------------------|--------------|
+| register          | 4 per cycle  |
+| L1 Cache access   | 3-4 cycles   |
+| L2 Cache access   | 11-12 cycles |
+| L3 unified access | 30 - 40      |
+| DRAM hit          | 195 cycles   |
+| L1 miss           | 40 cycles    |
+| L2 miss           | \>600 cycles |
 
 A performance checklist
 -----------------------

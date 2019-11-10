@@ -8,10 +8,12 @@ module Perf.Analysis where
 
 import Data.Scientific
 import Data.TDigest
-import Formatting
 import Perf
 import Protolude
 import Readme.Lhs hiding (Format)
+import qualified Data.Text as Text
+import Data.Text.Format hiding (prec)
+import Data.Text.Lazy.Builder (toLazyText)
 
 -- | compute deciles
 --
@@ -37,8 +39,8 @@ percentile :: (Functor f, Foldable f, Integral a) => Double -> f a -> Double
 percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
 
 -- | fixed precision for a Scientific
-prec :: Int -> Format r (Scientific -> r)
-prec n = scifmt Exponent (Just n)
+prec :: Int -> Scientific -> Text
+prec n x = Text.pack $ formatScientific Exponent (Just n) x
 
 -- | convert an integral to a Scientific
 --
@@ -59,15 +61,15 @@ formatSecs p s
 
 -- | format an Integral as a Scientific with a precision
 formatI :: (Integral a) => Int -> a -> Text
-formatI p x = sformat (prec p) (int2Sci x)
+formatI p x = prec p $ int2Sci x
 
 -- | format a Float as a Scientific with a precision
 formatF :: (RealFloat a) => Int -> a -> Text
-formatF p x = sformat (prec p) (fromFloatDigits x)
+formatF p x = prec p (fromFloatDigits x)
 
 -- | format a Float as a Scientific with a precision
 formatFixed :: (RealFloat a) => Int -> a -> Text
-formatFixed p x = sformat (fixed p) (fromFloatDigits x)
+formatFixed p x = toStrict $ toLazyText $ fixed p (fromFloatDigits x)
 
 -- | format the first few results, the median and average
 formatRun :: (Integral a) => Text -> Int -> Int -> [a] -> [Text]

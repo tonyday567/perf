@@ -7,7 +7,6 @@ import Criterion.Measurement
 import Criterion.Measurement.Types
 import Control.DeepSeq
 import Data.Text
-import Formatting
 import Perf.Analysis
 import Data.Scientific
 import Readme.Lhs
@@ -47,4 +46,4 @@ formatCriRuns r p runs =
   ["run", "cputimes", "cycles", "nanos per cycle"]
   [AlignLeft, AlignRight, AlignRight]
   []
-  (fmap (\(l,m) -> r p l m) runs)
+  (fmap (uncurry (r p)) runs)

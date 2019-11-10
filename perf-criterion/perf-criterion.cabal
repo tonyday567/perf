@@ -27,7 +27,6 @@ library
       base >=4.7 && <5
     , criterion-measurement
     , deepseq
-    , formatting
     , perf-analysis
     , scientific
     , text
@@ -44,7 +43,6 @@ executable perf-criterion
       base >=4.7 && <5
     , criterion
     , criterion-measurement
-    , formatting
     , perf
     , perf-analysis
     , perf-criterion

@@ -14,7 +14,6 @@
 module Main where
 
 import Readme.Lhs
-import Formatting
 import Options.Generic
 import Perf
 import Perf.Analysis
@@ -184,11 +183,11 @@ main = do
       [ ["pre warmup", show prewarmup]
       , ["one tick_", show onetick]
       , ["next 10", show ticks']
-      , ["average over one million", sformat (fixed 2) avticks]
-      , ["99.999% perc", sformat commas (floor tick99999 :: Integer)]
-      , ["99.9% perc", sformat (fixed 2) tick999]
-      , ["99th perc", sformat (fixed 2) tick99]
-      , ["40th perc", sformat (fixed 2) tick40]
+      , ["average over one million", fixed 2 avticks]
+      , ["99.999% perc", commas 0 tick99999]
+      , ["99.9% perc", fixed 2 tick999]
+      , ["99th perc", fixed 2 tick99]
+      , ["40th perc", fixed 2 tick40]
       , ["[min, 20th, .. 80th, max]",
          Text.intercalate " " (formatF 4 <$> qticks)]
       ]

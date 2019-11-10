@@ -12,7 +12,7 @@ import Perf
 import Protolude
 import Readme.Lhs hiding (Format)
 import qualified Data.Text as Text
-import Data.Text.Format hiding (prec)
+import qualified Data.Text.Format as Text
 import Data.Text.Lazy.Builder (toLazyText)
 
 -- | compute deciles
@@ -38,9 +38,30 @@ deciles n xs =
 percentile :: (Functor f, Foldable f, Integral a) => Double -> f a -> Double
 percentile p xs = fromMaybe 0 $ quantile p (tdigest (fromIntegral <$> xs) :: TDigest 25)
 
+-- | fixed precision
+prec :: (Real a) => Int -> a -> Text
+prec n x = toStrict $ toLazyText $ Text.prec n x
+
+-- | fixed
+fixed :: (Real a) => Int -> a -> Text
+fixed n x = toStrict $ toLazyText $ Text.fixed n x
+
 -- | fixed precision for a Scientific
-prec :: Int -> Scientific -> Text
-prec n x = Text.pack $ formatScientific Exponent (Just n) x
+sciprec :: Int -> Scientific -> Text
+sciprec n x = Text.pack $ formatScientific Exponent (Just n) x
+
+commas :: (RealFrac a) => Int -> a -> Text
+commas n a
+  | a < 1000 = fixed n a
+  | otherwise = go (floor a) ""
+  where
+    go :: Int -> Text -> Text
+    go x t
+      | x < 0 = "-" <> go (- x) ""
+      | x < 1000 = Text.pack (show x) <> t
+      | otherwise =
+        let (d, m) = divMod x 1000
+         in go d ("," <> Text.pack (show m))
 
 -- | convert an integral to a Scientific
 --
@@ -61,15 +82,15 @@ formatSecs p s
 
 -- | format an Integral as a Scientific with a precision
 formatI :: (Integral a) => Int -> a -> Text
-formatI p x = prec p $ int2Sci x
+formatI p x = sciprec p $ int2Sci x
 
 -- | format a Float as a Scientific with a precision
 formatF :: (RealFloat a) => Int -> a -> Text
-formatF p x = prec p (fromFloatDigits x)
+formatF p x = sciprec p (fromFloatDigits x)
 
 -- | format a Float as a Scientific with a precision
 formatFixed :: (RealFloat a) => Int -> a -> Text
-formatFixed p x = toStrict $ toLazyText $ fixed p (fromFloatDigits x)
+formatFixed p x = toStrict $ toLazyText $ Text.fixed p (fromFloatDigits x)
 
 -- | format the first few results, the median and average
 formatRun :: (Integral a) => Text -> Int -> Int -> [a] -> [Text]

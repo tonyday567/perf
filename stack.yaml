@@ -4,7 +4,6 @@ packages:
   - perf
   - perf-analysis
   - perf-criterion
-  # - ../readme-lhs
 
 extra-deps:
   - readme-lhs-0.5.0

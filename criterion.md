@@ -50,10 +50,10 @@ main = do
 
 | run         |   cputime|   cycles|
 |:------------|---------:|--------:|
-| fib 1 (ns)  |  5.350e-8|  1.408e2|
-| fib 5 (ns)  |  3.420e-8|  9.000e1|
-| fib 9 (ns)  |  5.533e-8|  1.456e2|
-| fib 11 (ns) |  8.314e-8|  2.188e2|
+| fib 1 (ns)  |  4.750e-8|  1.250e2|
+| fib 5 (ns)  |  2.599e-8|  6.840e1|
+| fib 9 (ns)  |  5.001e-8|  1.316e2|
+| fib 11 (ns) |  7.896e-8|  2.078e2|
 
 ``` {.haskell}
   -- but ticks seems a-ok
@@ -67,13 +67,12 @@ perf runs
 
 | run         |   cputime|   cycles|
 |:------------|---------:|--------:|
-| fib 1 (ns)  |  1.270e-8|  3.343e1|
-| fib 5 (ns)  |  3.838e-8|  1.010e2|
-| fib 9 (ns)  |  2.489e-7|  6.551e2|
-| fib 11 (ns) |  6.635e-7|  1.746e3|
+| fib 1 (ns)  |  1.112e-8|  2.926e1|
+| fib 5 (ns)  |  3.298e-8|  8.679e1|
+| fib 9 (ns)  |  2.435e-7|  6.408e2|
+| fib 11 (ns) |  5.784e-7|  1.522e3|
 
 ``` {.haskell}
-
   -- perf-criterion
   pc1 <- C.criNF n fib 1
   pc5 <- C.criNF n fib 5
@@ -83,15 +82,14 @@ perf runs
 
 criterion runs
 
-| run         |  cputimes|   cycles|
-|:------------|---------:|--------:|
-| fib 1 (ns)  |  2.400e-8|  3.400e1|
-| fib 5 (ns)  |  4.800e-8|  9.600e1|
-| fib 9 (ns)  |  2.510e-7|  5.740e2|
-| fib 11 (ns) |  6.470e-7|  1.477e3|
+| run         |  cputimes|      cycles| nanos per cycle |         |
+|:------------|---------:|-----------:|-----------------|---------|
+| fib 1 (ns)  |  1.700e-8|  -1.798e308| -1.798e308      | 2.200e1 |
+| fib 5 (ns)  |  4.000e-8|  -1.798e308| -1.798e308      | 7.600e1 |
+| fib 9 (ns)  |  2.970e-7|  -1.798e308| -1.798e308      | 6.720e2 |
+| fib 11 (ns) |  6.890e-7|  -1.798e308| -1.798e308      | 1.575e3 |
 
 ``` {.haskell}
-
 
   void $ runOutput
     ("perf-criterion/app/perf-criterion.lhs", LHS)
@@ -108,7 +106,7 @@ criterion runs
       , ("fib 9 (ns)", ts9)
       , ("fib 11 (ns)", ts11)
       ]
-    output "criterion_runs" $ Native $ (:[]) $ C.formatCriRuns 3
+    output "criterion_runs" $ Native $ (:[]) $ C.formatCriRuns C.criSpeed 3
       [ ("fib 1 (ns)", pc1)
       , ("fib 5 (ns)", pc5)
       , ("fib 9 (ns)", pc9)

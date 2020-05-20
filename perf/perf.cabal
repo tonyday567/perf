@@ -1,5 +1,6 @@
+cabal-version: 3.0
 name:           perf
-version:        0.5.1
+version:        0.6.0
 synopsis:       Low-level run time measurement.
 description:     A set of tools to accurately measure time performance of Haskell programs.
                 perf aims to be lightweight by having minimal dependencies on standard libraries.
@@ -10,12 +11,11 @@ bug-reports:    https://github.com/tonyday567/perf/issues
 author:         Tony Day, Marco Zocca
 maintainer:     tonyday567@gmail.com
 copyright:      Tony Day
-license:        BSD3
+license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     CHANGELOG.md
-cabal-version: 2.0
 
 source-repository head
   type: git

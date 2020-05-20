@@ -1,5 +1,6 @@
+cabal-version: 3.0
 name:           perf-criterion
-version:        0.0.0.1
+version:        0.0.1
 synopsis:       See readme.md
 description:    See readme.md for description.
 category:       project
@@ -8,10 +9,9 @@ bug-reports:    https://github.com/tonyday567/perf-criterion/issues
 author:         Tony Day
 maintainer:     tonyday567@gmail.com
 copyright:      Tony Day (c) 2017
-license:        BSD3
+license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
-cabal-version: 2.0
 
 source-repository head
   type: git
@@ -30,7 +30,7 @@ library
     , perf-analysis
     , scientific
     , text
-    , readme-lhs
+    , readme-lhs >= 0.6 && < 0.7
   default-language: Haskell2010
 
 executable perf-criterion
@@ -46,6 +46,6 @@ executable perf-criterion
     , perf
     , perf-analysis
     , perf-criterion
-    , protolude
-    , readme-lhs
+    , protolude >= 0.3 && < 0.4
+    , readme-lhs >= 0.6 && < 0.7
   default-language: Haskell2010

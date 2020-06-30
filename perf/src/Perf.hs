@@ -3,18 +3,18 @@
 {-# OPTIONS_GHC -Wall #-}
 
 -- | == Introduction
--- 
+--
 -- 'perf' provides high-resolution measurements of the runtime of Haskell functions. It does so by reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture.
 --
 -- With 'perf' the user may measure both pure and effectful functions, as shown in the Example below. Every piece of code the user may want to profile is passed as an argument to the 'perf' function, along with a text label (that will be displayed in the final summary) and the measurement function (e.g. 'cycles', 'cputime' or 'realtime').
 --
---'PerfT' is a monad transformer designed to collect performance information.
+-- 'PerfT' is a monad transformer designed to collect performance information.
 -- The transformer can be used to add performance measurent to existing code using 'Measure's.
 --
 -- == Example :
 --
 -- Code block to be profiled :
--- 
+--
 -- >   result <- do
 -- >       txt <- readFile "examples/examples.hs"
 -- >       let n = Text.length txt
@@ -45,26 +45,27 @@
 --
 -- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and flucturations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
 module Perf
-  ( PerfT
-  , Perf
-  , perf
-  , perfN
-  , runPerfT
-  , evalPerfT
-  , execPerfT
-  , module Perf.Cycle
-  , module Perf.Measure
+  ( PerfT,
+    Perf,
+    perf,
+    perfN,
+    runPerfT,
+    evalPerfT,
+    execPerfT,
+    module Perf.Cycle,
+    module Perf.Measure,
   )
-  where
+where
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT(..), evalStateT, runStateT, execStateT, get, put )
+import Control.Monad.Trans.State (StateT (..), evalStateT, execStateT, get, put, runStateT)
 import Data.Functor.Identity
-import Perf.Cycle
-import Perf.Measure
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Perf.Cycle
+import Perf.Measure
+import Prelude
 
 -- $setup
 -- >>> import Perf.Cycle
@@ -72,9 +73,11 @@ import qualified Data.Text as T
 
 -- | PerfT is polymorphic in the type of measurement being performed.
 -- The monad stores and produces a Map of labelled measurement values
-newtype PerfT m b a = PerfT
-  { runPerf_ :: StateT (Map.Map T.Text b) m a
-  } deriving (Functor, Applicative, Monad)
+newtype PerfT m b a
+  = PerfT
+      { runPerf_ :: StateT (Map.Map T.Text b) m a
+      }
+  deriving (Functor, Applicative, Monad)
 
 -- | The obligatory transformer over Identity
 type Perf b a = PerfT Identity b a
@@ -93,12 +96,12 @@ perf label m a =
 
 -- | Lift a monadic computation to a PerfT m, and carry out the computation multiple times.
 perfN ::
-     (MonadIO m, Monoid b)
-  => Int
-  -> T.Text
-  -> Measure m b
-  -> m a
-  -> PerfT m b a
+  (MonadIO m, Monoid b) =>
+  Int ->
+  T.Text ->
+  Measure m b ->
+  m a ->
+  PerfT m b a
 perfN n label m a =
   PerfT $ do
     st <- get

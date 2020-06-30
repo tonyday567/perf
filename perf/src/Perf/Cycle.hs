@@ -7,33 +7,32 @@
 -- The measurement unit - a 'Cycle' - is one oscillation of the chip crystal as measured by the <https://en.wikipedia.org/wiki/Time_Stamp_Counter rdtsc> instruction which inspects the TSC register.
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
---  
 module Perf.Cycle
   ( -- $setup
-    Cycle
-  , tick_
-  , warmup
-  , tick
-  , tick'
-  , tickIO
-  , tickNoinline
-  , ticks
-  , ticksIO
-  , ns
-  , tickWHNF
-  , tickWHNF'
-  , tickWHNFIO
-  , ticksWHNF
-  , ticksWHNFIO
-  , average
+    Cycle,
+    tick_,
+    warmup,
+    tick,
+    tick',
+    tickIO,
+    tickNoinline,
+    ticks,
+    ticksIO,
+    ns,
+    tickWHNF,
+    tickWHNF',
+    tickWHNFIO,
+    ticksWHNF,
+    ticksWHNFIO,
   )
-  where
+where
 
-import Control.DeepSeq (NFData(..), force)
-import qualified Control.Foldl as L (fold, sum, premap, genericLength)
+import Control.DeepSeq (NFData (..), force)
+import qualified Control.Foldl as L (fold, genericLength, premap, sum)
 import Control.Monad (replicateM)
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
+import Prelude
 
 -- $setup
 -- >>> import Perf.Cycle
@@ -41,7 +40,6 @@ import System.CPUTime.Rdtsc
 -- >>> let n = 1000
 -- >>> let a = 1000
 -- >>> let f x = foldl' (+) 0 [1 .. x]
---
 
 -- | an unwrapped Word64
 type Cycle = Word64
@@ -78,7 +76,6 @@ tick_ = do
 -- >>> t <- tick_ -- first measure can be very high
 -- >>> _ <- warmup 100
 -- >>> t <- tick_ -- should be around 20 (3k for ghci)
---
 warmup :: Int -> IO Double
 warmup n = do
   ts <- replicateM n tick_
@@ -110,7 +107,6 @@ tickNoinline !f !a = tick' f a
 -- | measures and deeply evaluates an `IO a`
 --
 -- >>> (cs, _) <- tickIO (pure (f a))
---
 tickIO :: (NFData a) => IO a -> IO (Cycle, a)
 tickIO a = do
   t <- rdtsc
@@ -129,7 +125,7 @@ tickIONoinline = tickIO
 -- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline version of to help reduce the chances of memoization, but this is an inexact science in the hands of he author, at least, so interpret with caution.
 -- The use of noinline interposes an extra function call, which can highly skew very fast computations.
 --
--- 
+--
 -- >>> let n = 1000
 -- >>> (cs, fa) <- ticks n f a
 --
@@ -141,15 +137,14 @@ tickIONoinline = tickIO
 -- > fPoly x = foldl' (+) 0 [1 .. x]
 -- > fLambda :: Int -> Int
 -- > fLambda = \x -> foldl' (+) 0 [1 .. x]
---
 ticks :: NFData b => Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticks n0 f a = go f a n0 []
   where
     go f' a' n ts
       | n <= 0 = pure (reverse ts, f a)
       | otherwise = do
-          (t,_) <- tickNoinline f a
-          go f' a' (n - 1) (t:ts)
+        (t, _) <- tickNoinline f a
+        go f' a' (n - 1) (t : ts)
 {-# NOINLINE ticks #-}
 
 -- | n measuremenst of a tickIO
@@ -157,17 +152,16 @@ ticks n0 f a = go f a n0 []
 -- returns an IO tuple; list of Cycles and the last evaluated f a
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
---
 ticksIO :: (NFData a) => Int -> IO a -> IO ([Cycle], a)
 ticksIO n0 a = go a n0 []
   where
     go a' n ts
       | n <= 0 = do
-            a'' <- a'
-            pure (reverse ts, a'')
+        a'' <- a'
+        pure (reverse ts, a'')
       | otherwise = do
-          (t,_) <- tickIONoinline a'
-          go a' (n - 1) (t:ts)
+        (t, _) <- tickIONoinline a'
+        go a' (n - 1) (t : ts)
 {-# NOINLINE ticksIO #-}
 
 -- | make a series of measurements on a list of a's to be applied to f, for a tick function.
@@ -175,8 +169,7 @@ ticksIO n0 a = go a n0 []
 -- Tends to be fragile to sharing issues, but very useful to determine computation Order
 --
 -- > ns ticks n f [1,10,100,1000]
---
-ns :: (a -> IO ([Cycle],b)) -> [a] -> IO ([[Cycle]], [b])
+ns :: (a -> IO ([Cycle], b)) -> [a] -> IO ([[Cycle]], [b])
 ns t as = do
   cs <- sequence $ t <$> as
   pure (fst <$> cs, snd <$> cs)
@@ -184,7 +177,6 @@ ns t as = do
 -- | average of an Integral foldable
 --
 -- > cAv <- average <$> ticks n f a
---
 average :: (Integral a, Foldable f) => f a -> Double
 average = L.fold (L.premap fromIntegral ((/) <$> L.sum <*> L.genericLength))
 
@@ -223,8 +215,8 @@ ticksWHNF n0 f a = go f a n0 []
     go f' a' n ts
       | n <= 0 = pure (reverse ts, f a)
       | otherwise = do
-          (t,_) <- tickWHNFNoinline f a
-          go f' a' (n - 1) (t:ts)
+        (t, _) <- tickWHNFNoinline f a
+        go f' a' (n - 1) (t : ts)
 {-# NOINLINE ticksWHNF #-}
 
 -- | WHNF version
@@ -233,9 +225,9 @@ ticksWHNFIO n0 a = go a n0 []
   where
     go a' n ts
       | n <= 0 = do
-            a'' <- a'
-            pure (reverse ts, a'')
+        a'' <- a'
+        pure (reverse ts, a'')
       | otherwise = do
-          (t,_) <- tickWHNFIONoinline a'
-          go a' (n - 1) (t:ts)
+        (t, _) <- tickWHNFIONoinline a'
+        go a' (n - 1) (t : ts)
 {-# NOINLINE ticksWHNFIO #-}

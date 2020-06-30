@@ -1,57 +1,28 @@
-language: haskell
-dist: trusty
+language: generic
 
 cache:
   directories:
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
-  - $TRAVIS_BUILD_DIR/dist-newstyle
-
-cabal: "3.0"
 
 matrix:
   include:
-    - env: BUILD=cabal
-      ghc: "8.8.3"
-    - env: BUILD=stack ARGS="--system-ghc"
-      ghc: "8.8.3"
+    - env: BUILD=stack
       # a -Werror build that is allowed to fail
-    - env: BUILD=werror ARGS="--system-ghc"
-      ghc: "8.8.3"
-    - env: BUILD=stack ARGS="--resolver nightly --system-ghc"
-      ghc: "8.8.3"
+    - env: BUILD=werror
 
   allow_failures:
-    - env: BUILD=stack ARGS="--resolver nightly --system-ghc"
-    - env: BUILD=werror ARGS="--system-ghc"
-    - env: BUILD=cabal
+    - env: BUILD=werror
 
 install:
 - |
-  case "$BUILD" in
-    cabal)
-      cabal --version
-      ghc --version
-      ;;
-    stack|werror)
-      ghc --version
       PATH=$HOME/.local/bin:$PATH
       mkdir -p ~/.local/bin
-      if [ `uname` = "Darwin" ]
-      then
-        travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
-      else
-        travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-      fi
-      ;;
-  esac
+      travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 script:
 - |
   case "$BUILD" in
-    cabal)
-      travis_wait 30 cabal build all
-      ;;
     stack)
       stack --no-terminal $ARGS test --haddock --no-haddock-deps
       ;;

@@ -3,6 +3,7 @@
 module Main where
 
 import Test.DocTest
+import Prelude
 
 main :: IO ()
 main = do

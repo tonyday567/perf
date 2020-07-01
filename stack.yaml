@@ -5,6 +5,8 @@ packages:
   - perf-examples
 
 extra-deps:
+  - rdtsc-1.3.0.1
+  # numhask pack
   - git: https://github.com/tonyday567/numhask-space
     commit: 6525f5096525196fe367dabdfe596a7bd0c0aa6c
   - git: https://github.com/tonyday567/numhask
@@ -13,10 +15,9 @@ extra-deps:
   - git: https://github.com/tonyday567/numhask
     commit: 37ee8dced120f60a511baa6bb6c7ac382b1e8827
     subdir: numhask
+  # readme-lhs pack
   - git: https://github.com/tonyday567/readme-lhs
-    commit: 36b895ee81aad473131e07ef40ba964765362b00
-  - rdtsc-1.3.0.1
-  - git: https://github.com/jgm/pandoc
-    commit: cd3941d34e578f2ebd4dd11484fc26c7afae8a6a
+    commit: e2a07bd492073dfed912f214cad61919a70c6fd7
+  - pandoc-2.10
   - hslua-1.1.2
   - jira-wiki-markup-1.3.2

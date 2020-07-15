@@ -1,23 +1,12 @@
 resolver: nightly-2020-06-25
 
 packages:
-  - perf
-  - perf-examples
+  - .
 
 extra-deps:
   - rdtsc-1.3.0.1
-  # numhask pack
-  - git: https://github.com/tonyday567/numhask-space
-    commit: 6525f5096525196fe367dabdfe596a7bd0c0aa6c
-  - git: https://github.com/tonyday567/numhask
-    commit: 37ee8dced120f60a511baa6bb6c7ac382b1e8827
-    subdir: numhask-prelude
-  - git: https://github.com/tonyday567/numhask
-    commit: 37ee8dced120f60a511baa6bb6c7ac382b1e8827
-    subdir: numhask
-  # readme-lhs pack
-  - git: https://github.com/tonyday567/readme-lhs
-    commit: e2a07bd492073dfed912f214cad61919a70c6fd7
+  - numhask-0.6.0
+  - readme-lhs-0.7.0
   - pandoc-2.10
   - hslua-1.1.2
   - jira-wiki-markup-1.3.2

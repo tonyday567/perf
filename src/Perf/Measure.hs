@@ -54,14 +54,13 @@ instance Additive NominalDiffTime where
 -- For example, the measure specified below will return 1 every time measurement is requested, thus forming the base of a simple counter for loopy code.
 --
 -- >>> let count = Measure 0 (pure ()) (pure 1)
-data Measure m b
-  = forall a.
-    (Additive b) =>
-    Measure
-      { measure :: b,
-        prestep :: m a,
-        poststep :: a -> m b
-      }
+data Measure m b = forall a.
+  (Additive b) =>
+  Measure
+  { measure :: b,
+    prestep :: m a,
+    poststep :: a -> m b
+  }
 
 -- | Measure a single effect.
 --

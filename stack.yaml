@@ -1,12 +1,9 @@
-resolver: nightly-2020-06-25
+resolver: nightly-2020-11-19
 
 packages:
   - .
 
 extra-deps:
   - rdtsc-1.3.0.1
-  - numhask-0.6.0.2
-  - readme-lhs-0.7.0
-  - pandoc-2.10
-  - hslua-1.1.2
-  - jira-wiki-markup-1.3.2
+
+allow-newer: true

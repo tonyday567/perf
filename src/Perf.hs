@@ -73,10 +73,9 @@ import Prelude
 
 -- | PerfT is polymorphic in the type of measurement being performed.
 -- The monad stores and produces a Map of labelled measurement values
-newtype PerfT m b a
-  = PerfT
-      { runPerf_ :: StateT (Map.Map T.Text b) m a
-      }
+newtype PerfT m b a = PerfT
+  { runPerf_ :: StateT (Map.Map T.Text b) m a
+  }
   deriving (Functor, Applicative, Monad)
 
 -- | The obligatory transformer over Identity

@@ -1,8 +1,8 @@
 cabal-version:  2.4
 name:           perf
-version:        0.7.0
+version:        0.7.1
 synopsis:       Low-level run time measurement.
-description:     A set of tools to accurately measure time performance of Haskell programs.
+description:    A set of tools to accurately measure time performance of Haskell programs.
                 perf aims to be lightweight by having minimal dependencies on standard libraries.
                 See the Perf module for an example and full API documentation. 
 category:       project
@@ -14,8 +14,6 @@ copyright:      Tony Day
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
-extra-source-files:
-    CHANGELOG.md
 
 source-repository head
   type: git

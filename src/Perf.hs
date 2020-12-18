@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | == Introduction
@@ -58,14 +59,12 @@ module Perf
 where
 
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State (StateT (..), evalStateT, execStateT, get, put, runStateT)
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Perf.Cycle
 import Perf.Measure
-import Prelude
+import NumHask.Prelude
 
 -- $setup
 -- >>> import Perf.Cycle
@@ -90,7 +89,7 @@ perf label m a =
   PerfT $ do
     st <- get
     (m', a') <- lift $ runMeasure m a
-    put $ Map.insertWith add label m' st
+    put $ Map.insertWith (+) label m' st
     return a'
 
 -- | Lift a monadic computation to a PerfT m, and carry out the computation multiple times.

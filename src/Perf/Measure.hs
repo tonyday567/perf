@@ -1,7 +1,8 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE StrictData #-}
 {-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Specification of a performance measurement type suitable for the 'PerfT' monad transformer.
 module Perf.Measure
@@ -13,38 +14,15 @@ module Perf.Measure
     realtime,
     count,
     cycles,
-    Additive (..),
   )
 where
 
-import Control.Monad (replicateM_)
+import Data.Fixed (Fixed (MkFixed))
 import Data.Time.Clock
-import GHC.Word (Word64)
 import Perf.Cycle
 import System.CPUTime
 import System.CPUTime.Rdtsc
-import Prelude
-
--- | Lightweight 'Additive' class.
-class Num a => Additive a where
-  add :: a -> a -> a
-  zero :: a
-
-instance Additive Int where
-  add = (+)
-  zero = 0
-
-instance Additive Integer where
-  add = (+)
-  zero = 0
-
-instance Additive Word64 where
-  add = (+)
-  zero = 0
-
-instance Additive NominalDiffTime where
-  add = (+)
-  zero = 0
+import NumHask.Prelude
 
 -- $setup
 -- >>> import Data.Foldable (foldl')
@@ -108,19 +86,24 @@ cputime = Measure 0 start stop
       t <- getCPUTime
       return $ t - a
 
--- | a measure using 'getCurrentTime' (unit is 'NominalDiffTime' which prints as seconds)
+-- | a measure using 'getCurrentTime' (unit is seconds)
 --
 -- >>> r <- runMeasure realtime (pure $ foldl' (+) 0 [0..1000])
 --
--- > (0.000046s,500500)
-realtime :: Measure IO NominalDiffTime
+-- > (0.000046,500500)
+realtime :: Measure IO Double
 realtime = Measure m0 start stop
   where
-    m0 = zero :: NominalDiffTime
+    m0 = zero
     start = getCurrentTime
     stop a = do
       t <- getCurrentTime
-      return $ diffUTCTime t a
+      return $ fromNominalDiffTime $ diffUTCTime t a
+
+fromNominalDiffTime :: NominalDiffTime -> Double
+fromNominalDiffTime t = fromInteger i * 1e-12
+  where
+    (MkFixed i) = nominalDiffTimeToSeconds t
 
 -- | a 'Measure' used to count iterations
 --

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -30,6 +31,8 @@ where
 import Control.DeepSeq (NFData (..), force)
 import qualified Control.Foldl as L (fold, genericLength, premap, sum)
 import Control.Monad (replicateM)
+import Data.Foldable (toList)
+import Data.Sequence (Seq(..))
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
@@ -138,13 +141,13 @@ tickIONoinline = tickIO
 -- > fLambda :: Int -> Int
 -- > fLambda = \x -> foldl' (+) 0 [1 .. x]
 ticks :: NFData b => Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n0 f a = go f a n0 []
+ticks n0 f a = go f a n0 Empty
   where
     go f' a' n ts
-      | n <= 0 = pure (reverse ts, f a)
+      | n <= 0 = pure (toList ts, f a)
       | otherwise = do
         (t, _) <- tickNoinline f a
-        go f' a' (n - 1) (t : ts)
+        go f' a' (n - 1) (ts :|> t)
 {-# NOINLINE ticks #-}
 
 -- | n measuremenst of a tickIO
@@ -153,15 +156,15 @@ ticks n0 f a = go f a n0 []
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
 ticksIO :: (NFData a) => Int -> IO a -> IO ([Cycle], a)
-ticksIO n0 a = go a n0 []
+ticksIO n0 a = go a n0 Empty
   where
     go a' n ts
       | n <= 0 = do
         a'' <- a'
-        pure (reverse ts, a'')
+        pure (toList ts, a'')
       | otherwise = do
         (t, _) <- tickIONoinline a'
-        go a' (n - 1) (t : ts)
+        go a' (n - 1) (ts :|> t)
 {-# NOINLINE ticksIO #-}
 
 -- | make a series of measurements on a list of a's to be applied to f, for a tick function.
@@ -210,24 +213,24 @@ tickWHNFIONoinline = tickWHNFIO
 
 -- | WHNF version
 ticksWHNF :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksWHNF n0 f a = go f a n0 []
+ticksWHNF n0 f a = go f a n0 Empty
   where
     go f' a' n ts
-      | n <= 0 = pure (reverse ts, f a)
+      | n <= 0 = pure (toList ts, f a)
       | otherwise = do
         (t, _) <- tickWHNFNoinline f a
-        go f' a' (n - 1) (t : ts)
+        go f' a' (n - 1) (ts :|> t)
 {-# NOINLINE ticksWHNF #-}
 
 -- | WHNF version
 ticksWHNFIO :: Int -> IO a -> IO ([Cycle], a)
-ticksWHNFIO n0 a = go a n0 []
+ticksWHNFIO n0 a = go a n0 Empty
   where
     go a' n ts
       | n <= 0 = do
         a'' <- a'
-        pure (reverse ts, a'')
+        pure (toList ts, a'')
       | otherwise = do
         (t, _) <- tickWHNFIONoinline a'
-        go a' (n - 1) (t : ts)
+        go a' (n - 1) (ts :|> t)
 {-# NOINLINE ticksWHNFIO #-}

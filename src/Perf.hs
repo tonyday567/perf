@@ -59,12 +59,13 @@ module Perf
 where
 
 import Control.Monad.IO.Class
+import Control.Monad.State.Lazy
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Perf.Cycle
 import Perf.Measure
-import NumHask.Prelude
+import Prelude
 
 -- $setup
 -- >>> import Perf.Cycle
@@ -84,7 +85,7 @@ instance (MonadIO m) => MonadIO (PerfT m b) where
   liftIO = PerfT . liftIO
 
 -- | Lift a monadic computation to a PerfT m, providing a label and a 'Measure'.
-perf :: (MonadIO m, Additive b) => T.Text -> Measure m b -> m a -> PerfT m b a
+perf :: (MonadIO m, Num b) => T.Text -> Measure m b -> m a -> PerfT m b a
 perf label m a =
   PerfT $ do
     st <- get

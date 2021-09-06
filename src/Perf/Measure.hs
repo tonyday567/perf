@@ -17,12 +17,13 @@ module Perf.Measure
   )
 where
 
+import Control.Monad
 import Data.Fixed (Fixed (MkFixed))
 import Data.Time.Clock
 import Perf.Cycle
 import System.CPUTime
 import System.CPUTime.Rdtsc
-import NumHask.Prelude
+import Prelude
 
 -- $setup
 -- >>> import Data.Foldable (foldl')
@@ -33,7 +34,7 @@ import NumHask.Prelude
 --
 -- >>> let count = Measure 0 (pure ()) (pure 1)
 data Measure m b = forall a.
-  (Additive b) =>
+  (Num b) =>
   Measure
   { measure :: b,
     prestep :: m a,
@@ -94,7 +95,7 @@ cputime = Measure 0 start stop
 realtime :: Measure IO Double
 realtime = Measure m0 start stop
   where
-    m0 = zero
+    m0 = 0
     start = getCurrentTime
     stop a = do
       t <- getCurrentTime

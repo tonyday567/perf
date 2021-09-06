@@ -1,8 +1,4 @@
 cradle:
-  stack:
-    - path: "./perf/src/"
-      component: "perf:lib"
-    - path: "./perf-examples/examples/perf-examples.hs"
-      component: "perf-analysis:exe:perf-examples"
-    - path: "./perf-examples/examples/perf-criterion.hs"
-      component: "perf-criterion:exe:perf-criterion"
+  cabal:
+  - component: "perf:lib:perf"
+    path: ./src

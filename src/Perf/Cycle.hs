@@ -9,7 +9,7 @@
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 module Perf.Cycle
-  ( -- $setup
+  ( -- $usage
     Cycle,
     tick_,
     warmup,
@@ -32,13 +32,23 @@ import Control.DeepSeq (NFData (..), force)
 import qualified Control.Foldl as L (fold, genericLength, premap, sum)
 import Control.Monad (replicateM)
 import Data.Foldable (toList)
-import Data.Sequence (Seq(..))
+import Data.Sequence (Seq (..))
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
 
 -- $setup
 -- >>> import Perf.Cycle
+-- >>> import Control.Monad
+-- >>> import Data.Foldable (foldl')
+-- >>> import qualified Control.Foldl as L
+-- >>> let n = 1000
+-- >>> let a = 1000
+-- >>> let f x = foldl' (+) 0 [1 .. x]
+
+-- $usage
+-- >>> import Perf.Cycle
+-- >>> import Control.Monad
 -- >>> import Data.Foldable (foldl')
 -- >>> let n = 1000
 -- >>> let a = 1000

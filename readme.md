@@ -1,11 +1,10 @@
 perf
 ===
 
-[![Build Status](https://travis-ci.org/tonyday567/perf.svg)](https://travis-ci.org/tonyday567/perf) [![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf)
+[![Hackage](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf)
+[![Build Status](https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg)](https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci) [![Hackage Deps](https://img.shields.io/hackage-deps/v/perf.svg)](http://packdeps.haskellers.com/reverse/perf)
 
 Low-level performance measurement for haskell using the [rdtsc](https://en.wikipedia.org/wiki/Time_Stamp_Counter) register on x86.
-
-
 
 metal speed
 ---

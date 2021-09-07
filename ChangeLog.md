@@ -1,3 +1,8 @@
+0.9.0
+===
+* Removed deepseq dependency
+
+
 0.8.0
 ===
 * GHC 9.0.1 support

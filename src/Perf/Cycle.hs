@@ -28,7 +28,6 @@ module Perf.Cycle
   )
 where
 
-import Control.DeepSeq (NFData (..), force)
 import qualified Control.Foldl as L (fold, genericLength, premap, sum)
 import Control.Monad (replicateM)
 import Data.Foldable (toList)
@@ -95,10 +94,10 @@ warmup n = do
   pure $ average ts
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
-tick' :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tick' :: (a -> b) -> a -> IO (Cycle, b)
 tick' f a = do
   !t <- rdtsc
-  !a' <- pure (force $ f a)
+  !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
 {-# INLINE tick' #-}
@@ -109,25 +108,25 @@ tick' f a = do
 -- >>> (cs, _) <- tick f a
 --
 -- Note that feeding the same computation through tick twice may kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fno-full-laziness (and maybe -fno-cse).
-tick :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tick :: (a -> b) -> a -> IO (Cycle, b)
 tick !f !a = tick' f a
 {-# INLINE tick #-}
 
-tickNoinline :: (NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickNoinline :: (a -> b) -> a -> IO (Cycle, b)
 tickNoinline !f !a = tick' f a
 {-# NOINLINE tickNoinline #-}
 
 -- | measures and deeply evaluates an `IO a`
 --
 -- >>> (cs, _) <- tickIO (pure (f a))
-tickIO :: (NFData a) => IO a -> IO (Cycle, a)
+tickIO :: IO a -> IO (Cycle, a)
 tickIO a = do
   t <- rdtsc
-  !a' <- force <$> a
+  !a' <- a
   t' <- rdtsc
   pure (t' - t, a')
 
-tickIONoinline :: (NFData a) => IO a -> IO (Cycle, a)
+tickIONoinline :: IO a -> IO (Cycle, a)
 tickIONoinline = tickIO
 {-# NOINLINE tickIONoinline #-}
 
@@ -150,7 +149,7 @@ tickIONoinline = tickIO
 -- > fPoly x = foldl' (+) 0 [1 .. x]
 -- > fLambda :: Int -> Int
 -- > fLambda = \x -> foldl' (+) 0 [1 .. x]
-ticks :: NFData b => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticks n0 f a = go f a n0 Empty
   where
     go f' a' n ts
@@ -165,7 +164,7 @@ ticks n0 f a = go f a n0 Empty
 -- returns an IO tuple; list of Cycles and the last evaluated f a
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
-ticksIO :: (NFData a) => Int -> IO a -> IO ([Cycle], a)
+ticksIO :: Int -> IO a -> IO ([Cycle], a)
 ticksIO n0 a = go a n0 Empty
   where
     go a' n ts

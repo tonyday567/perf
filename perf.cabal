@@ -39,7 +39,6 @@ library
   build-depends:
     , base          >=4.7   && <5
     , containers    ^>=0.6
-    , deepseq       ^>=1.4
     , foldl         ^>=1.4
     , mtl           ^>=2.2.2
     , rdtsc         ^>=1.3

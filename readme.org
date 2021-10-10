@@ -1,0 +1,318 @@
+#+TITLE: perf
+
+`perf` provides some ideas, code and a library for low-level performance measurement for Haskell hacking.
+
+- Uses the rdtsc instruction set that comes with the x86 chip.
+- Has a fundamental unit being the number of cycles taken to perform a computation, whether that computation comtains strict or lazy elements under the hood.
+- Strictly evaluates performance of the top level function application.
+
+
+* setup
+
+Running this internal to the perf repo results in interpretation of the modules, which slows everything down compared with an external process which accesses the compiled version of the library.
+
+#+begin_src haskell
+:set prompt " > "
+:set -Wno-type-defaults
+:set -Wno-name-shadowing
+:set -XOverloadedStrings
+#+end_src
+
+#+begin_src haskell
+import Perf
+import NumHask.Space (quantile)
+import Data.FormatN
+import Perf.Cycle
+import Prelude as P
+import Data.Foldable
+#+end_src
+
+* tick
+
+A fundamental operation is tick, which sandwiches a function application between two readings of the rdstc chip.
+
+#+begin_src haskell
+:t tick
+#+end_src
+
+#+RESULTS:
+: tick :: (a -> b) -> a -> IO (Cycle, b)
+
+tick returns in the IO monad, because reading a cycle counter is an IO effect. The trivial but fundamental point is that performance measurement effects the computation being measured.
+
+Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
+
+* tick_
+
+#+begin_src haskell
+replicateM 10 tick_
+#+end_src
+
+#+RESULTS:
+| 3590 | 1134 | 798 | 784 | 786 | 784 | 790 | 802 | 790 | 804 |
+
+* function application
+
+#+begin_src haskell
+tick (const ()) ()
+#+end_src
+
+#+RESULTS:
+| 5902 | nil |
+
+Here, ~const () ()~ was evaluated and took 350 cycles. What it did in taht time we will never know, really, at least from usage of ~perf~. It sounds slow but 350 is, on my 2.5GHz machine equal to 350 / 2.5e9 = 1.4e-7 of a second, 0.14 milliseconds, or 140 nanoseconds.
+
+Alternatively, ~tickIO~ measures the evaluation of an IO value.
+
+#+begin_src haskell
+:t tickIO
+#+end_src
+
+#+RESULTS:
+: tickIO :: IO a -> IO (Cycle, a)
+
+#+begin_src haskell
+tickIO (pure ())
+#+end_src
+
+#+RESULTS:
+| 6120 | nil |
+
+#+begin_src haskell
+replicateM 10 (tickIO (pure ()))
+#+end_src
+
+#+RESULTS:
+| 6304 | nil |
+| 2560 | nil |
+| 1824 | nil |
+| 1660 | nil |
+| 1586 | nil |
+| 1576 | nil |
+| 2470 | nil |
+| 1598 | nil |
+| 1588 | nil |
+| 1616 | nil |
+
+#+begin_src haskell
+ticks 100 (const ()) ()
+#+end_src
+
+#+RESULTS:
+| 6326 | 2352 | 2200 | 1958 | 1880 | 1938 | 1886 | 1854 | 1874 | 1940 | 1832 | 1812 | 1850 | 1894 | 1900 | 1894 | 1830 | 1832 | 1884 | 1870 | 1852 | 1884 | 1854 | 1846 | 1842 | 1862 | 1836 | 1838 | 1958 | 1986 | 1802 | 1832 | 1930 | 1910 | 1902 | 1870 | 1810 | 1878 | 1776 | 1898 | 1840 | 1790 | 1796 | 1842 | 1824 | 1898 | 1834 | 1906 | 1872 | 1838 | 1812 | 1882 | 1812 | 1884 | 1810 | 1820 | 1926 | 1902 | 1902 | 1854 | 1868 | 1876 | 1922 | 1816 | 1902 | 1886 | 1836 | 1822 | 1834 | 1820 | 1906 | 1886 | 1828 | 1824 | 1868 | 1882 | 1856 | 1876 | 1932 | 1882 | 1872 | 1878 | 1824 | 1844 | 1804 | 1804 | 1846 | 1900 | 1822 | 1836 | 1880 | 1878 | 1878 | 1870 | 1828 | 1800 | 2032 | 1920 | 1874 | 1836 |
+
+* interpreted performance
+
+#+begin_src haskell
+fmap fst $ ticks 10 sum ([1..10000] :: [Double])
+#+end_src
+
+#+RESULTS:
+| 1307720 | 740114 | 747050 | 2482222 | 729346 | 613916 | 2172022 | 569756 | 663376 | 1181096 |
+
+
+#+begin_src haskell
+import Data.Text as Text
+import Data.Text.IO as Text
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src haskell
+ts <- ticks 1000 sum ([1..10000] :: [Double])
+Text.putStrLn $ Text.intercalate "\t" [median ts, average ts, tenth ts]
+#+end_src
+
+#+RESULTS:
+: 442206	586453	429271
+
+#+begin_src haskell
+ts2 <- ticks' 100 sum ([1..1000] :: [Double])
+Text.putStrLn $ Text.intercalate "\t" [median ts2, average ts2, tenth ts2]
+#+end_src
+
+#+RESULTS:
+#+begin_example
+<interactive>:314:47: error:
+    • Variable not in scope: ts2 :: (f0 a0, b0)
+    • Perhaps you meant one of these:
+        ‘Ghci242.ts’ (imported from Ghci242),
+        ‘Ghci245.ts’ (imported from Ghci245),
+        ‘Ghci248.ts’ (imported from Ghci248)
+
+<interactive>:314:60: error:
+    • Variable not in scope: ts2 :: (t0 a1, b1)
+    • Perhaps you meant one of these:
+        ‘Ghci242.ts’ (imported from Ghci242),
+        ‘Ghci245.ts’ (imported from Ghci245),
+        ‘Ghci248.ts’ (imported from Ghci248)
+
+<interactive>:314:71: error:
+    • Variable not in scope: ts2 :: (f1 a2, b2)
+    • Perhaps you meant one of these:
+        ‘Ghci242.ts’ (imported from Ghci242),
+        ‘Ghci245.ts’ (imported from Ghci245),
+        ‘Ghci248.ts’ (imported from Ghci248)
+#+end_example
+
+
+
+
+#+begin_src haskell
+:set -XAllowAmbiguousTypes
+
+fMono :: Int -> Int
+fMono x = foldl' (+) 0 [1 .. x]
+
+fPoly :: (Enum b, Num b, Additive b) => b -> b
+fPoly x = foldl' (+) 0 [1 .. x]
+
+fLambda :: Int -> Int
+fLambda = \x -> foldl' (+) 0 [1 .. x]
+#+end_src
+
+#+begin_src haskell
+fmap median (ticks 1000 fMono 1000)
+#+end_src
+
+#+RESULTS:
+: 73393
+
+#+begin_src haskell
+fmap median $ ticks 1000 fPoly 1000
+#+end_src
+
+#+RESULTS:
+: 72349
+
+#+begin_src haskell
+fmap median $ ticks 1000 fLambda 1000
+#+end_src
+
+#+RESULTS:
+: 72786
+
+* compiled performance
+
+#+begin_src sh
+perf-bench -r 1000 -s 1000 --median
+#+end_src
+
+#+RESULTS:
+| list    | test |
+| fMono   | 1954 |
+| fPoly   | 1954 |
+| fLambda | 1956 |
+
+#+begin_src sh
+perf-bench -r 100000 -s 1000 --median
+#+end_src
+
+#+RESULTS:
+| simple  | perf | tests |
+| fMono   | 1954 |       |
+| fPoly   | 1954 |       |
+| fLambda | 1954 |       |
+
+* from bench.hs
+
+FIXME: this doesn't work ...
+
+#+begin_src haskell
+:load app/bench.hs
+#+end_src
+
+#+begin_src sh
+:main -r 100000 -s 1000 --median
+#+end_src
+
+#+RESULTS:
+
+
+
+
+* vectors
+
+#+begin_src sh
+perf-bench -r 1000 -s 10000 --vector --median
+#+end_src
+
+#+RESULTS:
+| vector    |  test |
+| vBoxed    | 13291 |
+| vUnboxed  | 13261 |
+| vStorable | 13264 |
+
+
+#+begin_src haskell
+import Perf
+import Perf.Cycle
+import Prelude as P
+import Data.Foldable
+#+end_src
+
+
+#+begin_src haskell
+replicateM 100 tick_
+#+end_src
+
+#+RESULTS:
+| 4568 | 1194 | 882 | 790 | 794 | 790 | 784 | 788 | 786 | 800 | 820 | 808 | 780 | 788 | 794 | 796 | 784 | 832 | 788 | 792 | 788 | 786 | 790 | 786 | 788 | 802 | 1038 | 822 | 796 | 796 | 792 | 786 | 792 | 782 | 798 | 792 | 788 | 790 | 788 | 848 | 792 | 794 | 784 | 800 | 792 | 802 | 794 | 790 | 786 | 788 | 794 | 788 | 782 | 794 | 788 | 792 | 782 | 794 | 792 | 792 | 788 | 786 | 792 | 792 | 788 | 784 | 782 | 790 | 790 | 786 | 790 | 794 | 782 | 794 | 790 | 786 | 788 | 780 | 788 | 786 | 794 | 786 | 786 | 894 | 796 | 790 | 786 | 782 | 786 | 788 | 794 | 790 | 772 | 788 | 800 | 790 | 790 | 790 | 792 | 832 |
+
+
+* Next PerfT
+
+- [ ] multiline
+- [ ] better example
+- [ ] refactor to Writer
+
+#+begin_src haskell
+  result <- do
+      txt <- readFile "readme.org"
+      let n = Text.length txt
+      let x = foldl' (+) 0 [1..n]
+      putStrLn $ "sum of one to number of characters is: " <>
+          (show x :: Text)
+      pure (n, x)
+  putStrLn result
+#+end_src
+
+#+RESULTS:
+: <interactive>:17:12: error: Variable not in scope: result :: String
+
+#+begin_src haskell
+  (result', ms) <- runPerfT $ do
+          txt <- perf "file read" cycles $ readFile "perf-analysis/examples/examples.hs"
+          n <- perf "length" cycles $ pure (Text.length txt)
+          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
+          perf "print to screen" cycles $
+              putStrLn $ "sum of one to number of characters is: " <>
+              (show x :: Text)
+          pure (n, x)
+#+end_src
+
+* Next Perf ToDo
+
+- [ ] doctests
+- [ ] make tick a Writer ???
+- [ ] refactor PerfT
+- unboxed, mutable
+- core
+  [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
+- profiling
+- benchmarking
+  criterion
+  [[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][Test.Tasty.Bench]]
+  gauge
+- weigh
+- detecting space leaks
+- laziness, WHNF and all that.
+  [[http://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
+  [[https://stackoverflow.com/questions/6872898/what-is-weak-head-normal-form/6889335#6889335][haskell - What is Weak Head Normal Form? - Stack Overflow]]
+
+* Resources
+
+[[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
+[[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
+[[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]

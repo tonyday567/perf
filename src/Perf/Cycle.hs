@@ -18,6 +18,7 @@ module Perf.Cycle
     tickIO,
     tickNoinline,
     ticks,
+    ticksi,
     ticksIO,
     ns,
     tickWHNF,
@@ -25,16 +26,21 @@ module Perf.Cycle
     tickWHNFIO,
     ticksWHNF,
     ticksWHNFIO,
+    average,
+    median,
+    decile
   )
 where
 
-import qualified Control.Foldl as L (fold, genericLength, premap, sum)
-import Control.Monad (replicateM)
+import Control.Monad (replicateM_)
 import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
+import NumHask.Space (quantile)
+import Data.FormatN
+import Data.Text (Text)
 
 -- $setup
 -- >>> import Perf.Cycle
@@ -88,10 +94,10 @@ tick_ = do
 -- >>> t <- tick_ -- first measure can be very high
 -- >>> _ <- warmup 100
 -- >>> t <- tick_ -- should be around 20 (3k for ghci)
-warmup :: Int -> IO Double
+warmup :: Int -> IO ()
 warmup n = do
-  ts <- replicateM n tick_
-  pure $ average ts
+  replicateM_ n tick_
+  pure ()
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
 tick' :: (a -> b) -> a -> IO (Cycle, b)
@@ -134,7 +140,7 @@ tickIONoinline = tickIO
 --
 -- returns a list of Cycles and the last evaluated f a
 --
--- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline version of to help reduce the chances of memoization, but this is an inexact science in the hands of he author, at least, so interpret with caution.
+-- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline version of to help reduce the chances of memoization, but this is an inexact science in the hands of the author, at least, so interpret with caution.
 -- The use of noinline interposes an extra function call, which can highly skew very fast computations.
 --
 --
@@ -158,6 +164,16 @@ ticks n0 f a = go f a n0 Empty
         (t, _) <- tickNoinline f a
         go f' a' (n - 1) (ts :|> t)
 {-# NOINLINE ticks #-}
+
+ticksi :: Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticksi n0 f a = go f a n0 Empty
+  where
+    go f' a' n ts
+      | n <= 0 = pure (toList ts, f a)
+      | otherwise = do
+        (t, _) <- tickNoinline f a
+        go f' a' (n - 1) (ts :|> t)
+{-# INLINE ticksi #-}
 
 -- | n measuremenst of a tickIO
 --
@@ -185,12 +201,6 @@ ns :: (a -> IO ([Cycle], b)) -> [a] -> IO ([[Cycle]], [b])
 ns t as = do
   cs <- sequence $ t <$> as
   pure (fst <$> cs, snd <$> cs)
-
--- | average of an Integral foldable
---
--- > cAv <- average <$> ticks n f a
-average :: (Integral a, Foldable f) => f a -> Double
-average = L.fold (L.premap fromIntegral ((/) <$> L.sum <*> L.genericLength))
 
 -- | WHNF versions
 tickWHNF :: (a -> b) -> a -> IO (Cycle, b)
@@ -243,3 +253,12 @@ ticksWHNFIO n0 a = go a n0 Empty
         (t, _) <- tickWHNFIONoinline a'
         go a' (n - 1) (ts :|> t)
 {-# NOINLINE ticksWHNFIO #-}
+
+median :: [Cycle] -> Text
+median = fixed 0 . quantile 0.5 . fmap Prelude.fromIntegral
+
+average :: [Cycle] -> Text
+average = fixed 0 . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
+
+decile :: [Cycle] -> Text
+decile = fixed 0 . quantile 0.1 . fmap Prelude.fromIntegral

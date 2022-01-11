@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
     Perf
+    Perf.BigO
     Perf.Cycle
     Perf.Measure
 
@@ -45,5 +46,6 @@ library
     , transformers  ^>=0.5
     , formatn ^>= 0.1
     , numhask-space ^>= 0.8.1.0
+    , vector ^>= 0.12.3
   default-language:   Haskell2010
   default-extensions:

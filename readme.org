@@ -1,11 +1,25 @@
 #+TITLE: perf
 
-`perf` provides some ideas, code and a library for low-level performance measurement for Haskell hacking.
+~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library focuses on using the rdtsc instruction set that comes with the x86 chip to measure performance as number of cycles.
 
-- Uses the rdtsc instruction set that comes with the x86 chip.
-- Has a fundamental unit being the number of cycles taken to perform a computation, whether that computation comtains strict or lazy elements under the hood.
-- Strictly evaluates performance of the top level function application.
+* Usage
 
+
+#+begin_src haskell
+replicate 10 tick_
+#+end_src
+
+#+RESULTS:
+: <interactive>:25:1: error:
+:     • No instance for (Show (IO Cycle)) arising from a use of ‘print’
+:     • In a stmt of an interactive GHCi command: print it
+
+#+begin_src haskell
+:t show
+#+end_src
+
+#+RESULTS:
+: String
 
 * setup
 
@@ -229,9 +243,6 @@ FIXME: this doesn't work ...
 
 #+RESULTS:
 
-
-
-
 * vectors
 
 #+begin_src sh
@@ -260,59 +271,13 @@ replicateM 100 tick_
 #+RESULTS:
 | 4568 | 1194 | 882 | 790 | 794 | 790 | 784 | 788 | 786 | 800 | 820 | 808 | 780 | 788 | 794 | 796 | 784 | 832 | 788 | 792 | 788 | 786 | 790 | 786 | 788 | 802 | 1038 | 822 | 796 | 796 | 792 | 786 | 792 | 782 | 798 | 792 | 788 | 790 | 788 | 848 | 792 | 794 | 784 | 800 | 792 | 802 | 794 | 790 | 786 | 788 | 794 | 788 | 782 | 794 | 788 | 792 | 782 | 794 | 792 | 792 | 788 | 786 | 792 | 792 | 788 | 784 | 782 | 790 | 790 | 786 | 790 | 794 | 782 | 794 | 790 | 786 | 788 | 780 | 788 | 786 | 794 | 786 | 786 | 894 | 796 | 790 | 786 | 782 | 786 | 788 | 794 | 790 | 772 | 788 | 800 | 790 | 790 | 790 | 792 | 832 |
 
-
-* Next PerfT
-
-- [ ] multiline
-- [ ] better example
-- [ ] refactor to Writer
-
-#+begin_src haskell
-  result <- do
-      txt <- readFile "readme.org"
-      let n = Text.length txt
-      let x = foldl' (+) 0 [1..n]
-      putStrLn $ "sum of one to number of characters is: " <>
-          (show x :: Text)
-      pure (n, x)
-  putStrLn result
-#+end_src
-
-#+RESULTS:
-: <interactive>:17:12: error: Variable not in scope: result :: String
-
-#+begin_src haskell
-  (result', ms) <- runPerfT $ do
-          txt <- perf "file read" cycles $ readFile "perf-analysis/examples/examples.hs"
-          n <- perf "length" cycles $ pure (Text.length txt)
-          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
-          perf "print to screen" cycles $
-              putStrLn $ "sum of one to number of characters is: " <>
-              (show x :: Text)
-          pure (n, x)
-#+end_src
-
-* Next Perf ToDo
-
-- [ ] doctests
-- [ ] make tick a Writer ???
-- [ ] refactor PerfT
-- unboxed, mutable
-- core
-  [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
-- profiling
-- benchmarking
-  criterion
-  [[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][Test.Tasty.Bench]]
-  gauge
-- weigh
-- detecting space leaks
-- laziness, WHNF and all that.
-  [[http://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
-  [[https://stackoverflow.com/questions/6872898/what-is-weak-head-normal-form/6889335#6889335][haskell - What is Weak Head Normal Form? - Stack Overflow]]
-
 * Resources
 
+[[https://github.com/haskell-perf][Haskell performance · GitHub]]
 [[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
 [[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
+
+* space
+
+https://github.com/ndmitchell/spaceleak

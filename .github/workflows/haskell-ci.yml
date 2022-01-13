@@ -71,7 +71,7 @@ jobs:
           xz -d < cabal-docspec.xz > $HOME/.cabal/bin/cabal-docspec
           rm -f cabal-docspec.xz
           chmod a+x $HOME/.cabal/bin/cabal-docspec
-          cabal-docspec --version
+          $HOME/.cabal/bin/cabal-docspec --version
       - name: build
         run: |
           cabal build all --enable-tests --write-ghc-environment-files=always
@@ -81,7 +81,7 @@ jobs:
       - if: ${{ matrix.ghc == '9.2.1'}}
         name: docspec
         run: |
-          cabal-docspec --verbose
+          $HOME/.cabal/bin/cabal-docspec --verbose
       - name: haddock
         run: |
           cabal haddock all

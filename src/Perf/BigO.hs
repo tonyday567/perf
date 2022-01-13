@@ -44,8 +44,6 @@ import Data.Bool
 import Data.Maybe
 
 -- $setup
--- >>> :set -XNoImplicitPrelude
--- >>> import NumHask.Prelude
 -- >>> import qualified Data.List as List
 
 -- data PerfTest = PerformanceExample Expression BigOExpression
@@ -69,10 +67,10 @@ olist = [N3 .. N0]
 
 -- | functions to compute performance measure
 --
--- >>> fmap ($ zero) promote_
+-- >>> fmap ($ 0) promote_
 -- [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
 --
--- >>> fmap ($ one) promote_
+-- >>> fmap ($ 1) promote_
 -- [1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]
 --
 -- Ordering makes sense around N=10

@@ -28,6 +28,7 @@ module Perf.Cycle
     ticksWHNFIO,
     average,
     median,
+    tenth,
     decile
   )
 where
@@ -39,14 +40,13 @@ import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
 import NumHask.Space (quantile)
-import Data.FormatN
 import Data.Text (Text)
+import Data.FormatN
 
 -- $setup
 -- >>> import Perf.Cycle
 -- >>> import Control.Monad
 -- >>> import Data.Foldable (foldl')
--- >>> import qualified Control.Foldl as L
 -- >>> let n = 1000
 -- >>> let a = 1000
 -- >>> let f x = foldl' (+) 0 [1 .. x]
@@ -69,18 +69,6 @@ type Cycle = Word64
 -- >>> onetick <- tick_
 -- >>> ticks' <- replicateM 10 tick_
 -- >>> manyticks <- replicateM 1000000 tick_
--- >>> let average = L.fold ((/) <$> L.sum <*> L.genericLength)
--- >>> let avticks = average (fromIntegral <$> manyticks)
---
--- > one tick_: 78 cycles
--- > next 10: [20,18,20,20,20,20,18,16,20,20]
--- > average over 1m: 20.08 cycles
--- > 99.999% perc: 7,986
--- > 99.9% perc: 50.97
--- > 99th perc:  24.99
--- > 40th perc:  18.37
--- > [min, 10th, 20th, .. 90th, max]:
--- > 12.00 16.60 17.39 17.88 18.37 18.86 19.46 20.11 20.75 23.04 5.447e5
 --
 -- The distribution of tick_ measurements is highly skewed, with the maximum being around 50k cycles, which is of the order of a GC. The important point on the distribution is around the 30th to 50th percentile, where you get a clean measure, usually free of GC activity and cache miss-fires
 tick_ :: IO Cycle
@@ -95,9 +83,7 @@ tick_ = do
 -- >>> _ <- warmup 100
 -- >>> t <- tick_ -- should be around 20 (3k for ghci)
 warmup :: Int -> IO ()
-warmup n = do
-  replicateM_ n tick_
-  pure ()
+warmup n = replicateM_ n tick_
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
 tick' :: (a -> b) -> a -> IO (Cycle, b)
@@ -255,10 +241,13 @@ ticksWHNFIO n0 a = go a n0 Empty
 {-# NOINLINE ticksWHNFIO #-}
 
 median :: [Cycle] -> Text
-median = fixed 0 . quantile 0.5 . fmap Prelude.fromIntegral
+median = comma (Just 3) . quantile 0.5 . fmap Prelude.fromIntegral
 
 average :: [Cycle] -> Text
-average = fixed 0 . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
+average = comma (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
 
 decile :: [Cycle] -> Text
-decile = fixed 0 . quantile 0.1 . fmap Prelude.fromIntegral
+decile = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral
+
+tenth :: [Cycle] -> Text
+tenth = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral

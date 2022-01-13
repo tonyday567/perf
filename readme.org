@@ -6,33 +6,22 @@
 
 
 #+begin_src haskell
-replicate 10 tick_
 #+end_src
-
-#+RESULTS:
-: <interactive>:25:1: error:
-:     • No instance for (Show (IO Cycle)) arising from a use of ‘print’
-:     • In a stmt of an interactive GHCi command: print it
-
-#+begin_src haskell
-:t show
-#+end_src
-
-#+RESULTS:
-: String
 
 * setup
 
 Running this internal to the perf repo results in interpretation of the modules, which slows everything down compared with an external process which accesses the compiled version of the library.
 
-#+begin_src haskell
+#+begin_src haskell :results output
 :set prompt " > "
 :set -Wno-type-defaults
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
 #+end_src
 
-#+begin_src haskell
+#+RESULTS:
+
+#+begin_src haskell :results output
 import Perf
 import NumHask.Space (quantile)
 import Data.FormatN
@@ -40,6 +29,8 @@ import Perf.Cycle
 import Prelude as P
 import Data.Foldable
 #+end_src
+
+#+RESULTS:
 
 * tick
 
@@ -63,7 +54,7 @@ replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-| 3590 | 1134 | 798 | 784 | 786 | 784 | 790 | 802 | 790 | 804 |
+| 1086 | 628 | 542 | 542 | 540 | 540 | 532 | 530 | 544 | 542 |
 
 * function application
 
@@ -72,7 +63,7 @@ tick (const ()) ()
 #+end_src
 
 #+RESULTS:
-| 5902 | nil |
+| 6920 | nil |
 
 Here, ~const () ()~ was evaluated and took 350 cycles. What it did in taht time we will never know, really, at least from usage of ~perf~. It sounds slow but 350 is, on my 2.5GHz machine equal to 350 / 2.5e9 = 1.4e-7 of a second, 0.14 milliseconds, or 140 nanoseconds.
 
@@ -90,44 +81,44 @@ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
-| 6120 | nil |
+| 5348 | nil |
 
 #+begin_src haskell
 replicateM 10 (tickIO (pure ()))
 #+end_src
 
 #+RESULTS:
-| 6304 | nil |
-| 2560 | nil |
-| 1824 | nil |
-| 1660 | nil |
-| 1586 | nil |
-| 1576 | nil |
-| 2470 | nil |
-| 1598 | nil |
-| 1588 | nil |
-| 1616 | nil |
+| 4866 | nil |
+| 2308 | nil |
+| 1718 | nil |
+| 1524 | nil |
+| 1520 | nil |
+| 1516 | nil |
+| 1526 | nil |
+| 1534 | nil |
+| 1530 | nil |
+| 1536 | nil |
 
 #+begin_src haskell
 ticks 100 (const ()) ()
 #+end_src
 
 #+RESULTS:
-| 6326 | 2352 | 2200 | 1958 | 1880 | 1938 | 1886 | 1854 | 1874 | 1940 | 1832 | 1812 | 1850 | 1894 | 1900 | 1894 | 1830 | 1832 | 1884 | 1870 | 1852 | 1884 | 1854 | 1846 | 1842 | 1862 | 1836 | 1838 | 1958 | 1986 | 1802 | 1832 | 1930 | 1910 | 1902 | 1870 | 1810 | 1878 | 1776 | 1898 | 1840 | 1790 | 1796 | 1842 | 1824 | 1898 | 1834 | 1906 | 1872 | 1838 | 1812 | 1882 | 1812 | 1884 | 1810 | 1820 | 1926 | 1902 | 1902 | 1854 | 1868 | 1876 | 1922 | 1816 | 1902 | 1886 | 1836 | 1822 | 1834 | 1820 | 1906 | 1886 | 1828 | 1824 | 1868 | 1882 | 1856 | 1876 | 1932 | 1882 | 1872 | 1878 | 1824 | 1844 | 1804 | 1804 | 1846 | 1900 | 1822 | 1836 | 1880 | 1878 | 1878 | 1870 | 1828 | 1800 | 2032 | 1920 | 1874 | 1836 |
+| 5784 | 2858 | 2416 | 2386 | 2378 | 2336 | 2336 | 2364 | 2282 | 2384 | 2316 | 2380 | 2274 | 2436 | 2328 | 2222 | 2266 | 2338 | 2320 | 2354 | 2264 | 2288 | 2366 | 2334 | 2336 | 2604 | 2398 | 2384 | 2424 | 2306 | 2374 | 2222 | 2318 | 2324 | 2242 | 2394 | 2478 | 2384 | 2306 | 2272 | 2304 | 2278 | 2248 | 2304 | 2400 | 2322 | 2278 | 2312 | 2398 | 2308 | 2356 | 2328 | 2348 | 2392 | 2374 | 2632 | 2284 | 2328 | 2294 | 2362 | 2366 | 2360 | 2356 | 2294 | 2334 | 2470 | 2422 | 2292 | 2324 | 2424 | 2406 | 2358 | 2354 | 2370 | 2396 | 2348 | 2300 | 2306 | 2428 | 2314 | 2386 | 2286 | 2424 | 2292 | 2338 | 2404 | 2390 | 2318 | 2388 | 2378 | 2304 | 2372 | 2606 | 2450 | 2396 | 2354 | 2282 | 2286 | 2378 | 2346 |
 
 * interpreted performance
 
 #+begin_src haskell
-fmap fst $ ticks 10 sum ([1..10000] :: [Double])
+fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
 #+end_src
 
 #+RESULTS:
-| 1307720 | 740114 | 747050 | 2482222 | 729346 | 613916 | 2172022 | 569756 | 663376 | 1181096 |
+| 1.65e6 | 1.19e6 | 1.04e6 | 4.13e6 | 668,000 | 626,000 | 2.69e6 | 629,000 | 618,000 | 1.61e6 |
 
 
 #+begin_src haskell
-import Data.Text as Text
-import Data.Text.IO as Text
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 #+end_src
 
 #+RESULTS:
@@ -135,43 +126,11 @@ import Data.Text.IO as Text
 
 #+begin_src haskell
 ts <- ticks 1000 sum ([1..10000] :: [Double])
-Text.putStrLn $ Text.intercalate "\t" [median ts, average ts, tenth ts]
+Text.putStrLn $ Text.intercalate "\t" [median (fst ts), average (fst ts)]
 #+end_src
 
 #+RESULTS:
-: 442206	586453	429271
-
-#+begin_src haskell
-ts2 <- ticks' 100 sum ([1..1000] :: [Double])
-Text.putStrLn $ Text.intercalate "\t" [median ts2, average ts2, tenth ts2]
-#+end_src
-
-#+RESULTS:
-#+begin_example
-<interactive>:314:47: error:
-    • Variable not in scope: ts2 :: (f0 a0, b0)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
-
-<interactive>:314:60: error:
-    • Variable not in scope: ts2 :: (t0 a1, b1)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
-
-<interactive>:314:71: error:
-    • Variable not in scope: ts2 :: (f1 a2, b2)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
-#+end_example
-
-
-
+: 525,000	791,000
 
 #+begin_src haskell
 :set -XAllowAmbiguousTypes
@@ -186,12 +145,20 @@ fLambda :: Int -> Int
 fLambda = \x -> foldl' (+) 0 [1 .. x]
 #+end_src
 
+#+RESULTS:
+: <interactive>:74:17: error:
+:     Ambiguous occurrence ‘foldl'’
+:     It could refer to
+:        either ‘Text.foldl'’, imported from ‘Data.Text’
+:            or ‘Data.Foldable.foldl'’, imported from ‘Data.Foldable’
+
 #+begin_src haskell
 fmap median (ticks 1000 fMono 1000)
 #+end_src
 
 #+RESULTS:
-: 73393
+: <interactive>:63:25: error:
+:     Variable not in scope: fMono :: a0 -> b0
 
 #+begin_src haskell
 fmap median $ ticks 1000 fPoly 1000

@@ -37,7 +37,7 @@ where
 import qualified Data.List as GHC.List
 import qualified Data.List as List
 import qualified Data.Vector as V
-import Perf hiding (ns)
+import Perf
 import Prelude
 import GHC.Generics
 import Data.Bool

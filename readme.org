@@ -6,6 +6,9 @@
 
 
 #+begin_src haskell
+import Perf
+
+
 #+end_src
 
 * setup
@@ -158,75 +161,71 @@ fmap (median . fst) $ ticks 1000 fLambda 1000
 
 * compiled performance
 
-#+begin_src sh
-perf-bench -r 1000 -s 1000 --median
+#+begin_src sh :results output
+perf-basic --help
 #+end_src
 
 #+RESULTS:
-| list    | test |
-| fMono   | 1954 |
-| fPoly   | 1954 |
-| fLambda | 1956 |
+#+begin_example
+basic perf callibration
 
-#+begin_src sh
-perf-bench -r 100000 -s 1000 --median
+Usage: perf-basic (-r|--runs ARG) [-b|--include basic effect measurements]
+                  (-l|--length ARG) [--best | --median | --average]
+  perf benchmarking
+
+Available options:
+  -r,--runs ARG            number of runs to perform
+  -l,--length ARG          length of list
+  --best                   report upper decile
+  --median                 report median
+  --average                report average
+  -h,--help                Show this help text
+#+end_example
+
+#+begin_src sh :results output
+perf-basic -b -r 10000 --average -l 1000
 #+end_src
 
 #+RESULTS:
-| simple  | perf | tests |
-| fMono   | 1954 |       |
-| fPoly   | 1954 |       |
-| fLambda | 1954 |       |
+#+begin_example
+tick_: [16,14,14,14,14,14,16,16,16,16]
+tick_: 16.6
+const (): [16,14,14,14,14,16,16,16,16,16]
+tick (const ()): 16.4
+tickIO (pure ()): 16.1
+fa: 8,940
+sum: 10,700
+sum': 7,300
+fApp_: 664
+fSum_ 674
+fMono: 9,400
+fPoly: 10,700
+fLambda: 6,830
+#+end_example
 
-* from bench.hs
-
-FIXME: this doesn't work ...
-
-#+begin_src haskell
-:load app/bench.hs
-#+end_src
-
-#+begin_src sh
-:main -r 100000 -s 1000 --median
-#+end_src
-
-#+RESULTS:
-
-* vectors
-
-#+begin_src sh
-perf-bench -r 1000 -s 10000 --vector --median
+#+begin_src sh :results output
+ghc app/basic.hs -O2
+./app/basic -b -r 10000 --average -l 1000
 #+end_src
 
 #+RESULTS:
-| vector    |  test |
-| vBoxed    | 13291 |
-| vUnboxed  | 13261 |
-| vStorable | 13264 |
-
-
-#+begin_src haskell
-import Perf
-import Perf.Cycle
-import Prelude as P
-import Data.Foldable
-#+end_src
-
-
-#+begin_src haskell
-replicateM 100 tick_
-#+end_src
-
-#+RESULTS:
-| 4568 | 1194 | 882 | 790 | 794 | 790 | 784 | 788 | 786 | 800 | 820 | 808 | 780 | 788 | 794 | 796 | 784 | 832 | 788 | 792 | 788 | 786 | 790 | 786 | 788 | 802 | 1038 | 822 | 796 | 796 | 792 | 786 | 792 | 782 | 798 | 792 | 788 | 790 | 788 | 848 | 792 | 794 | 784 | 800 | 792 | 802 | 794 | 790 | 786 | 788 | 794 | 788 | 782 | 794 | 788 | 792 | 782 | 794 | 792 | 792 | 788 | 786 | 792 | 792 | 788 | 784 | 782 | 790 | 790 | 786 | 790 | 794 | 782 | 794 | 790 | 786 | 788 | 780 | 788 | 786 | 794 | 786 | 786 | 894 | 796 | 790 | 786 | 782 | 786 | 788 | 794 | 790 | 772 | 788 | 800 | 790 | 790 | 790 | 792 | 832 |
+#+begin_example
+Loaded package environment from /Users/tonyday/haskell/perf/.ghc.environment.x86_64-darwin-8.10.7
+tick_: [18,18,18,18,18,22,20,20,18,18]
+tick_: 19.0
+const (): [30,18,20,18,20,18,20,20,20,20]
+tick (const ()): 19.0
+tickIO (pure ()): 18.9
+fa: 8,970
+sum: 10,700
+sum': 7,190
+fApp_: 665
+fSum_ 673
+fMono: 9,400
+fPoly: 10,700
+fLambda: 6,890
+#+end_example
 
 * Resources
 
-[[https://github.com/haskell-perf][Haskell performance · GitHub]]
-[[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
-[[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
-
-* space
-
-https://github.com/ndmitchell/spaceleak

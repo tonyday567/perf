@@ -67,7 +67,7 @@ fSum_ x = sum [1 .. x]
 fMono :: [Int] -> Int
 fMono xs = foldl' (+) 0 xs
 
-fPoly :: (Enum b, Num b) => [b] -> b
+fPoly :: (Num b) => [b] -> b
 fPoly xs = foldl' (+) 0 xs
 
 fLambda :: [Int] -> Int
@@ -102,14 +102,4 @@ main = do
   replicateM n (tick fPoly [1..l]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fPoly: "<>)) & (>>= putStrLn)
   replicateM n (tick fLambda [1..l]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fLambda: "<>)) & (>>= putStrLn)
 
-{-
-  -- The various ticks
-  ticksi n sum [1..l] & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksi sum: " <>)) & (>>= putStrLn)
   ticks n sum [1..l] & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks sum: " <>)) & (>>= putStrLn)
-  ticksi n sum [1..l] & fmap (\(c,x) -> "ticksi sum & result: " <> T.unpack (tickStat s c) <> " " <> show x) & (>>= putStrLn)
-
-  -- The various ticks
-  ticksi n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksi fSum_: " <>)) & (>>= putStrLn)
-  ticks n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks fSum_: " <>)) & (>>= putStrLn)
-
--}

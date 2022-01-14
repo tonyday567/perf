@@ -9,33 +9,25 @@
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 module Perf.Cycle
-  ( -- $usage
+  ( -- * Usage
+
+    -- $usage
     Cycle,
     tick_,
     warmup,
     tick,
-    tick',
+    tickLazy,
     tickIO,
-    tickNoinline,
+    multi,
     ticks,
-    ticksi,
     ticksIO,
-    ns,
-    tickWHNF,
-    tickWHNF',
-    tickWHNFIO,
-    ticksWHNF,
-    ticksWHNFIO,
     average,
     median,
     tenth,
-    decile
   )
 where
 
-import Control.Monad (replicateM_)
-import Data.Foldable (toList)
-import Data.Sequence (Seq (..))
+import Control.Monad (replicateM_, replicateM)
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
@@ -43,21 +35,15 @@ import NumHask.Space (quantile)
 import Data.Text (Text)
 import Data.FormatN
 
--- $setup
--- >>> import Perf.Cycle
--- >>> import Control.Monad
--- >>> import Data.Foldable (foldl')
--- >>> let n = 1000
--- >>> let a = 1000
--- >>> let f x = foldl' (+) 0 [1 .. x]
 
 -- $usage
--- >>> import Perf.Cycle
--- >>> import Control.Monad
--- >>> import Data.Foldable (foldl')
--- >>> let n = 1000
--- >>> let a = 1000
--- >>> let f x = foldl' (+) 0 [1 .. x]
+-- > import Perf.Cycle
+-- > import Data.Foldable (foldl')
+-- > let r = 10000
+-- > let l = 1000
+-- > let f x = foldl' (+) 0 [1 .. x]
+-- > first median <$> ticks r f a
+--
 
 -- | an unwrapped Word64
 type Cycle = Word64
@@ -85,28 +71,29 @@ tick_ = do
 warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
 
--- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
-tick' :: (a -> b) -> a -> IO (Cycle, b)
-tick' f a = do
+-- | tick where both arguments are lazy, so measurement will include evaluation of thunks that may constitute f and/or a
+--
+-- Empirically, there is evidence that the use of tickLazy can lead to a memoization of the function application being measured.
+--
+tickLazy :: (a -> b) -> a -> IO (Cycle, b)
+tickLazy f a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
-{-# INLINE tick' #-}
+{-# INLINE tickLazy #-}
 
--- | `tick f a` strictly evaluates f and a, then deeply evaluates f a, returning a (Cycle, f a)
+-- | `tick f a` strictly evaluates f and a, then evaluates f a, returning a (Cycle, f a)
 --
--- >>> _ <- warmup 100
--- >>> (cs, _) <- tick f a
+-- > (cycleList, result) <- tick f a
 --
--- Note that feeding the same computation through tick twice may kick off sharing (aka memoization aka let floating).  Given the importance of sharing to GHC optimisations this is the intended behaviour.  If you want to turn this off then see -fno-full-laziness (and maybe -fno-cse).
 tick :: (a -> b) -> a -> IO (Cycle, b)
-tick !f !a = tick' f a
-{-# INLINE tick #-}
-
-tickNoinline :: (a -> b) -> a -> IO (Cycle, b)
-tickNoinline !f !a = tick' f a
-{-# NOINLINE tickNoinline #-}
+tick !f !a = do
+  !t <- rdtsc
+  !a' <- pure (f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
+{-# INLINEABLE tick #-}
 
 -- | measures and deeply evaluates an `IO a`
 --
@@ -117,137 +104,34 @@ tickIO a = do
   !a' <- a
   t' <- rdtsc
   pure (t' - t, a')
+{-# INLINEABLE tickIO #-}
 
-tickIONoinline :: IO a -> IO (Cycle, a)
-tickIONoinline = tickIO
-{-# NOINLINE tickIONoinline #-}
+multi :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
+multi tickf n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickf f a))
+{-# INLINE multi #-}
 
 -- | n measurements of a tick
 --
 -- returns a list of Cycles and the last evaluated f a
 --
--- GHC is very good at finding ways to share computation, and anything measuring a computation multiple times is a prime candidate for aggresive ghc treatment. Internally, ticks uses a noinline pragma and a noinline version of to help reduce the chances of memoization, but this is an inexact science in the hands of the author, at least, so interpret with caution.
--- The use of noinline interposes an extra function call, which can highly skew very fast computations.
---
---
--- >>> let n = 1000
--- >>> (cs, fa) <- ticks n f a
---
--- Baseline speed can be highly sensitive to the nature of the function trimmings.  Polymorphic functions can tend to be slightly slower, and functions with lambda expressions can experience dramatic slowdowns.
---
--- > fMono :: Int -> Int
--- > fMono x = foldl' (+) 0 [1 .. x]
--- > fPoly :: (Enum b, Num b, Additive b) => b -> b
--- > fPoly x = foldl' (+) 0 [1 .. x]
--- > fLambda :: Int -> Int
--- > fLambda = \x -> foldl' (+) 0 [1 .. x]
 ticks :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks n0 f a = go f a n0 Empty
-  where
-    go f' a' n ts
-      | n <= 0 = pure (toList ts, f a)
-      | otherwise = do
-        (t, _) <- tickNoinline f a
-        go f' a' (n - 1) (ts :|> t)
-{-# NOINLINE ticks #-}
+ticks = multi tick
+{-# INLINEABLE ticks #-}
 
-ticksi :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksi n0 f a = go f a n0 Empty
-  where
-    go f' a' n ts
-      | n <= 0 = pure (toList ts, f a)
-      | otherwise = do
-        (t, _) <- tickNoinline f a
-        go f' a' (n - 1) (ts :|> t)
-{-# INLINE ticksi #-}
-
--- | n measuremenst of a tickIO
+-- | n measurements of a tickIO
 --
 -- returns an IO tuple; list of Cycles and the last evaluated f a
 --
 -- >>> (cs, fa) <- ticksIO n (pure $ f a)
 ticksIO :: Int -> IO a -> IO ([Cycle], a)
-ticksIO n0 a = go a n0 Empty
-  where
-    go a' n ts
-      | n <= 0 = do
-        a'' <- a'
-        pure (toList ts, a'')
-      | otherwise = do
-        (t, _) <- tickIONoinline a'
-        go a' (n - 1) (ts :|> t)
-{-# NOINLINE ticksIO #-}
-
--- | make a series of measurements on a list of a's to be applied to f, for a tick function.
---
--- Tends to be fragile to sharing issues, but very useful to determine computation Order
---
--- > ns ticks n f [1,10,100,1000]
-ns :: (a -> IO ([Cycle], b)) -> [a] -> IO ([[Cycle]], [b])
-ns t as = do
-  cs <- sequence $ t <$> as
-  pure (fst <$> cs, snd <$> cs)
-
--- | WHNF versions
-tickWHNF :: (a -> b) -> a -> IO (Cycle, b)
-tickWHNF !f !a = tickWHNF' f a
-
-tickWHNFNoinline :: (a -> b) -> a -> IO (Cycle, b)
-tickWHNFNoinline !f !a = tickWHNF' f a
-{-# NOINLINE tickWHNFNoinline #-}
-
--- | WHNF version
-tickWHNF' :: (a -> b) -> a -> IO (Cycle, b)
-tickWHNF' f a = do
-  !t <- rdtsc
-  !a' <- pure (f a)
-  !t' <- rdtsc
-  pure (t' - t, a')
-
--- | WHNF version
-tickWHNFIO :: IO a -> IO (Cycle, a)
-tickWHNFIO a = do
-  t <- rdtsc
-  !a' <- a
-  t' <- rdtsc
-  pure (t' - t, a')
-
-tickWHNFIONoinline :: IO a -> IO (Cycle, a)
-tickWHNFIONoinline = tickWHNFIO
-{-# NOINLINE tickWHNFIONoinline #-}
-
--- | WHNF version
-ticksWHNF :: Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticksWHNF n0 f a = go f a n0 Empty
-  where
-    go f' a' n ts
-      | n <= 0 = pure (toList ts, f a)
-      | otherwise = do
-        (t, _) <- tickWHNFNoinline f a
-        go f' a' (n - 1) (ts :|> t)
-{-# NOINLINE ticksWHNF #-}
-
--- | WHNF version
-ticksWHNFIO :: Int -> IO a -> IO ([Cycle], a)
-ticksWHNFIO n0 a = go a n0 Empty
-  where
-    go a' n ts
-      | n <= 0 = do
-        a'' <- a'
-        pure (toList ts, a'')
-      | otherwise = do
-        (t, _) <- tickWHNFIONoinline a'
-        go a' (n - 1) (ts :|> t)
-{-# NOINLINE ticksWHNFIO #-}
+ticksIO n0 a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickIO a))
+{-# INLINEABLE ticksIO #-}
 
 median :: [Cycle] -> Text
 median = comma (Just 3) . quantile 0.5 . fmap Prelude.fromIntegral
 
 average :: [Cycle] -> Text
 average = comma (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
-
-decile :: [Cycle] -> Text
-decile = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral
 
 tenth :: [Cycle] -> Text
 tenth = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral

@@ -21,7 +21,6 @@ import Data.Fixed (Fixed (MkFixed))
 import Data.Time.Clock
 import Perf.Cycle
 import System.CPUTime
-import System.CPUTime.Rdtsc
 import Prelude
 
 -- $setup

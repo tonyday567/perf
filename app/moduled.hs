@@ -12,7 +12,6 @@ import Data.Function
 import Control.Category
 import Control.Monad
 import Options.Applicative
-import System.CPUTime.Rdtsc
 import Data.Foldable
 
 data RunType = RunBasic deriving (Eq, Show)
@@ -62,8 +61,8 @@ tickStat StatBest = tenth
 tickStat StatMedian = median
 tickStat StatAverage = average
 
-fApp_ :: Int -> ()
-fApp_ x = foldl' const () [1 .. x]
+fApp_ :: Int -> Int
+fApp_ x = foldl' const 0 [1 .. x]
 
 fSum_ :: Int -> Int
 fSum_ x = sum [1 .. x]
@@ -83,7 +82,7 @@ tickSameFile !f !a = do
   !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
-{-# INLINEABLE tickSameFile #-}
+{-# INLINE tickSameFile #-}
 
 ticksRec :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticksRec tickf n0 f a = go f a n0 []
@@ -115,24 +114,32 @@ main = do
   let a = optionAlgoType o
   print a
   _ <- warmup 100
-  case a of
-        AlgoFSum -> shape1 s n fSum_ l
-        AlgoFConst -> shape1 s n fApp_ l
-        AlgoMonoSum -> shape1 s n fMono [1..l]
-        AlgoPolySum -> shape1 s n fPoly [1..l]
-        AlgoLambdaSum -> shape1 s n fLambda [1..l]
-  where
-    shape1 :: StatType -> Int -> (a -> b) -> a -> IO ()
-    shape1 s n tf ta = do
-      replicateM n (Perf.tick tf ta) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("replicateM Perf.tick "<>)) & (>>= putStrLn)
-      replicateM n (tickSameFile tf ta) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("replicateM tickSameFile "<>)) & (>>= putStrLn)
+{-
+  let (tf, ta) = case a of
+        -- AlgoFSum -> (fSum_, l)
+        -- AlgoFConst -> (fApp_, l)
+        AlgoMonoSum -> (fMono, [1..l])
+        AlgoPolySum -> (fPoly, [1..l])
+        AlgoLambdaSum -> (fLambda, [1..l])
+        _ -> (fMono, [1..l])
+-}
 
-      Perf.ticks n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.ticks " <>)) & (>>= putStrLn)
-      Perf.multi Perf.tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.multi Perf.tick " <>)) & (>>= putStrLn)
-      Perf.multi tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.multi tickSameFile " <>)) & (>>= putStrLn)
+  let (tf, ta) = case a of
+        AlgoFSum -> (fSum_, l)
+        AlgoFConst -> (fApp_, l)
+        -- AlgoMonoSum -> (fMono, [1..l])
+        -- AlgoPolySum -> (fPoly, [1..l])
+        -- AlgoLambdaSum -> (fLambda, [1..l])
+        _ -> (fSum_, l)
+  replicateM n (Perf.tick tf ta) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("replicateM Perf.tick "<>)) & (>>= putStrLn)
+  replicateM n (tickSameFile tf ta) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("replicateM tickSameFile "<>)) & (>>= putStrLn)
 
-      ticksSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksSameFile " <>)) & (>>= putStrLn)
-      ticksR tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksR tickSameFile " <>)) & (>>= putStrLn)
-      ticksRec tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksRec tickSameFile " <>)) & (>>= putStrLn)
-      ticksR tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksR tick " <>)) & (>>= putStrLn)
-      ticksRec tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksRec tick " <>)) & (>>= putStrLn)
+  Perf.ticks n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.ticks " <>)) & (>>= putStrLn)
+  Perf.multi Perf.tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.multi Perf.tick " <>)) & (>>= putStrLn)
+  Perf.multi tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.multi tickSameFile " <>)) & (>>= putStrLn)
+
+  ticksSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksSameFile " <>)) & (>>= putStrLn)
+  ticksR tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksR tickSameFile " <>)) & (>>= putStrLn)
+  ticksRec tickSameFile n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksRec tickSameFile " <>)) & (>>= putStrLn)
+  ticksR tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksR tick " <>)) & (>>= putStrLn)
+  ticksRec tick n tf ta & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksRec tick " <>)) & (>>= putStrLn)

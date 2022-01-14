@@ -12,11 +12,12 @@ module Perf.Cycle
   ( -- * Usage
 
     -- $usage
+    rdtsc,
     Cycle,
     tick_,
     warmup,
     tick,
-    tickLazy,
+    tickUnsafe,
     tickIO,
     multi,
     ticks,
@@ -71,19 +72,12 @@ tick_ = do
 warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
 
--- | tick where both arguments are lazy, so measurement will include evaluation of thunks that may constitute f and/or a
+-- | This is unsafe from the point of view of being prone to memoization via being inlined.
 --
--- Empirically, there is evidence that the use of tickLazy can lead to a memoization of the function application being measured.
---
-tickLazy :: (a -> b) -> a -> IO (Cycle, b)
-tickLazy f a = do
-  !t <- rdtsc
-  !a' <- pure (f a)
-  !t' <- rdtsc
-  pure (t' - t, a')
-{-# INLINE tickLazy #-}
 
 -- | `tick f a` strictly evaluates f and a, then evaluates f a, returning a (Cycle, f a)
+--
+-- Noinline pragma is applied to prevent memoization.
 --
 -- > (cycleList, result) <- tick f a
 --
@@ -93,9 +87,19 @@ tick !f !a = do
   !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
-{-# INLINEABLE tick #-}
+{-# NOINLINE tick #-}
 
--- | measures and deeply evaluates an `IO a`
+-- | This is unsafe from the point of view of being prone to memoization via being inlined upstream.
+--
+tickUnsafe :: (a -> b) -> a -> IO (Cycle, b)
+tickUnsafe !f !a = do
+  !t <- rdtsc
+  !a' <- pure (f a)
+  !t' <- rdtsc
+  pure (t' - t, a')
+{-# INLINEABLE tickUnsafe #-}
+
+-- | measures an `IO a`
 --
 -- >>> (cs, _) <- tickIO (pure (f a))
 tickIO :: IO a -> IO (Cycle, a)

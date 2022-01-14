@@ -48,12 +48,8 @@ tickStat StatBest = tenth
 tickStat StatMedian = median
 tickStat StatAverage = average
 
-fa_ :: [a] -> ()
-fa_ [] = ()
-fa_ (_:xs) = fa_ xs
-
-sum' :: (Num a) => [a] -> a
-sum' = go 0
+sumRec :: (Num a) => [a] -> a
+sumRec = go 0
   where
     go acc [] = acc
     go acc (x:xs) = go (acc+x) xs
@@ -73,33 +69,38 @@ fPoly xs = foldl' (+) 0 xs
 fLambda :: [Int] -> Int
 fLambda = \xs -> foldl' (+) 0 xs
 
+reportMulti :: String -> StatType -> IO ([Cycle], b) -> IO ()
+reportMulti label s x = x & fmap (fst >>> tickStat s >>> T.unpack >>> (label<>)) & (>>= putStrLn)
+
 main :: IO ()
 main = do
   o <- execParser opts
   let !n = optionRuns o
   let !l = optionLength o
   let s = optionStatType o
-  _ <- warmup 100
+  let !ls = [1..l]
 
   replicateM 10 tick_ & fmap (show >>> ("tick_: "<>)) & (>>= putStrLn)
   replicateM n tick_ & fmap (tickStat s >>> T.unpack >>> ("tick_: "<>)) & (>>= putStrLn)
   replicateM 10 (tick (const ()) ()) & fmap (fmap fst >>> show >>> ("const (): "<>)) & (>>= putStrLn)
-  replicateM n (tick (const ()) ()) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tick (const ()): "<>)) & (>>= putStrLn)
+
+  multi tick n (const ()) () & reportMulti "const ()|" s
+
   replicateM n (tickIO (pure ())) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickIO (pure ()): "<>)) & (>>= putStrLn)
 
-  replicateM n (tick fa_ [1..l::Int]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fa: "<>)) & (>>= putStrLn)
+  multi tick n fMono ls & reportMulti "fMono|" s
+  multi tick n fPoly ls & reportMulti "fPoly|" s
+  multi tick n fLambda ls & reportMulti "fLambda|" s
 
-  replicateM n (tick sum [1..l::Int]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("sum: "<>)) & (>>= putStrLn)
-  replicateM n (tick sum' [1..l::Int]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("sum': "<>)) & (>>= putStrLn)
+  multi tickUnsafe n fMono ls & reportMulti "fMono|" s
+  multi tickUnsafe n fPoly ls & reportMulti "fPoly|" s
+  multi tickUnsafe n fLambda ls & reportMulti "fLambda|" s
 
-  -- seeing if printing the answer makes a difference (it really shouldn't)
-  -- replicateM n (tick fSum_ l) & fmap (\xs -> "fSum_ & result: " <> T.unpack (tickStat s (fmap fst xs)) <> " " <> show (sum (fmap snd xs))) & (>>= putStrLn)
+  multi tickUnsafe n fSum_ l & reportMulti "multi tickUnsafe fSum_|" s
+  ticks n fSum_ l & reportMulti "ticks fSum_|" s
+  multi tick n fSum_ l & reportMulti "multi tick fSum_|" s
+  multi tickUnsafe n fSum_ l & reportMulti "multi tickUnsafe fSum_|" s
 
-  replicateM n (tick fApp_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fApp_: "<>)) & (>>= putStrLn)
-  replicateM n (tick fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fSum_ "<>)) & (>>= putStrLn)
-
-  replicateM n (tick fMono [1..l]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fMono: "<>)) & (>>= putStrLn)
-  replicateM n (tick fPoly [1..l]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fPoly: "<>)) & (>>= putStrLn)
-  replicateM n (tick fLambda [1..l]) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("fLambda: "<>)) & (>>= putStrLn)
-
-  ticks n sum [1..l] & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks sum: " <>)) & (>>= putStrLn)
+  ticks n fApp_ l & reportMulti "ticks fApp_|" s
+  multi tick n fApp_ l & reportMulti "multi tick fApp_|" s
+  multi tickUnsafe n fApp_ l & reportMulti "multi tickUnsafe fApp_|" s

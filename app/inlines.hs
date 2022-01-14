@@ -6,14 +6,13 @@
 module Main where
 
 import Prelude hiding ((.))
-import Perf.Cycle hiding (ticks, tickLazy)
+import Perf.Cycle
 import qualified Perf.Cycle as Perf
 import qualified Data.Text as T
 import Data.Function
 import Control.Category
 import Control.Monad
 import Options.Applicative
-import System.CPUTime.Rdtsc
 
 data RunType = RunBasic deriving (Eq, Show)
 

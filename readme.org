@@ -10,7 +10,7 @@
 
 * setup
 
-Running this internal to the perf repo results in interpretation of the modules, which slows everything down compared with an external process which accesses the compiled version of the library.
+Running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
 #+begin_src haskell :results output
 :set prompt " > "
@@ -28,13 +28,15 @@ import Data.FormatN
 import Perf.Cycle
 import Prelude as P
 import Data.Foldable
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 #+end_src
 
 #+RESULTS:
 
 * tick
 
-A fundamental operation is tick, which sandwiches a function application between two readings of the rdstc chip.
+The fundamental operation of Perf.Cycle is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
 #+begin_src haskell
 :t tick
@@ -49,23 +51,32 @@ Unlike benchmarking-style libraries, such as criterion, the result of the comput
 
 * tick_
 
+tick_ measures the number of cycles between two clock reads.
+
+#+begin_src haskell
+:t tick_
+#+end_src
+
+#+RESULTS:
+: tick_ :: IO Cycle
+
 #+begin_src haskell
 replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-| 1086 | 628 | 542 | 542 | 540 | 540 | 532 | 530 | 544 | 542 |
+| 992 | 612 | 564 | 524 | 532 | 524 | 520 | 530 | 530 | 516 |
 
 * function application
 
 #+begin_src haskell
-tick (const ()) ()
+fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 #+end_src
 
 #+RESULTS:
-| 6920 | nil |
+| 6800 | 2646 | 2366 | 2252 | 2222 | 2322 | 2220 | 2376 | 2240 | 2190 |
 
-Here, ~const () ()~ was evaluated and took 350 cycles. What it did in taht time we will never know, really, at least from usage of ~perf~. It sounds slow but 350 is, on my 2.5GHz machine equal to 350 / 2.5e9 = 1.4e-7 of a second, 0.14 milliseconds, or 140 nanoseconds.
+Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, reducing down to 2.2k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
 Alternatively, ~tickIO~ measures the evaluation of an IO value.
 
@@ -77,27 +88,11 @@ Alternatively, ~tickIO~ measures the evaluation of an IO value.
 : tickIO :: IO a -> IO (Cycle, a)
 
 #+begin_src haskell
-tickIO (pure ())
+fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
-| 5348 | nil |
-
-#+begin_src haskell
-replicateM 10 (tickIO (pure ()))
-#+end_src
-
-#+RESULTS:
-| 4866 | nil |
-| 2308 | nil |
-| 1718 | nil |
-| 1524 | nil |
-| 1520 | nil |
-| 1516 | nil |
-| 1526 | nil |
-| 1534 | nil |
-| 1530 | nil |
-| 1536 | nil |
+| 6014 | 2396 | 1802 | 1556 | 1636 | 1550 | 1752 | 1570 | 1514 | 1542 |
 
 #+begin_src haskell
 ticks 100 (const ()) ()
@@ -106,31 +101,23 @@ ticks 100 (const ()) ()
 #+RESULTS:
 | 5784 | 2858 | 2416 | 2386 | 2378 | 2336 | 2336 | 2364 | 2282 | 2384 | 2316 | 2380 | 2274 | 2436 | 2328 | 2222 | 2266 | 2338 | 2320 | 2354 | 2264 | 2288 | 2366 | 2334 | 2336 | 2604 | 2398 | 2384 | 2424 | 2306 | 2374 | 2222 | 2318 | 2324 | 2242 | 2394 | 2478 | 2384 | 2306 | 2272 | 2304 | 2278 | 2248 | 2304 | 2400 | 2322 | 2278 | 2312 | 2398 | 2308 | 2356 | 2328 | 2348 | 2392 | 2374 | 2632 | 2284 | 2328 | 2294 | 2362 | 2366 | 2360 | 2356 | 2294 | 2334 | 2470 | 2422 | 2292 | 2324 | 2424 | 2406 | 2358 | 2354 | 2370 | 2396 | 2348 | 2300 | 2306 | 2428 | 2314 | 2386 | 2286 | 2424 | 2292 | 2338 | 2404 | 2390 | 2318 | 2388 | 2378 | 2304 | 2372 | 2606 | 2450 | 2396 | 2354 | 2282 | 2286 | 2378 | 2346 |
 
-* interpreted performance
+* sum example
 
 #+begin_src haskell
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
 #+end_src
 
 #+RESULTS:
-| 1.65e6 | 1.19e6 | 1.04e6 | 4.13e6 | 668,000 | 626,000 | 2.69e6 | 629,000 | 618,000 | 1.61e6 |
+| 8.39e6 | 4.03e6 | 3.31e6 | 1.29e7 | 1.76e6 | 3.03e6 | 5.23e6 | 1.07e6 | 1.13e6 | 2.73e6 |
 
 
 #+begin_src haskell
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+ts <- ticks 10000 sum ([1..1000] :: [Double])
+putStrLn $ Text.unpack $ average (fst ts)
 #+end_src
 
 #+RESULTS:
-
-
-#+begin_src haskell
-ts <- ticks 1000 sum ([1..10000] :: [Double])
-Text.putStrLn $ Text.intercalate "\t" [median (fst ts), average (fst ts)]
-#+end_src
-
-#+RESULTS:
-: 525,000	791,000
+: 35,300
 
 #+begin_src haskell
 :set -XAllowAmbiguousTypes
@@ -145,34 +132,29 @@ fLambda :: Int -> Int
 fLambda = \x -> foldl' (+) 0 [1 .. x]
 #+end_src
 
-#+RESULTS:
-: <interactive>:74:17: error:
-:     Ambiguous occurrence ‘foldl'’
-:     It could refer to
-:        either ‘Text.foldl'’, imported from ‘Data.Text’
-:            or ‘Data.Foldable.foldl'’, imported from ‘Data.Foldable’
-
 #+begin_src haskell
-fmap median (ticks 1000 fMono 1000)
+fmap (median . fst) (ticks 1000 fMono 1000)
 #+end_src
 
 #+RESULTS:
-: <interactive>:63:25: error:
-:     Variable not in scope: fMono :: a0 -> b0
+: )’
+: "69,200"
 
 #+begin_src haskell
-fmap median $ ticks 1000 fPoly 1000
+fmap (median . fst) $ ticks 1000 fPoly 1000
 #+end_src
 
 #+RESULTS:
-: 72349
+: )’
+: "65,400"
 
 #+begin_src haskell
-fmap median $ ticks 1000 fLambda 1000
+fmap (median . fst) $ ticks 1000 fLambda 1000
 #+end_src
 
 #+RESULTS:
-: 72786
+: )’
+: "64,300"
 
 * compiled performance
 

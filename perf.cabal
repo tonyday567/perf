@@ -16,14 +16,25 @@ copyright:          Tony Day
 license:            BSD-3-Clause
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        ==8.10.7 || ==9.2.1
+tested-with:        GHC ==8.10.7 || ==9.2.1
 extra-source-files: ChangeLog.md
 
 source-repository head
   type:     git
   location: https://github.com/tonyday567/perf
 
+common ghc-options-stanza
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wredundant-constraints
+    -fwrite-ide-info
+    -hiedir=.hie
+
 library
+  import: ghc-options-stanza
   exposed-modules:
     Perf
     Perf.BigO
@@ -31,10 +42,6 @@ library
     Perf.Measure
 
   hs-source-dirs:     src
-  ghc-options:
-    -Wall -Wcompat -Wincomplete-record-updates
-    -Wincomplete-uni-patterns -Wredundant-constraints -fwrite-ide-info
-    -hiedir=.hie -Wunused-packages
 
   build-depends:
     , base          >=4.7 && <5
@@ -49,3 +56,27 @@ library
     , vector        ^>=0.12.3
   default-language:   Haskell2010
   default-extensions:
+  ghc-options: -O2
+
+executable perf-basic
+  import: ghc-options-stanza
+  main-is: basic.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+  default-language:   Haskell2010
+  ghc-options: -O2
+
+executable perf-ticksi
+  import: ghc-options-stanza
+  main-is: ticksi.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+  default-language:   Haskell2010

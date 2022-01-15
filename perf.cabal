@@ -114,3 +114,30 @@ executable perf-others
     formatn,
   default-language:   Haskell2010
   ghc-options: -O2
+
+executable perf-space
+  import: ghc-options-stanza
+  main-is: space.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+    deepseq
+  default-language:   Haskell2010
+  ghc-options: -O2
+
+executable perf-recursion
+  import: ghc-options-stanza
+  main-is: recursion.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+    deepseq,
+    gauge
+  default-language:   Haskell2010
+  ghc-options: -O2

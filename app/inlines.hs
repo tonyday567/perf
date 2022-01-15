@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | basic measurement and callibration
 
@@ -7,65 +8,51 @@ module Main where
 
 import Prelude hiding ((.))
 import Perf.Cycle
-import qualified Perf.Cycle as Perf
 import qualified Data.Text as T
 import Data.Function
 import Control.Category
 import Control.Monad
 import Options.Applicative
-
-data RunType = RunBasic deriving (Eq, Show)
-
-data StatType = StatAverage | StatMedian | StatBest deriving (Eq, Show)
+import Control.DeepSeq
+import Perf.Algos
+import Perf.Stats
+import Data.Text (Text, unpack)
 
 data Options = Options
   { optionRuns :: Int,
-    optionBasic :: Bool,
     optionLength :: Int,
+    optionAlgoType :: AlgoType,
     optionStatType :: StatType
   } deriving (Eq, Show)
 
 options :: Parser Options
 options = Options <$>
   option auto (long "runs" <> short 'r' <> help "number of runs to perform") <*>
-  switch (long "include basic effect measurements" <> short 'b') <*>
   option auto (long "length" <> short 'l' <> help "length of list") <*>
-  stat
+  parseAlgo <*>
+  parseStat
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
   (fullDesc <> progDesc "perf benchmarking" <> header "basic perf callibration")
 
-stat :: Parser StatType
-stat =
-  flag' StatBest (long "best" <> help "report upper decile") <|>
-  flag' StatMedian (long "median" <> help "report median") <|>
-  flag' StatAverage (long "average" <> help "report average") <|>
-  pure StatAverage
-
-tickStat :: StatType -> [Cycle] -> T.Text
-tickStat StatBest = tenth
-tickStat StatMedian = median
-tickStat StatAverage = average
-
-fSum_ :: Int -> Int
-fSum_ x = sum [1 .. x]
+-- * in-module variations on a tick counter
 
 tickNoPragma :: (a -> b) -> a -> IO (Cycle, b)
 tickNoPragma !f !a = do
   !t <- rdtsc
-  !a' <- pure (f a)
+  !a' <- pure $! f a
   !t' <- rdtsc
   pure (t' - t, a')
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
-tickLazy :: (a -> b) -> a -> IO (Cycle, b)
-tickLazy f a = do
+tickLazyS :: (a -> b) -> a -> IO (Cycle, b)
+tickLazyS f a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
   pure (t' - t, a')
-{-# INLINE tickLazy #-}
+{-# INLINE tickLazyS #-}
 
 tickInline :: (a -> b) -> a -> IO (Cycle, b)
 tickInline !f !a = do
@@ -124,17 +111,13 @@ tickInline2' !f !a = do
   pure (t' - t, a')
 {-# INLINE [~2] tickInline2' #-}
 
-ticks :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks tickf n0 f a = go f a n0 []
-  where
-    go f' a' n ts
-      | n <= 0 = pure (ts, f a)
-      | otherwise = do
-        (t, _) <- tickf f a
-        go f' a' (n - 1) (t:ts)
+multi' :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
+multi' tickf n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickf f a))
+{-# INLINEABLE multi' #-}
 
-ticks' :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
-ticks' tickf n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickf f a))
+ticks' :: (NFData a, NFData b) => Int -> (a -> b) -> a -> IO ([Cycle], b)
+ticks' n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickForce f a))
+{-# INLINEABLE ticks' #-}
 
 ticksNoPragma :: Int -> (a -> b) -> a -> IO ([Cycle], b)
 ticksNoPragma n0 f a = go f a n0 []
@@ -217,41 +200,43 @@ ticksInline2' n0 f a = go f a n0 []
         (t, _) <- tickInline2' f a
         go f' a' (n - 1) (t:ts)
 
+runs :: (NFData a, NFData b) => Text -> (a -> b) -> a -> Int -> StatType -> IO ()
+runs label f a n s = do
+  putStrLn $ unpack label
+  ticksNoPragma n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksNoPragma " <>)) & (>>= putStrLn)
+  ticksLazy n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksLazy " <>)) & (>>= putStrLn)
+  ticksInline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline " <>)) & (>>= putStrLn)
+  ticksInlineable n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInlineable " <>)) & (>>= putStrLn)
+  ticksNoinline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksNoinline " <>)) & (>>= putStrLn)
+  ticksInline1 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline1 " <>)) & (>>= putStrLn)
+  ticksInline2 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline2 " <>)) & (>>= putStrLn)
+  ticksInline1' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline1' " <>)) & (>>= putStrLn)
+  ticksInline2' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline2' " <>)) & (>>= putStrLn)
+  multi tickNoPragma n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickNoPragma " <>)) & (>>= putStrLn)
+  multi tickInline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline " <>)) & (>>= putStrLn)
+  multi tickInlineable n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInlineable " <>)) & (>>= putStrLn)
+  multi tickNoinline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickNoinline " <>)) & (>>= putStrLn)
+  multi tickInline1 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline1 " <>)) & (>>= putStrLn)
+  multi tickInline2 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline2 " <>)) & (>>= putStrLn)
+  multi tickInline1' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline1' " <>)) & (>>= putStrLn)
+  multi tickInline2' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline2' " <>)) & (>>= putStrLn)
+  ticks' n f a & reportStat ("ticks' " <> "" <> " | ") s
+
 main :: IO ()
 main = do
   o <- execParser opts
   let !n = optionRuns o
   let !l = optionLength o
+  let !ls = [1..l]
   let s = optionStatType o
+  let !a = optionAlgoType o
   _ <- warmup 100
 
-  replicateM n (Perf.tick fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("Perf.tick "<>)) & (>>= putStrLn)
-
-  replicateM n (tickNoPragma fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickNoPragma "<>)) & (>>= putStrLn)
-  replicateM n (tickLazy fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickLazy "<>)) & (>>= putStrLn)
-  replicateM n (tickInline fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickInline "<>)) & (>>= putStrLn)
-  replicateM n (tickInlineable fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickInlineable "<>)) & (>>= putStrLn)
-  replicateM n (tickNoinline fSum_ l) & fmap (fmap fst >>> tickStat s >>> T.unpack >>> ("tickNoinline "<>)) & (>>= putStrLn)
-
-  Perf.ticks n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.ticks " <>)) & (>>= putStrLn)
-  Perf.multi Perf.tick n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("Perf.multi Perf.tick " <>)) & (>>= putStrLn)
-
-  ticksNoPragma n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksNoPragma " <>)) & (>>= putStrLn)
-  ticksLazy n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksLazy " <>)) & (>>= putStrLn)
-  ticksInline n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInline " <>)) & (>>= putStrLn)
-  ticksInlineable n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInlineable " <>)) & (>>= putStrLn)
-  ticksNoinline n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksNoinline " <>)) & (>>= putStrLn)
-  ticksInline1 n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInline1 " <>)) & (>>= putStrLn)
-  ticksInline2 n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInline2 " <>)) & (>>= putStrLn)
-  ticksInline1' n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInline1' " <>)) & (>>= putStrLn)
-  ticksInline2' n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticksInline2' " <>)) & (>>= putStrLn)
-
-  ticks' tickNoPragma n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickNoPragma " <>)) & (>>= putStrLn)
-  ticks' tickLazy n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickLazy " <>)) & (>>= putStrLn)
-  ticks' tickInline n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInline " <>)) & (>>= putStrLn)
-  ticks' tickInlineable n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInlineable " <>)) & (>>= putStrLn)
-  ticks' tickNoinline n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickNoinline " <>)) & (>>= putStrLn)
-  ticks' tickInline1 n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInline1 " <>)) & (>>= putStrLn)
-  ticks' tickInline2 n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInline2 " <>)) & (>>= putStrLn)
-  ticks' tickInline1' n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInline1' " <>)) & (>>= putStrLn)
-  ticks' tickInline2' n fSum_ l & fmap (fst >>> tickStat s >>> T.unpack >>> ("ticks tickInline2' " <>)) & (>>= putStrLn)
+  case a of
+    AlgoFuseSum -> runs "fuseSum" fuseSum l n s
+    AlgoFuseConst -> runs "fuseConst" fuseConst l n s
+    AlgoRecSum -> runs "recSum" recSum ls n s
+    AlgoMonoSum -> runs "monoSum" monoSum ls n s
+    AlgoPolySum -> runs "polySum" polySum ls n s
+    AlgoLambdaSum -> runs "lambdaSum" lambdaSum ls n s
+    AlgoMapInc -> runs "MapInc" mapInc ls n s

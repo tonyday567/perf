@@ -2,6 +2,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | 'tick' uses the rdtsc chipset to measure time performance of a computation.
 --
@@ -17,14 +18,14 @@ module Perf.Cycle
     tick_,
     warmup,
     tick,
-    tickUnsafe,
+    tickWHNF,
+    tickLazy,
+    tickForce,
+    tickForceArgs,
     tickIO,
     multi,
     ticks,
     ticksIO,
-    average,
-    median,
-    tenth,
   )
 where
 
@@ -32,10 +33,7 @@ import Control.Monad (replicateM_, replicateM)
 import GHC.Word (Word64)
 import System.CPUTime.Rdtsc
 import Prelude
-import NumHask.Space (quantile)
-import Data.Text (Text)
-import Data.FormatN
-
+import Control.DeepSeq
 
 -- $usage
 -- > import Perf.Cycle
@@ -72,47 +70,98 @@ tick_ = do
 warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
 
--- | This is unsafe from the point of view of being prone to memoization via being inlined.
+-- | `tick f a`
 --
-
--- | `tick f a` strictly evaluates f and a, then evaluates f a, returning a (Cycle, f a)
---
--- Noinline pragma is applied to prevent memoization.
---
--- > (cycleList, result) <- tick f a
+-- - strictly evaluates f and a to WHNF
+-- - starts the cycle counter
+-- - strictly evaluates f a to WHNF
+-- - stops the cycle counter
+-- - returns (number of cycles, f a)
 --
 tick :: (a -> b) -> a -> IO (Cycle, b)
 tick !f !a = do
   !t <- rdtsc
-  !a' <- pure (f a)
+  !a' <- pure $! f a
   !t' <- rdtsc
   pure (t' - t, a')
-{-# NOINLINE tick #-}
+{-# INLINEABLE tick #-}
 
--- | This is unsafe from the point of view of being prone to memoization via being inlined upstream.
+-- | `tickWHNF f a`
 --
-tickUnsafe :: (a -> b) -> a -> IO (Cycle, b)
-tickUnsafe !f !a = do
+-- - starts the cycle counter
+-- - strictly evaluates f a to WHNF (this may also kick off thunk evaluation in f or a which will also be captured in the cycle count)
+-- - stops the cycle counter
+-- - returns (number of cycles, f a)
+--
+tickWHNF :: (a -> b) -> a -> IO (Cycle, b)
+tickWHNF f a = do
   !t <- rdtsc
-  !a' <- pure (f a)
+  !a' <- pure $! f a
   !t' <- rdtsc
   pure (t' - t, a')
-{-# INLINEABLE tickUnsafe #-}
+{-# INLINEABLE tickWHNF #-}
+
+-- | `tickLazy f a`
+--
+-- - starts the cycle counter
+-- - lazily evaluates f a to WHNF
+-- - stops the cycle counter
+-- - returns (number of cycles, f a)
+--
+tickLazy :: (a -> b) -> a -> IO (Cycle, b)
+tickLazy f a = do
+  t <- rdtsc
+  let a' = f a
+  t' <- rdtsc
+  pure (t' - t, a')
+{-# INLINEABLE tickLazy #-}
+
+-- | `tickForce f a`
+--
+-- - deeply evaluates f and a,
+-- - starts the cycle counter
+-- - deeply evaluates f a
+-- - stops the cycle counter
+-- - returns (number of cycles, f a)
+--
+tickForce :: (NFData a, NFData b) => (a -> b) -> a -> IO (Cycle, b)
+tickForce (force -> !f) (force -> !a) = do
+  !t <- rdtsc
+  !a' <- pure (force (f a))
+  !t' <- rdtsc
+  pure (t' - t, a')
+{-# INLINEABLE tickForce #-}
+
+-- | `tickForceArgs f a`
+--
+-- - deeply evaluates f and a,
+-- - starts the cycle counter
+-- - strictly evaluates f a to WHNF
+-- - stops the cycle counter
+-- - returns (number of cycles, f a)
+--
+tickForceArgs :: (NFData a) => (a -> b) -> a -> IO (Cycle, b)
+tickForceArgs (force -> !f) (force -> !a) = do
+  !t <- rdtsc
+  !a' <- pure $! f a
+  !t' <- rdtsc
+  pure (t' - t, a')
+{-# INLINEABLE tickForceArgs #-}
 
 -- | measures an `IO a`
 --
 -- >>> (cs, _) <- tickIO (pure (f a))
 tickIO :: IO a -> IO (Cycle, a)
 tickIO a = do
-  t <- rdtsc
+  !t <- rdtsc
   !a' <- a
-  t' <- rdtsc
+  !t' <- rdtsc
   pure (t' - t, a')
 {-# INLINEABLE tickIO #-}
 
 multi :: ((a -> b) -> a -> IO (Cycle, b)) -> Int -> (a -> b) -> a -> IO ([Cycle], b)
 multi tickf n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickf f a))
-{-# INLINE multi #-}
+{-# INLINEABLE multi #-}
 
 -- | n measurements of a tick
 --
@@ -130,12 +179,3 @@ ticks = multi tick
 ticksIO :: Int -> IO a -> IO ([Cycle], a)
 ticksIO n0 a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickIO a))
 {-# INLINEABLE ticksIO #-}
-
-median :: [Cycle] -> Text
-median = comma (Just 3) . quantile 0.5 . fmap Prelude.fromIntegral
-
-average :: [Cycle] -> Text
-average = comma (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
-
-tenth :: [Cycle] -> Text
-tenth = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral

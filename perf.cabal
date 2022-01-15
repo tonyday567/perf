@@ -40,7 +40,8 @@ library
     Perf.BigO
     Perf.Cycle
     Perf.Measure
-
+    Perf.Algos
+    Perf.Stats
   hs-source-dirs:     src
 
   build-depends:
@@ -54,6 +55,8 @@ library
     , formatn       ^>=0.1
     , numhask-space ^>=0.8.1.0
     , vector        ^>=0.12.3
+    , deepseq
+    , optparse-applicative
   default-language:   Haskell2010
   default-extensions:
   ghc-options: -O2
@@ -67,6 +70,47 @@ executable perf-basic
     perf,
     text,
     optparse-applicative,
+    deepseq
   default-language:   Haskell2010
   ghc-options: -O2
 
+executable perf-inlines
+  import: ghc-options-stanza
+  main-is: inlines.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+    deepseq
+  default-language:   Haskell2010
+  ghc-options: -O2
+
+executable perf-moduled
+  import: ghc-options-stanza
+  main-is: moduled.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    perf,
+    text,
+    optparse-applicative,
+    deepseq
+  default-language:   Haskell2010
+  ghc-options: -O2
+
+executable perf-others
+  import: ghc-options-stanza
+  main-is: others.hs
+  hs-source-dirs: app
+  build-depends:
+    base,
+    deepseq,
+    gauge,
+    perf,
+    text,
+    optparse-applicative,
+    formatn,
+  default-language:   Haskell2010
+  ghc-options: -O2

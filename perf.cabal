@@ -52,8 +52,8 @@ library
     , text          ^>=1.2
     , time          ^>=1.9
     , transformers  ^>=0.5
-    , formatn       ^>=0.1
-    , numhask-space ^>=0.8.1.0
+    , formatn       ^>=0.2
+    , numhask-space ^>=0.10
     , vector        ^>=0.12.3
     , deepseq
     , optparse-applicative

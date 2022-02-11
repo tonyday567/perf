@@ -10,6 +10,7 @@ import Prelude hiding ((.))
 import Options.Applicative
 import Perf.Stats
 import Perf.Algos
+import Perf
 
 data Options = Options
   { optionRuns :: Int,

@@ -7,8 +7,6 @@
 
 #+begin_src haskell
 import Perf
-
-
 #+end_src
 
 * setup
@@ -26,6 +24,7 @@ Running this readme.org is very slow compared with an external process which acc
 
 #+begin_src haskell :results output
 import Perf
+import Perf.Stats
 import NumHask.Space (quantile)
 import Data.FormatN
 import Perf.Cycle
@@ -68,7 +67,7 @@ replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-| 992 | 612 | 564 | 524 | 532 | 524 | 520 | 530 | 530 | 516 |
+| 8530 | 910 | 730 | 668 | 642 | 648 | 644 | 642 | 646 | 640 |
 
 * function application
 
@@ -77,7 +76,7 @@ fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 #+end_src
 
 #+RESULTS:
-| 6800 | 2646 | 2366 | 2252 | 2222 | 2322 | 2220 | 2376 | 2240 | 2190 |
+| 8610 | 3654 | 2900 | 2932 | 2672 | 2708 | 2684 | 2664 | 2582 | 2652 |
 
 Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, reducing down to 2.2k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
@@ -95,14 +94,14 @@ fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
-| 6014 | 2396 | 1802 | 1556 | 1636 | 1550 | 1752 | 1570 | 1514 | 1542 |
+| 5840 | 2602 | 1910 | 1698 | 1668 | 1660 | 1672 | 1676 | 1680 | 1662 |
 
 #+begin_src haskell
 ticks 100 (const ()) ()
 #+end_src
 
 #+RESULTS:
-| 5784 | 2858 | 2416 | 2386 | 2378 | 2336 | 2336 | 2364 | 2282 | 2384 | 2316 | 2380 | 2274 | 2436 | 2328 | 2222 | 2266 | 2338 | 2320 | 2354 | 2264 | 2288 | 2366 | 2334 | 2336 | 2604 | 2398 | 2384 | 2424 | 2306 | 2374 | 2222 | 2318 | 2324 | 2242 | 2394 | 2478 | 2384 | 2306 | 2272 | 2304 | 2278 | 2248 | 2304 | 2400 | 2322 | 2278 | 2312 | 2398 | 2308 | 2356 | 2328 | 2348 | 2392 | 2374 | 2632 | 2284 | 2328 | 2294 | 2362 | 2366 | 2360 | 2356 | 2294 | 2334 | 2470 | 2422 | 2292 | 2324 | 2424 | 2406 | 2358 | 2354 | 2370 | 2396 | 2348 | 2300 | 2306 | 2428 | 2314 | 2386 | 2286 | 2424 | 2292 | 2338 | 2404 | 2390 | 2318 | 2388 | 2378 | 2304 | 2372 | 2606 | 2450 | 2396 | 2354 | 2282 | 2286 | 2378 | 2346 |
+| 8226 | 3298 | 3254 | 2686 | 2694 | 2724 | 2868 | 2732 | 2644 | 2678 | 2680 | 2896 | 2734 | 2606 | 2608 | 2598 | 2606 | 2738 | 2742 | 2610 | 2554 | 2532 | 2576 | 2592 | 2600 | 2562 | 2786 | 2592 | 2646 | 2624 | 2666 | 2640 | 2640 | 2602 | 2672 | 2560 | 3478 | 2556 | 2552 | 2572 | 2622 | 2492 | 2572 | 2706 | 2544 | 2604 | 2748 | 2570 | 2596 | 3078 | 2666 | 2592 | 2612 | 2648 | 2594 | 2564 | 2716 | 2564 | 2594 | 2596 | 2554 | 2766 | 2552 | 3026 | 2602 | 2860 | 2632 | 2614 | 2620 | 2586 | 3014 | 2626 | 2626 | 2614 | 2830 | 2624 | 2616 | 2648 | 2610 | 2626 | 2610 | 2590 | 2930 | 2622 | 2732 | 2698 | 3004 | 2664 | 2948 | 2630 | 2588 | 2766 | 2726 | 2600 | 2634 | 2792 | 2704 | 2774 | 2638 | 2634 |
 
 * sum example
 
@@ -111,7 +110,7 @@ fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Doub
 #+end_src
 
 #+RESULTS:
-| 8.39e6 | 4.03e6 | 3.31e6 | 1.29e7 | 1.76e6 | 3.03e6 | 5.23e6 | 1.07e6 | 1.13e6 | 2.73e6 |
+| 3,680,000 | 5,020,000 | 726,000 | 693,000 | 2,880,000 | 746,000 | 671,000 | 1,730,000 | 626,000 | 618,000 |
 
 
 #+begin_src haskell
@@ -120,7 +119,8 @@ putStrLn $ Text.unpack $ average (fst ts)
 #+end_src
 
 #+RESULTS:
-: 35,300
+: <interactive>:42:26-32: error:
+:     Variable not in scope: average :: [Cycle] -> Text.Text
 
 #+begin_src haskell
 :set -XAllowAmbiguousTypes
@@ -160,6 +160,8 @@ fmap (median . fst) $ ticks 1000 fLambda 1000
 : "64,300"
 
 * compiled performance
+
+** baseline callibration
 
 #+begin_src sh :results output
 perf-basic --help
@@ -229,3 +231,103 @@ fLambda: 6,890
 * Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
+
+
+* ToDo zipping
+
+#+begin_src haskell
+-- * zipping
+-- from https://doisinkidney.com/posts/2019-05-08-list-manipulation-tricks.html
+
+-- what is the name of this type of recursion?
+zipRec :: [a] -> [b] -> [(a,b)]
+zipRec [] _ = []
+zipRec _ [] = []
+zipRec (x:xs) (y:ys) = (x,y) : zipRec xs ys
+
+-- step 1: write as a case statement on the first argument
+
+zipCase :: [a] -> [b] -> [(a,b)]
+zipCase xs = case xs of
+  [] -> const []
+  (x:xs') -> \case
+    [] -> []
+    (y:ys) -> (x,y):zipCase xs' ys
+
+-- step 2: rewrite the case statements as auxillary functions
+zipAux :: [a] -> [b] -> [(a,b)]
+zipAux xs = case xs of
+  [] -> b
+  (x:xs') -> f x xs'
+  where
+    b _ = []
+    f x xs' = \case
+      [] -> []
+      (y:ys) -> (x,y):zipAux xs' ys
+
+-- step 3: refactor the recursive call to the first case expression
+zipRef :: [a] -> [b] -> [(a,b)]
+zipRef xs = case xs of
+  [] -> b
+  (x:xs') -> f x (zipRef xs')
+  where
+    b _ = []
+    f x xs' = \case
+      [] -> []
+      (y:ys) -> (x,y): xs' ys
+
+-- step 4 pass the auxillary functions to foldr
+-- zipR :: [a] -> [b] -> [(a,b)]
+zipR :: [a] -> [b] -> [(a, b)]
+zipR = foldr f b
+  where
+    b _ = []
+    f x xs = \case
+      [] -> []
+      (y:ys) -> (x,y): xs ys
+
+zipR' :: [a] -> [b] -> [(a, b)]
+zipR' = foldr f (const [])
+  where
+    f x xs ys = case ys of
+      [] -> []
+      (y:ys') -> (x,y): xs ys'
+
+-- from https://doisinkidney.com/posts/2020-08-22-some-more-list-algorithms.html
+newtype Zip a b =
+  Zip { runZip :: a -> (Zip a b -> b) -> b }
+
+zipZ :: [a] -> [b] -> [(a,b)]
+zipZ xs ys = foldr xf (const []) xs (Zip (foldr yf yb ys))
+  where
+    xf x xk yk = runZip yk x xk
+
+    yf y yk x xk = (x,y) : xk (Zip yk)
+    yb _ _ = []
+
+newtype a -&> b = Hyp { invoke :: (b -&> a) -> b }
+
+{-
+FIXME:
+
+zipHyp :: forall a b. [a] -> [b] -> [(a,b)]
+zipHyp xs ys = invoke xz yz
+  where
+    xz :: (a -> [(a,b)]) -&> [(a,b)]
+    xz = foldr f b xs
+      where
+        f x xk = Hyp (\yk -> invoke yk xk x)
+        b = Hyp (\_ -> [])
+
+    yz :: [(a,b)] -&> (a -> [(a,b)])
+    yz = foldr f b ys
+      where
+        f y yk = Hyp (\xk x -> (x,y) : invoke xk yk)
+        b = Hyp (\_ _ -> [])
+
+-}
+
+-- a -&> a ~ Fix (Cont a)
+newtype HypP p a b = HypP { invokeP :: p (HypP p b a) b }
+newtype HypM m a b = HypM { invokeM :: m ((HypM m a b -> a) -> b) }
+#+end_src

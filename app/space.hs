@@ -1,5 +1,8 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant lambda" #-}
+{-# HLINT ignore "Use isNothing" #-}
 
 import Perf.Algos
 import Prelude
@@ -42,7 +45,7 @@ testInfListPoly :: Int -> Int
 testInfListPoly n =
   length .
   take n $
-  [1..]
+  [(1::Int)..]
 
 -- flist: 1000000
 --         54,104 bytes allocated in the heap
@@ -170,9 +173,7 @@ maybeCountFTest :: (Maybe Int -> Bool) -> Maybe Int -> (Int -> Int) -> Int -> In
 maybeCountFTest p x r = \ !a ->
   case x of
     Nothing -> 999
-    Just _ -> case p x of
-      True -> r (a+1)
-      False -> r a
+    Just _ -> if p x then r (a+1) else r a
 
 -- Using a negative Int as failure
 --
@@ -192,9 +193,7 @@ maybeCountFTest2 :: (Maybe Int -> Bool) -> Maybe Int -> (Int -> Int) -> Int -> I
 maybeCountFTest2 p x r = \ !a ->
   case x of
     Nothing -> -1
-    Just x' -> case p x of
-      True -> r (a+1)
-      False -> r a
+    Just _ -> if p x then r (a+1) else r a
 
 maybeCountRTest2 :: (Maybe Int -> Bool) -> [Maybe Int] -> Maybe Int
 maybeCountRTest2 p xs0 = case foldr (maybeCountFTest2 p) id xs0 0 of
@@ -391,7 +390,7 @@ accTail3 n = go 0 [1..n] where
 --      16,669,240 bytes allocated in the heap
 testRecurseNoList :: Integral a => a -> a
 testRecurseNoList n =
-  acc n
+  accN n
 
 -- * mapM experiment
 

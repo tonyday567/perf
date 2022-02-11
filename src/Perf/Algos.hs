@@ -1,8 +1,11 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant lambda" #-}
+{-# HLINT ignore "Avoid lambda" #-}
 
 -- | Algorithms and functions for testing purposes
 
@@ -12,29 +15,53 @@ module Perf.Algos
     parseAlgo,
     allAlgos,
     allApps,
+
+    -- * sums
     recSum,
-    fuseConst,
     fuseSum,
     monoSum,
     polySum,
     lambdaSum,
-    mapInc, zipRec,
-    zipCase,zipAux,zipRef,zipR,zipR',zipZ,lengthRec,lengthCase,lengthAux,
-    lengthR,lengthR',splitHalf, HypP(..), HypM(..),
+    sumF,
+    sumR,
+
+    -- * length
+    lengthTail,
+    lengthTailLazy,
+    lengthPoly,
+    lengthMonoMaybe,
+    lengthr,
+    lengthR,
+    lengthR',
+    lengthRec,
+    lengthCase,
+    lengthAux,
+
+    -- * counting
+    maybeCount,
+    maybeCountLazy,
+    maybeCountR,
+
+
+    -- * recursive patterns
     recurseTail,
     recurseCo,
-    lengthTailLazy,
-    lengthr,
-    maybeCount,
     recurseTailLazy,
     accTail,
-    acc,
+    accN,
+
+    -- * other
+    mapInc,
+    fuseConst,
+    splitHalf,
+
   ) where
 
 import Data.Foldable
 import Data.Text (Text)
 import Options.Applicative
 import Data.Bifunctor
+import Data.Bool
 
 data AlgoType = AlgoRecSum | AlgoFuseSum | AlgoFuseConst | AlgoMonoSum | AlgoPolySum | AlgoLambdaSum | AlgoMapInc deriving (Eq, Show)
 
@@ -81,15 +108,12 @@ parseAlgo =
   flag' AlgoMapInc (long "mapinc" <> help "map inc") <|>
   pure AlgoFuseSum
 
--- various algos
+-- various sums
 recSum :: (Num a) => [a] -> a
 recSum = go 0
   where
     go acc [] = acc
     go acc (x:xs) = go (acc+x) xs
-
-fuseConst :: Int -> ()
-fuseConst x = foldl' const () [1 .. x]
 
 fuseSum :: Int -> Int
 fuseSum x = sum [1 .. x]
@@ -103,103 +127,12 @@ polySum xs = foldl' (+) 0 xs
 lambdaSum :: [Int] -> Int
 lambdaSum = \xs -> foldl' (+) 0 xs
 
+
+fuseConst :: Int -> ()
+fuseConst x = foldl' const () [1 .. x]
+
 mapInc :: [Int] -> [Int]
 mapInc xs = fmap (+1) xs
-
--- * zipping
--- from https://doisinkidney.com/posts/2019-05-08-list-manipulation-tricks.html
-
--- what is the name of this type of recursion?
-zipRec :: [a] -> [b] -> [(a,b)]
-zipRec [] _ = []
-zipRec _ [] = []
-zipRec (x:xs) (y:ys) = (x,y) : zipRec xs ys
-
--- step 1: write as a case statement on the first argument
-
-zipCase :: [a] -> [b] -> [(a,b)]
-zipCase xs = case xs of
-  [] -> const []
-  (x:xs') -> \case
-    [] -> []
-    (y:ys) -> (x,y):zipCase xs' ys
-
--- step 2: rewrite the case statements as auxillary functions
-zipAux :: [a] -> [b] -> [(a,b)]
-zipAux xs = case xs of
-  [] -> b
-  (x:xs') -> f x xs'
-  where
-    b _ = []
-    f x xs' = \case
-      [] -> []
-      (y:ys) -> (x,y):zipAux xs' ys
-
--- step 3: refactor the recursive call to the first case expression
-zipRef :: [a] -> [b] -> [(a,b)]
-zipRef xs = case xs of
-  [] -> b
-  (x:xs') -> f x (zipRef xs')
-  where
-    b _ = []
-    f x xs' = \case
-      [] -> []
-      (y:ys) -> (x,y): xs' ys
-
--- step 4 pass the auxillary functions to foldr
--- zipR :: [a] -> [b] -> [(a,b)]
-zipR :: [a] -> [b] -> [(a, b)]
-zipR = foldr f b
-  where
-    b _ = []
-    f x xs = \case
-      [] -> []
-      (y:ys) -> (x,y): xs ys
-
-zipR' :: [a] -> [b] -> [(a, b)]
-zipR' = foldr f (const [])
-  where
-    f x xs ys = case ys of
-      [] -> []
-      (y:ys') -> (x,y): xs ys'
-
--- from https://doisinkidney.com/posts/2020-08-22-some-more-list-algorithms.html
-newtype Zip a b =
-  Zip { runZip :: a -> (Zip a b -> b) -> b }
-
-zipZ :: [a] -> [b] -> [(a,b)]
-zipZ xs ys = foldr xf (const []) xs (Zip (foldr yf yb ys))
-  where
-    xf x xk yk = runZip yk x xk
-
-    yf y yk x xk = (x,y) : xk (Zip yk)
-    yb _ _ = []
-
-newtype a -&> b = Hyp { invoke :: (b -&> a) -> b }
-
-{-
-FIXME:
-
-zipHyp :: forall a b. [a] -> [b] -> [(a,b)]
-zipHyp xs ys = invoke xz yz
-  where
-    xz :: (a -> [(a,b)]) -&> [(a,b)]
-    xz = foldr f b xs
-      where
-        f x xk = Hyp (\yk -> invoke yk xk x)
-        b = Hyp (\_ -> [])
-
-    yz :: [(a,b)] -&> (a -> [(a,b)])
-    yz = foldr f b ys
-      where
-        f y yk = Hyp (\xk x -> (x,y) : invoke xk yk)
-        b = Hyp (\_ _ -> [])
-
--}
-
--- a -&> a ~ Fix (Cont a)
-newtype HypP p a b = HypP { invokeP :: p (HypP p b a) b }
-newtype HypM m a b = HypM { invokeM :: m ((HypM m a b -> a) -> b) }
 
 lengthRec :: [a] -> Int
 lengthRec [] = 0
@@ -245,8 +178,6 @@ splitHalf xs = go xs xs
     go (y:ys) (_:_:zs) = first (y:) (go ys zs)
     go ys _ = ([],ys)
 
-
--- * recursion basics
 lengthTail :: [Int] -> Int
 lengthTail xs0 = go 0 xs0
   where
@@ -278,9 +209,7 @@ maybeCount p xs0 = go 0 xs0
     go c [] = Just c
     go _ (Nothing:_) = Nothing
     go c (Just x:xs) =
-      case p x of
-        True -> go (c + 1) $! xs
-        False -> go c $! xs
+      go (bool c (c+1) (p x)) $! xs
 
 maybeCountLazy :: (Int -> Bool) -> [Maybe Int] -> Maybe Int
 maybeCountLazy p xs0 = go 0 xs0
@@ -289,9 +218,7 @@ maybeCountLazy p xs0 = go 0 xs0
     go c [] = Just c
     go _ (Nothing:_) = Nothing
     go c (Just x:xs) =
-      case p x of
-        True -> go (c + 1) xs
-        False -> go c xs
+      if p x then go (c + 1) xs else go c xs
 
 sumF :: (Num a) => a -> (a -> a) -> a -> a
 sumF x r = \ !a -> r (x + a)
@@ -303,9 +230,7 @@ maybeCountF :: (Int -> Bool) -> Maybe Int -> (Maybe Int -> Maybe Int) -> Maybe I
 maybeCountF p x r = \ !a ->
   case x of
     Nothing -> Nothing
-    Just x' -> case p x' of
-      True -> r (fmap (+1) a)
-      False -> r a
+    Just x' -> if p x' then r (fmap (+1) a) else r a
 
 maybeCountR :: Foldable t => (Int -> Bool) -> t (Maybe Int) -> Maybe Int
 maybeCountR p xs0 = foldr (maybeCountF p) id xs0 (Just 0)
@@ -327,9 +252,9 @@ accTail x = go x 1 where
     go 1 y = y
     go x y = go (x-1) $! (x+y)
 
-acc :: (Integral a) => a -> a
-acc 1 = 1
-acc x = x + acc (x-1)
+accN :: (Integral a) => a -> a
+accN 1 = 1
+accN x = x + accN (x-1)
 
 recurseCo :: (a -> b -> b) -> b -> [a] -> b
 recurseCo f s0 = go

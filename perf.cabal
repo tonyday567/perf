@@ -39,7 +39,6 @@ library
     Perf
     Perf.BigO
     Perf.Cycle
-    Perf.Measure
     Perf.Algos
     Perf.Stats
   hs-source-dirs:     src

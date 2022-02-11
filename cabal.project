@@ -1,5 +1,2 @@
 packages:
   perf.cabal
-
--- https://github.com/haskell/cabal/issues/6087
-write-ghc-environment-files: always

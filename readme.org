@@ -119,8 +119,7 @@ putStrLn $ Text.unpack $ average (fst ts)
 #+end_src
 
 #+RESULTS:
-: <interactive>:42:26-32: error:
-:     Variable not in scope: average :: [Cycle] -> Text.Text
+: 58,800
 
 #+begin_src haskell
 :set -XAllowAmbiguousTypes
@@ -140,26 +139,42 @@ fmap (median . fst) (ticks 1000 fMono 1000)
 #+end_src
 
 #+RESULTS:
-: )’
-: "69,200"
+: 63,400
 
 #+begin_src haskell
 fmap (median . fst) $ ticks 1000 fPoly 1000
 #+end_src
 
 #+RESULTS:
-: )’
-: "65,400"
+: 63,000
 
 #+begin_src haskell
 fmap (median . fst) $ ticks 1000 fLambda 1000
 #+end_src
 
 #+RESULTS:
-: )’
-: "64,300"
+: 63,400
 
-* compiled performance
+* apps
+
+** example1
+
+- [ ] laziness kicks in on second run of ~fap "" f a~
+- [ ] cycles' best multi run
+
+#+begin_src sh :results output
+perf-example1 -r 10000 --average -l 1000
+#+end_src
+
+#+RESULTS:
+: example1
+: sum of one to 7132 is: 25436278
+: (25436278,fromList [("",Sum {getSum = 273196}),("file read",Sum {getSum = 375068}),("length",Sum {getSum = 18702}),("print result",Sum {getSum = 27104})])
+: raw results
+: fromList [("PerfT cycle'",18.0),("PerfT cycles'",5925.9436),("PerfT mtick",27764.0),("PerfT mtick 0",16.0),("PerfT mtick 1",14.0),("PerfT mtick 2",16.0),("PerfT mtick 3",16.0),("PerfT mtick 4",18.0),("PerfT mticks",7282.1758),("raw multi tick",8568.6478),("raw ticks",8803.8314)]
+: regressions:
+: ["PerfT mtick","PerfT mticks","raw multi tick","raw ticks"]
+
 
 ** baseline callibration
 
@@ -171,8 +186,9 @@ perf-basic --help
 #+begin_example
 basic perf callibration
 
-Usage: perf-basic (-r|--runs ARG) [-b|--include basic effect measurements]
-                  (-l|--length ARG) [--best | --median | --average]
+Usage: perf-basic (-r|--runs ARG) (-l|--length ARG)
+                  [--best | --median | --average | --averagesecs]
+
   perf benchmarking
 
 Available options:
@@ -181,52 +197,82 @@ Available options:
   --best                   report upper decile
   --median                 report median
   --average                report average
+  --averagesecs            report average in seconds
   -h,--help                Show this help text
 #+end_example
 
+perf-basic issues:
+
+- [ ] ~ticks~ runs are sometimes double ~multi tick~.
+- [ ] ~tickLazy~ computation escapes
+- [ ] ~tick~, ~tickWHNF~, ~tickForce~, ~tickForceArgs~ same for sums
+- [ ] ~tickForce~ blows out for mapInc:
+
+  multi tickForce mapInc | 202,000, multi tickForceArgs mapInc | 57.8
+- [ ] fuseSum 2000 | recSum, polySum, lambdaSum: 5750
+
+
+
 #+begin_src sh :results output
-perf-basic -b -r 10000 --average -l 1000
+perf-basic -r 10000 --average -l 1000
 #+end_src
 
 #+RESULTS:
 #+begin_example
-tick_: [16,14,14,14,14,14,16,16,16,16]
-tick_: 16.6
-const (): [16,14,14,14,14,16,16,16,16,16]
-tick (const ()): 16.4
-tickIO (pure ()): 16.1
-fa: 8,940
-sum: 10,700
-sum': 7,300
-fApp_: 664
-fSum_ 674
-fMono: 9,400
-fPoly: 10,700
-fLambda: 6,830
+tick_: [14,16,16,16,16,16,14,14,16,16]
+tick_: 16.0
+const (): [16,16,16,16,18,18,18,18,16,16]
+const ()|19.4
+tickIO (pure ()): 16.2
+ticks fuseSum | 2,060
+multi tick fuseSum | 1,990
+multi tickWHNF fuseSum | 2,030
+multi tickLazy fuseSum | 18.3
+multi tickForce fuseSum | 2,000
+multi tickForceArgs fuseSum | 1,980
+ticks fuseConst | 1,380
+multi tick fuseConst | 1,310
+multi tickWHNF fuseConst | 1,420
+multi tickLazy fuseConst | 18.7
+multi tickForce fuseConst | 1,340
+multi tickForceArgs fuseConst | 1,320
+ticks recSum | 10,700
+multi tick recSum | 5,750
+multi tickWHNF recSum | 5,780
+multi tickLazy recSum | 18.7
+multi tickForce recSum | 5,840
+multi tickForceArgs recSum | 5,940
+ticks monoSum | 11,100
+multi tick monoSum | 5,720
+multi tickWHNF monoSum | 5,770
+multi tickLazy monoSum | 18.5
+multi tickForce monoSum | 5,690
+multi tickForceArgs monoSum | 5,780
+ticks polySum | 11,200
+multi tick polySum | 5,680
+multi tickWHNF polySum | 5,800
+multi tickLazy polySum | 18.7
+multi tickForce polySum | 5,820
+multi tickForceArgs polySum | 5,850
+ticks lambdaSum | 11,200
+multi tick lambdaSum | 5,640
+multi tickWHNF lambdaSum | 5,750
+multi tickLazy lambdaSum | 18.1
+multi tickForce lambdaSum | 5,700
+multi tickForceArgs lambdaSum | 5,810
+ticks mapInc | 126
+multi tick mapInc | 107
+multi tickWHNF mapInc | 169
+multi tickLazy mapInc | 18.2
+multi tickForce mapInc | 202,000
+multi tickForceArgs mapInc | 57.8
 #+end_example
 
 #+begin_src sh :results output
 ghc app/basic.hs -O2
-./app/basic -b -r 10000 --average -l 1000
+./app/basic -r 10000 --average -l 1000
 #+end_src
 
-#+RESULTS:
-#+begin_example
-Loaded package environment from /Users/tonyday/haskell/perf/.ghc.environment.x86_64-darwin-8.10.7
-tick_: [18,18,18,18,18,22,20,20,18,18]
-tick_: 19.0
-const (): [30,18,20,18,20,18,20,20,20,20]
-tick (const ()): 19.0
-tickIO (pure ()): 18.9
-fa: 8,970
-sum: 10,700
-sum': 7,190
-fApp_: 665
-fSum_ 673
-fMono: 9,400
-fPoly: 10,700
-fLambda: 6,890
-#+end_example
 
 * Resources
 

@@ -10,7 +10,6 @@ import Prelude hiding ((.))
 import Options.Applicative
 import Perf.Stats
 import Perf.Algos
-import Perf
 
 data Options = Options
   { optionRuns :: Int,
@@ -35,6 +34,9 @@ main = do
   let !l = optionLength o
   let s = optionStatType o
 
+  print =<< testBaselineP n s
   testBaseline n s
+
+  print =<< testBaselineP n s
 
   mapM_ (\x -> testApps x n s) (allApps l)

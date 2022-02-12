@@ -6,6 +6,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | == Introduction
 --
@@ -16,48 +17,23 @@
 -- 'PerfT' is a monad transformer designed to collect performance information.
 -- The transformer can be used to add performance measurent to existing code using 'Measure's.
 --
--- == Example :
---
--- Code block to be profiled :
---
--- >   result <- do
--- >       txt <- readFile "examples/examples.hs"
--- >       let n = Text.length txt
--- >       let x = foldl' (+) 0 [1..n]
--- >       putStrLn $ "sum of one to number of characters is: " <>
--- >           (show x :: Text)
--- >       pure (n, x)
---
--- The same code, instrumented with 'perf' :
---
--- >   (result', ms) <- runPerfT $ do
--- >           txt <- perf "file read" cycles $ readFile "examples/examples.hs"
--- >           n <- perf "length" cycles $ pure (Text.length txt)
--- >           x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
--- >           perf "print to screen" cycles $
--- >               putStrLn $ "sum of one to number of characters is: " <>
--- >               (show x :: Text)
--- >           pure (n, x)
 --
 -- Running the code produces a tuple of the original computation results, and a Map of performance measurements that were specified.  Indicative results:
 --
--- > file read                               4.92e5 cycles
--- > length                                  1.60e6 cycles
--- > print to screen                         1.06e5 cycles
--- > sum                                     8.12e3 cycles
---
 -- == Note on RDTSC
 --
--- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and flucturations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
+-- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and fluctuations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
 module Perf
   ( Measure (..),
-    measure,
-    measureM,
+
+    -- * applicants
+    fap,
+    fam,
+    (|$|),
+    ($|),
 
     -- * PerfT monad
-    perf,
-    perfM,
-    PerfT,
+    PerfT (..),
     Perf,
     runPerfT,
     evalPerfT,
@@ -65,67 +41,47 @@ module Perf
 
     -- * specific measures
     module Perf.Cycle,
-    cost,
     cputime,
     realtime,
-    cycles,
     count,
 
-    -- * example
-    example1,
-    example1',
+    -- * various cycle measurement routines.
+    cycle',
+    multi',
+    cycles',
+    mtick,
+    mticks,
 
-    -- * operators
-    (|$|),
-    (~$~),
   )
 where
 
 import Control.Monad.State.Lazy
 import Data.Functor.Identity
 import qualified Data.Map as Map
-import qualified Data.Text.IO as Text
 import Perf.Cycle
 import Prelude
 import Data.Time
 import Data.Fixed
 import System.CPUTime
 import Data.String
-import qualified Data.Text as Text
 import Data.Text (Text)
-import Data.Foldable
 import Data.Bifunctor
 
 -- $setup
--- >>> import Perf.Cycle
--- >>> import Data.Foldable (foldl')
+-- >>> import Perf
 
--- | A Measure consists of a monadic effect prior to measuring, a monadic effect to finalise the measurement, and the value measured
---
--- For example, the measure specified below will return 1 every time measurement is requested, thus forming the base of a simple counter for loopy code.
---
--- >>> let count = Measure 0 (pure ()) (pure 1)
-data Measure m t = forall i.
+data Measure m t =
   Measure
-  { prestep :: m i,
-    poststep :: i -> m t
+  { measure :: forall a b. (a -> b) -> a -> m (t,b),
+    measureM :: forall a. m a -> m (t,a)
   }
 
--- | Measure the performance of a pure computation.
-measure :: Monad m => Measure m t -> (a -> b) -> a -> m (t, b)
-measure (Measure pre post) !f !a = do
-  !p <- pre
-  !b <- pure $! f a
-  !t <- post p
-  pure (t, b)
+instance (Functor m) => Functor (Measure m) where
+  fmap f (Measure m n) =
+    Measure
+    (\f' a' -> fmap (first f) (m f' a'))
+    (fmap (first f) . n)
 
--- | Measure the performance of a monadic computation.
-measureM :: Monad m => Measure m t -> (a -> m b) -> a -> m (t, b)
-measureM (Measure pre post) !f !a = do
-  !p <- pre
-  !b <- f a
-  !t <- post p
-  pure (t, b)
 
 -- | Performance measurement transformer
 newtype PerfT m t a = PerfT
@@ -142,48 +98,37 @@ instance (MonadIO m) => MonadIO (PerfT m t) where
 -- | Lift an application to a PerfT m, providing a label and a 'Measure'.
 --
 -- Measurements with the same label will be added
-perf :: (MonadIO m, Num t) => Text -> (a -> b) -> a -> PerfT m t b
-perf label f a =
+fap :: (MonadIO m, Semigroup t) => Text -> (a -> b) -> a -> PerfT m t b
+fap label f a =
   PerfT $ do
     m <- fst <$> get
     (t, fa) <- lift $ measure m f a
-    modify $ second (Map.insertWith (+) label t)
+    modify $ second (Map.insertWith (<>) label t)
     return fa
 
--- | Lift an application to a PerfT m, providing a label and a 'Measure'.
+
+-- | Lift a monadic value to a PerfT m, providing a label and a 'Measure'.
 --
 -- Measurements with the same label will be added
-perfM :: (MonadIO m, Num t) => Text -> (a -> m b) -> a -> PerfT m t b
-perfM label f a =
+fam :: (MonadIO m, Semigroup t) => Text -> m a -> PerfT m t a
+fam label a =
   PerfT $ do
     m <- fst <$> get
-    (t, fa) <- lift $ measureM m f a
-    modify $ second (Map.insertWith (+) label t)
-    return fa
-
--- | lift a pure function application to PerfT
---
--- >>> fap "sum" (foldl' (+) 0) [0..10000]
-fap :: Text -> (a -> b) -> a -> PerfT IO Cycle b
-fap label f a = perf label f a
-
--- | lift a monadic function application to PerfT
---
--- >>> fam "sum" (pure . foldl' (+) 0) [0..10000]
-fam :: Text -> (a -> IO b) -> a -> PerfT IO Cycle b
-fam label f a = perfM label f a
+    (t, ma) <- lift $ measureM m a
+    modify $ second (Map.insertWith (<>) label t)
+    return ma
 
 -- | lift a pure, unnamed function application to PerfT
-(|$|) :: (a -> b) -> a -> PerfT IO Cycle b
+(|$|) :: (Semigroup t) => (a -> b) -> a -> PerfT IO t b
 (|$|) f a = fap "" f a
 
 -- | lift a monadic, unnamed function application to PerfT
-(~$~) :: (a -> IO b) -> a -> PerfT IO Cycle b
-(~$~) f a = fam "" f a
+($|) :: (Semigroup t) => IO a -> PerfT IO t a
+($|) a = fam "" a
 
 -- | Run the performance measure, returning (computational result, measurement).
 --
--- >>> (cs, result) <- runPerfT cycles $ (foldl' (+) 0) |$| [0..10000]
+-- >>> (cs, result) <- runPerfT cycle' $ (foldl' (+) 0) |$| [0..10000]
 --
 -- > (50005000,fromList [("sum",562028)])
 -- runPerfT :: Measure m t -> PerfT m t a -> Measure m t -> m (a, Map.Map Text t)
@@ -193,7 +138,7 @@ runPerfT m p = fmap (second snd) <$> flip runStateT (m, Map.empty) $ measurePerf
 -- | Consume the PerfT layer and return the original monadic result.
 -- Fingers crossed, PerfT structure should be completely compiled away.
 --
--- >>> result <- evalPerfT $ perf "sum" cycles (foldl' (+) 0) [0..10000]
+-- >>> result <- evalPerfT $ perf "sum" cycle' (foldl' (+) 0) [0..10000]
 --
 -- > 50005000
 evalPerfT :: Monad m => Measure m t -> PerfT m t a -> m a
@@ -201,19 +146,28 @@ evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
 
 -- | Consume a PerfT layer and return the measurement.
 --
--- >>> cs <- execPerfT $ perf "sum" cycles (foldl' (+) 0) [0..10000]
+-- >>> cs <- execPerfT $ perf "sum" cycle' (foldl' (+) 0) [0..10000]
 --
 -- > fromList [("sum",562028)]
 execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
 
--- | cost of a measurement in terms of the Measure's own units
---
--- >>> r <- cost count
--- >>> r
--- 1
-cost :: Monad m => Measure m b -> m b
-cost (Measure pre post) = pre >>= post
+
+-- | A single step measurement.
+single :: Monad m => m i -> (i -> m t) -> (a -> b) -> a -> m (t, b)
+single pre post !f !a = do
+  !p <- pre
+  !b <- pure $! f a
+  !t <- post p
+  pure (t, b)
+
+-- | A single step measurement.
+singleM :: Monad m => m i -> (i -> m t) -> m a -> m (t, a)
+singleM pre post a = do
+  !p <- pre
+  !ma <- a
+  !t <- post p
+  pure (t, ma)
 
 -- | a measure using 'getCPUTime' from System.CPUTime (unit is picoseconds)
 --
@@ -221,7 +175,7 @@ cost (Measure pre post) = pre >>= post
 --
 -- > (34000000,500500)
 cputime :: Measure IO Integer
-cputime = Measure start stop
+cputime = Measure (single start stop) (singleM start stop)
   where
     start = getCPUTime
     stop a = do
@@ -234,7 +188,7 @@ cputime = Measure start stop
 --
 -- > (0.000046,500500)
 realtime :: Measure IO Double
-realtime = Measure start stop
+realtime = Measure (single start stop) (singleM start stop)
   where
     start = getCurrentTime
     stop a = do
@@ -252,49 +206,37 @@ fromNominalDiffTime t = fromInteger i * 1e-12
 -- >>> r
 -- (1,())
 count :: Measure IO Int
-count = Measure start stop
+count = Measure (single start stop) (singleM start stop)
   where
     start = return ()
     stop () = return 1
 
 -- | a 'Measure' using the 'rdtsc' CPU register (units are in cycles)
 --
--- >>> r <- measure cycles (const ()) ()
+-- >>> r <- measure cycle' (const ()) ()
 --
 -- > (120540,()) -- ghci-level
 -- > (18673,())  -- compiled with -O2
-cycles :: Measure IO Cycle
-cycles = Measure start stop
+cycle' :: Measure IO Cycle
+cycle' = Measure (single start stop) (singleM start stop)
   where
     start = rdtsc
     stop a = do
       t <- rdtsc
       return $ t - a
 
-example1 :: IO Int
-example1 = do
-     txt <- Text.readFile "src/Perf.hs"
-     let n = Text.length txt
-     let x = foldl' (+) 0 [1..n]
-     Text.putStrLn $ "sum of one to number of characters is: " <> Text.pack (show x)
-     pure x
+multi' :: (Applicative m) => Int -> Measure m t -> Measure m [t]
+multi' n (Measure p m) =
+  Measure
+  (\f a -> fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (p f a)))
+  (fmap (\xs -> (fmap fst xs, snd (head xs))) . replicateM n . m)
 
-example1' :: IO (Int, Map.Map Text Cycle)
-example1' = runPerfT cycles $ do
-     txt <- Text.readFile ~$~ "src/Perf.hs"
-     let n = Text.length txt
-     f <- foldl' (+) 0 |$| [1..n]
-     (Text.putStrLn .
-       ("sum of one to number of characters is: " <>) .
-       Text.pack .
-       show) ~$~ f
-     pure f
+mtick :: Measure IO Cycle
+mtick = Measure tick tickIO
 
--- >   (result', ms) <- runPerfT $ do
--- >           txt <- perf "file read" cycles $ readFile "examples/examples.hs"
--- >           n <- perf "length" cycles $ pure (Text.length txt)
--- >           x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
--- >           perf "print to screen" cycles $
--- >               putStrLn $ "sum of one to number of characters is: " <>
--- >               (show x :: Text)
--- >           pure (n, x)
+mticks :: Int -> Measure IO [Cycle]
+mticks n = Measure (ticks n) (ticksIO n)
+
+cycles' :: Int -> Measure IO [Cycle]
+cycles' n = multi' n cycle'
+

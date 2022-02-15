@@ -7,6 +7,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | == Introduction
 --
@@ -26,6 +27,15 @@
 module Perf
   ( Measure (..),
 
+    StepMeasure (..),
+    toMeasure,
+    toMeasures,
+    single,
+    singleM,
+    multi,
+    multiM,
+    cycle,
+
     -- * applicants
     fap,
     fam,
@@ -40,32 +50,38 @@ module Perf
     execPerfT,
 
     -- * specific measures
-    module Perf.Cycle,
+    module Perf.Tick,
     cputime,
     realtime,
-    count,
+    ghcStats,
+    SpaceStats (..),
+    space,
+    repeated,
+    -- inners,
 
     -- * various cycle measurement routines.
-    cycle',
-    multi',
-    cycles',
-    mtick,
-    mticks,
-
+    tick,
+    ticks,
+    spaceTime,
   )
 where
 
 import Control.Monad.State.Lazy
 import Data.Functor.Identity
-import qualified Data.Map as Map
-import Perf.Cycle
-import Prelude
+import qualified Data.Map.Strict as Map
+import Perf.Tick
+import Prelude hiding (cycle)
 import Data.Time
 import Data.Fixed
 import System.CPUTime
 import Data.String
 import Data.Text (Text)
 import Data.Bifunctor
+import GHC.Stats
+import Data.Bool
+import Data.Word
+import System.Mem
+import System.CPUTime.Rdtsc
 
 -- $setup
 -- >>> import Perf
@@ -82,6 +98,13 @@ instance (Functor m) => Functor (Measure m) where
     (\f' a' -> fmap (first f) (m f' a'))
     (fmap (first f) . n)
 
+-- | An inefficient application that runs the inner action twice.
+instance (Applicative m) => Applicative (Measure m) where
+  pure t = Measure (\f a -> pure (t, f a)) (\a -> (t,) <$> a)
+  (Measure mf nf) <*> (Measure mt nt) =
+    Measure
+    (\f a -> (\(nf',fa') (t',_) -> (nf' t',fa')) <$> mf f a <*> mt f a)
+    (\a -> (\(nf',a') (t',_) -> (nf' t',a')) <$> nf a <*> nt a)
 
 -- | Performance measurement transformer
 newtype PerfT m t a = PerfT
@@ -105,7 +128,6 @@ fap label f a =
     (t, fa) <- lift $ measure m f a
     modify $ second (Map.insertWith (<>) label t)
     return fa
-
 
 -- | Lift a monadic value to a PerfT m, providing a label and a 'Measure'.
 --
@@ -152,30 +174,67 @@ evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
 execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
 
+data StepMeasure m t = forall i. StepMeasure { pre :: m i, post :: i -> m t }
+
+instance (Functor m) => Functor (StepMeasure m)
+  where
+    fmap f (StepMeasure start stop) = StepMeasure start (fmap f . stop)
+
+instance (Applicative m) => Applicative (StepMeasure m)
+  where
+    pure t  = StepMeasure (pure ()) (const (pure t))
+    (<*>) (StepMeasure fstart fstop) (StepMeasure start stop) =
+      StepMeasure ((,) <$> fstart <*> start) (\(fi,i) -> fstop fi <*> stop i)
+
+toMeasure :: (Monad m) => StepMeasure m t -> Measure m t
+toMeasure (StepMeasure pre' post') = Measure (single pre' post') (singleM pre' post')
 
 -- | A single step measurement.
 single :: Monad m => m i -> (i -> m t) -> (a -> b) -> a -> m (t, b)
-single pre post !f !a = do
-  !p <- pre
+single pre' post' !f !a = do
+  !p <- pre'
   !b <- pure $! f a
-  !t <- post p
+  !t <- post' p
   pure (t, b)
+{-# INLINEABLE single #-}
 
 -- | A single step measurement.
 singleM :: Monad m => m i -> (i -> m t) -> m a -> m (t, a)
-singleM pre post a = do
-  !p <- pre
+singleM pre' post' a = do
+  !p <- pre'
   !ma <- a
-  !t <- post p
+  !t <- post' p
   pure (t, ma)
+{-# INLINEABLE singleM #-}
+
+-- | Multiple measurements
+multi :: Monad m => m i -> (i -> m t) -> Int -> (a -> b) -> a -> m ([t], b)
+multi pre' post' n !f !a =
+  fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (single pre' post' f a))
+{-# INLINEABLE multi #-}
+
+-- | Multiple measurements
+multiM :: Monad m => m i -> (i -> m t) -> Int -> m a -> m ([t], a)
+multiM pre' post' n a =
+  fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (singleM pre' post' a))
+{-# INLINEABLE multiM #-}
+
+toMeasures :: (Monad m) => Int -> StepMeasure m t -> Measure m [t]
+toMeasures n (StepMeasure pre' post') = Measure (multi pre' post' n) (multiM pre' post' n)
+
+cycle :: StepMeasure IO Word64
+cycle = StepMeasure start stop
+  where
+    start = rdtsc
+    stop r = fmap (\x -> x - r) rdtsc
 
 -- | a measure using 'getCPUTime' from System.CPUTime (unit is picoseconds)
 --
 -- >>> r <- measure cputime (foldl' (+) 0) [0..1000]
 --
 -- > (34000000,500500)
-cputime :: Measure IO Integer
-cputime = Measure (single start stop) (singleM start stop)
+cputime :: StepMeasure IO Integer
+cputime = StepMeasure start stop
   where
     start = getCPUTime
     stop a = do
@@ -187,8 +246,8 @@ cputime = Measure (single start stop) (singleM start stop)
 -- >>> r <- measure realtime (foldl' (+) 0) [0..1000]
 --
 -- > (0.000046,500500)
-realtime :: Measure IO Double
-realtime = Measure (single start stop) (singleM start stop)
+realtime :: StepMeasure IO Double
+realtime = StepMeasure start stop
   where
     start = getCurrentTime
     stop a = do
@@ -200,43 +259,56 @@ fromNominalDiffTime t = fromInteger i * 1e-12
   where
     (MkFixed i) = nominalDiffTimeToSeconds t
 
--- | a 'Measure' used to count iterations
---
--- >>> r <- measure count (pure ())
--- >>> r
--- (1,())
-count :: Measure IO Int
-count = Measure (single start stop) (singleM start stop)
-  where
-    start = return ()
-    stop () = return 1
-
--- | a 'Measure' using the 'rdtsc' CPU register (units are in cycles)
---
--- >>> r <- measure cycle' (const ()) ()
---
--- > (120540,()) -- ghci-level
--- > (18673,())  -- compiled with -O2
-cycle' :: Measure IO Cycle
-cycle' = Measure (single start stop) (singleM start stop)
-  where
-    start = rdtsc
-    stop a = do
-      t <- rdtsc
-      return $ t - a
-
-multi' :: (Applicative m) => Int -> Measure m t -> Measure m [t]
-multi' n (Measure p m) =
+repeated :: (Applicative m) => Int -> Measure m t -> Measure m [t]
+repeated n (Measure p m) =
   Measure
   (\f a -> fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (p f a)))
   (fmap (\xs -> (fmap fst xs, snd (head xs))) . replicateM n . m)
+{-# INLINEABLE repeated #-}
 
-mtick :: Measure IO Cycle
-mtick = Measure tick tickIO
+tick :: Measure IO Word64
+tick = Measure count countIO
+{-# INLINEABLE tick #-}
 
-mticks :: Int -> Measure IO [Cycle]
-mticks n = Measure (ticks n) (ticksIO n)
+ticks :: Int -> Measure IO [Word64]
+ticks n = Measure (counts n) (countsIO n)
+{-# INLINEABLE ticks #-}
 
-cycles' :: Int -> Measure IO [Cycle]
-cycles' n = multi' n cycle'
 
+ghcStats :: Measure IO (Maybe (RTSStats, RTSStats))
+ghcStats = Measure (single start stop) (singleM start stop)
+  where
+    start = do
+      p <- getRTSStatsEnabled
+      bool (pure Nothing) (Just <$> getRTSStats) p
+    stop s = do
+      case s of
+        Nothing -> pure Nothing
+        Just s' -> do
+          s'' <- getRTSStats
+          pure $ Just (s',s'')
+
+data SpaceStats = SpaceStats { allocated :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64 } deriving (Read, Show, Eq)
+
+diffSpace :: SpaceStats -> SpaceStats -> SpaceStats
+diffSpace (SpaceStats x1 x2 x3 x4 x5) (SpaceStats x1' x2' x3' x4' x5') = SpaceStats (x1' - x1) (x2' - x2) (x3' - x3) (x4' - x4) (x5' - x5)
+
+getSpace :: RTSStats -> SpaceStats
+getSpace s = SpaceStats (allocated_bytes s) (gcs s) (max_live_bytes s) (gcdetails_live_bytes (gc s)) (max_mem_in_use_bytes s)
+
+space :: StepMeasure IO SpaceStats
+space = StepMeasure start stop
+  where
+    start = do
+      performGC
+      getSpace <$> getRTSStats
+    stop s = do
+      s' <- getSpace <$> getRTSStats
+      pure $ diffSpace s s'
+
+spaceTime :: StepMeasure IO (Word64, SpaceStats)
+spaceTime = (,) <$> cycle <*> space
+
+-- FIXME:
+-- inners :: Int -> StepMeasure IO (SpaceStats, [SpaceStats])
+-- inners n = (,) <$> space <*> multi n space

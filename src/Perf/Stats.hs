@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 
@@ -12,65 +13,75 @@ module Perf.Stats
     stat,
     statD,
     parseStat,
-    reportStat,
-    testAllTicks,
-    testApps,
-    testBaseline,
-    testBaselineP,
+
+    -- no ops
+    runNoOps,
+    testNoOps,
+    addStat,
+    readStats,
+    writeStats,
+    printOrg,
+    printOrg2D,
+    printOrg2DTranspose,
+
+    -- * algos
+    testSum,
+    testAlgos,
+    testStyleBySum,
   ) where
 
 import Perf
-import qualified Data.Text as T
+import qualified Data.Text.IO as Text
 import Data.Text (Text)
 import Data.FormatN
 import NumHask.Space (quantile)
 import Perf.Algos
 import Control.DeepSeq
 import Options.Applicative
-import Data.Function
-import Control.Category hiding ((.))
-import Control.Monad
-import Data.Semigroup
 import qualified Data.Map.Strict as Map
+import Control.Monad.State.Lazy
+import Box.Csv
+import Box
+import qualified Data.Text as Text
+import qualified Data.List as List
 
-median :: [Cycle] -> Text
-median = comma (Just 3) . quantile 0.5 . fmap Prelude.fromIntegral
+median :: (Integral a) => [a] -> Text
+median = expt (Just 3) . quantile 0.5 . fmap Prelude.fromIntegral
 
-medianD :: [Cycle] -> Double
+medianD :: (Integral a) => [a] -> Double
 medianD = quantile 0.5 . fmap Prelude.fromIntegral
 
-average :: [Cycle] -> Text
-average = comma (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
+average :: (Integral a) => [a] -> Text
+average = expt (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs))
 
-averageD :: [Cycle] -> Double
+averageD :: (Integral a) => [a] -> Double
 averageD xs = (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs)
 
-tenth :: [Cycle] -> Text
-tenth = comma (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral
+tenth :: (Integral a) => [a] -> Text
+tenth = expt (Just 3) . quantile 0.1 . fmap Prelude.fromIntegral
 
-tenthD :: [Cycle] -> Double
+tenthD :: (Integral a) => [a] -> Double
 tenthD = quantile 0.1 . fmap Prelude.fromIntegral
 
 data StatType = StatAverage | StatMedian | StatBest | StatSecs deriving (Eq, Show)
 
-averageSecs :: [Cycle] -> Text
+averageSecs :: (Integral a) => [a] -> Text
 averageSecs = expt (Just 3) . (\xs -> (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs) / 2.5e9)
 
-averageSecsD :: [Cycle] -> Double
+averageSecsD :: (Integral a) => [a] -> Double
 averageSecsD xs = (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs) / 2.5e9
 
-stat :: StatType -> [Cycle] -> Text
+stat :: StatType -> (Integral a) => [a] -> Text
 stat StatBest = tenth
 stat StatMedian = median
 stat StatAverage = average
 stat StatSecs = averageSecs
 
-statD :: StatType -> [Cycle] -> Double
+statD :: StatType -> (Integral a) => [a] -> Double
 statD StatBest = tenthD
 statD StatMedian = medianD
 statD StatAverage = averageD
 statD StatSecs = averageSecsD
-
 
 parseStat :: Parser StatType
 parseStat =
@@ -80,38 +91,93 @@ parseStat =
   flag' StatSecs (long "averagesecs" <> help "report average in seconds") <|>
   pure StatAverage
 
-reportStat :: Text -> StatType -> IO ([Cycle], b) -> IO ()
-reportStat label s x = x & fmap (fst >>> stat s >>> (label<>) >>> T.unpack) & (>>= putStrLn)
+addStat :: (Ord k, Monad m) => k -> s -> StateT (Map.Map k s) m ()
+addStat label s = do
+  modify (Map.insert label s)
 
-testAllTicks :: (NFData a, NFData b) =>
-  Text -> (a -> b) -> a -> Int -> StatType -> IO ()
-testAllTicks label f a n s = do
-  ticks n f a & reportStat ("ticks " <> label <> " | ") s
-  multi tick n f a & reportStat ("multi tick " <> label <> " | ") s
-  multi tickWHNF n f a & reportStat ("multi tickWHNF " <> label <> " | ") s
-  multi tickLazy n f a & reportStat ("multi tickLazy " <> label <> " | ") s
-  multi tickForce n f a & reportStat ("multi tickForce " <> label <> " | ") s
-  multi tickForceArgs n f a & reportStat ("multi tickForceArgs " <> label <> " | ") s
+csvFile :: CsvConfig
+csvFile = CsvConfig "./other/default.csv" ',' NoHeader
 
-testApps :: AlgoApplication Int -> Int -> StatType -> IO ()
-testApps (ApplicationFuseSum label f a) n s = testAllTicks label f a n s
-testApps (ApplicationFuseConst label f a) n s = testAllTicks label f a n s
-testApps (ApplicationRecSum label f a) n s = testAllTicks label f a n s
-testApps (ApplicationMonoSum label f a) n s = testAllTicks label f a n s
-testApps (ApplicationPolySum label f a) n s = testAllTicks label f a n s
-testApps (ApplicationLambdaSum label f a) n s = testAllTicks label f a n s
-testApps (ApplicationMapInc label f a) n s = testAllTicks label f a n s
+writeStats :: FilePath -> (a -> Text) -> Map.Map [Text] a -> IO ()
+writeStats fp f m =
+  glue <$> rowCommitter (csvFile { file = fp }) (\(l,v) -> l <> [f v]) <*|> qList (Map.toList m)
 
-testBaseline :: Int -> StatType -> IO ()
-testBaseline n s = do
-  replicateM 10 tick_ & fmap (show >>> ("tick_: "<>)) & (>>= putStrLn)
-  replicateM n tick_ & fmap (stat s >>> T.unpack >>> ("tick_: "<>)) & (>>= putStrLn)
-  replicateM 10 (tick (const ()) ()) & fmap (fmap fst >>> show >>> ("const (): "<>)) & (>>= putStrLn)
-  multi tick n (const ()) () & reportStat "const ()|" s
-  replicateM n (tickIO (pure ())) & fmap (fmap fst >>> stat s >>> T.unpack >>> ("tickIO (pure ()): "<>)) & (>>= putStrLn)
+readStats :: FilePath -> IO (Map.Map [Text] Text)
+readStats fp = do
+  r <- runCsv (csvFile { file = fp  }) fields
+  pure $ Map.fromList [(init x, last x) | (Right x) <- r]
 
--- testBaseline' :: Int -> StatType -> IO ()
-testBaselineP :: p1 -> p2 -> IO ((), Map.Map Text (Sum Cycle))
-testBaselineP _ _ = runPerfT (Sum <$> cycle') $ do
-  fap "const" (const ()) ()
-  fam "pure" (pure ())
+testCountStyles :: (NFData t, NFData b) => Text -> (t -> b) -> t -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
+testCountStyles l f a n s = do
+  addStat [l,"count"] . stat s =<< lift (fst <$> multi count n f a)
+  addStat [l,"countWHNF"] . stat s =<< lift (fst <$> multi countWHNF n f a)
+  addStat [l,"countLazy"] . stat s =<< lift (fst <$> multi countLazy n f a)
+  addStat [l,"countForce"] . stat s =<< lift (fst <$> multi countForce n f a)
+  addStat [l,"countForceArgs"] . stat s =<< lift (fst <$> multi countForceArgs n f a)
+  addStat [l,"cycles"] . stat s =<< lift (snd . head . Map.toList <$> execPerfT (ticks n) (f |$| a))
+
+testAlgos :: AlgoApplication Int -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
+testAlgos (ApplicationFuseSum label f a) n s = testCountStyles label f a n s
+testAlgos (ApplicationFuseConst label f a) n s = testCountStyles label f a n s
+testAlgos (ApplicationRecSum label f a) n s = testCountStyles label f a n s
+testAlgos (ApplicationMonoSum label f a) n s = testCountStyles label f a n s
+testAlgos (ApplicationPolySum label f a) n s = testCountStyles label f a n s
+testAlgos (ApplicationLambdaSum label f a) n s = testCountStyles label f a n s
+
+testSum :: SumAlgo Int -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
+testSum (SumFuse label f a) n s = testCountStyles label f a n s
+testSum (SumMono label f a) n s = testCountStyles label f a n s
+testSum (SumPoly label f a) n s = testCountStyles label f a n s
+testSum (SumLambda label f a) n s = testCountStyles label f a n s
+
+testStyleBySum :: Int -> Int -> StatType -> IO (Map.Map [Text] Text)
+testStyleBySum n l s = flip execStateT Map.empty $ mapM_ (\x -> testSum x n s) (allSums l)
+
+runNoOps :: Int -> Maybe FilePath -> IO (Map.Map Text [Word64])
+runNoOps n fp = do
+    m <- execPerfT (ticks n) $ do
+      liftIO $ warmup 1000
+      fap "fap cycles'" (const ()) ()
+      fam "fam cycles'" (pure ())
+    case fp of
+      Nothing -> pure ()
+      Just fp' -> writeFile fp' (show m)
+    pure m
+
+testNoOps :: Maybe FilePath -> Int -> Int -> IO (Map.Map [Text] Text)
+testNoOps fp f n = flip execStateT Map.empty $ do
+  m <- lift (runNoOps n fp)
+  mapM_ (addStat ["first " <> Text.pack (show f), " faps"] . Text.pack . show . take f) (Map.lookup "fap cycles'" m)
+  mapM_ (addStat ["first " <> Text.pack (show f), " fams"] . Text.pack . show . take f) (Map.lookup "fam cycles'" m)
+  mapM_ (addStat ["best","faps"] . tenth) (Map.lookup "fap cycles'" m)
+  mapM_ (addStat ["best","fams"] . tenth) (Map.lookup "fam cycles'" m)
+  mapM_ (addStat ["median","faps"] . median) (Map.lookup "fap cycles'" m)
+  mapM_ (addStat ["median","fams"] . median) (Map.lookup "fam cycles'" m)
+  mapM_ (addStat ["average","faps"] . average) (Map.lookup "fap cycles'" m)
+  mapM_ (addStat ["average","fams"] . average) (Map.lookup "fam cycles'" m)
+
+printOrg :: Map.Map [Text] Text -> IO ()
+printOrg m = do
+    Text.putStrLn "|stat|result|"
+    _ <- Map.traverseWithKey (\k a -> Text.putStrLn ("|" <> Text.intercalate "|" k <> "|" <> a <> "|")) m
+    pure ()
+
+printOrg2D :: Map.Map [Text] Text -> IO ()
+printOrg2D m = do
+    let rs = List.nub ((List.!! 0) . fst <$> Map.toList m)
+    let cs = List.nub ((List.!! 1) . fst <$> Map.toList m)
+    Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
+    sequence_ $
+      (\c -> Text.putStrLn
+        ("|" <> c <> "|" <>
+          Text.intercalate "|" ((\r -> m Map.! [r,c]) <$> rs) <> "|")) <$> cs
+
+printOrg2DTranspose :: Map.Map [Text] Text -> IO ()
+printOrg2DTranspose m = do
+    let rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
+    let cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
+    Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
+    sequence_ $
+      (\c -> Text.putStrLn
+        ("|" <> c <> "|" <>
+          Text.intercalate "|" ((\r -> m Map.! [c,r]) <$> rs) <> "|")) <$> cs

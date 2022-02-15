@@ -6,6 +6,8 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant lambda" #-}
 {-# HLINT ignore "Avoid lambda" #-}
+{-# HLINT ignore "Use foldr" #-}
+{-# HLINT ignore "Use sum" #-}
 
 -- | Algorithms and functions for testing purposes
 
@@ -15,10 +17,18 @@ module Perf.Algos
     parseAlgo,
     allAlgos,
     allApps,
+    SumAlgo (..),
+    allSums,
 
     -- * sums
     recSum,
     fuseSum,
+    fuseFoldl'Sum,
+    fuseFoldrSum,
+    tailSum,
+    tailSumGo,
+    cataSum,
+    foldrSum,
     monoSum,
     polySum,
     lambdaSum,
@@ -62,8 +72,9 @@ import Data.Text (Text)
 import Options.Applicative
 import Data.Bifunctor
 import Data.Bool
+import Data.Functor.Foldable
 
-data AlgoType = AlgoRecSum | AlgoFuseSum | AlgoFuseConst | AlgoMonoSum | AlgoPolySum | AlgoLambdaSum | AlgoMapInc deriving (Eq, Show)
+data AlgoType = AlgoRecSum | AlgoFuseSum | AlgoFuseConst | AlgoMonoSum | AlgoPolySum | AlgoLambdaSum deriving (Eq, Show)
 
 allAlgos :: [AlgoType]
 allAlgos =
@@ -73,8 +84,7 @@ allAlgos =
     AlgoFuseConst,
     AlgoMonoSum,
     AlgoPolySum,
-    AlgoLambdaSum,
-    AlgoMapInc
+    AlgoLambdaSum
   ]
 
 data AlgoApplication a =
@@ -83,8 +93,28 @@ data AlgoApplication a =
   ApplicationRecSum Text ((Num a) => [a] -> a) [a] |
   ApplicationMonoSum Text ([Int] -> Int) [Int] |
   ApplicationPolySum Text ((Num a) => [a] -> a) [a] |
-  ApplicationLambdaSum Text ([Int] -> Int) [a] |
-  ApplicationMapInc Text ([Int] -> [Int]) [Int]
+  ApplicationLambdaSum Text ([Int] -> Int) [a]
+
+data SumAlgo a =
+  SumFuse Text (Int -> Int) Int |
+  SumPoly Text ((Num a) => [a] -> a) [a] |
+  SumMono Text ([Int] -> Int) [Int] |
+  SumLambda Text ([Int] -> Int) [a]
+
+allSums :: Int -> [SumAlgo Int]
+allSums l =
+  [ SumFuse "fuseSum" fuseSum l,
+    SumFuse "fuseFoldl'Sum" fuseFoldl'Sum l,
+    SumFuse "fuseFoldrSum" fuseFoldrSum l,
+    SumPoly "tailSum" tailSum [1..l],
+    SumPoly "tailSumGo" tailSumGo [1..l],
+    SumPoly "foldrSum" foldrSum [1..l],
+    SumPoly "recSum" recSum [1..l],
+    SumPoly "cataSum" cataSum [1..l],
+    SumMono "monoSum" monoSum [1..l],
+    SumPoly "polySum" polySum [1..l],
+    SumLambda "lambdaSum" lambdaSum [1..l]
+  ]
 
 allApps :: Int -> [AlgoApplication Int]
 allApps l =
@@ -93,8 +123,7 @@ allApps l =
     ApplicationRecSum "recSum" recSum [1..l],
     ApplicationMonoSum "monoSum" monoSum [1..l],
     ApplicationPolySum "polySum" polySum [1..l],
-    ApplicationLambdaSum "lambdaSum" lambdaSum [1..l],
-    ApplicationMapInc "mapInc" mapInc [1..l]
+    ApplicationLambdaSum "lambdaSum" lambdaSum [1..l]
   ]
 
 parseAlgo :: Parser AlgoType
@@ -105,18 +134,46 @@ parseAlgo =
   flag' AlgoPolySum (long "polysum" <> help "polymorphic sum") <|>
   flag' AlgoLambdaSum (long "lambdasum" <> help "lambdaed sum") <|>
   flag' AlgoRecSum (long "recsum" <> help "recursion sum") <|>
-  flag' AlgoMapInc (long "mapinc" <> help "map inc") <|>
   pure AlgoFuseSum
 
 -- various sums
+
+-- fusion pipelines
+fuseSum :: Int -> Int
+fuseSum x = sum [1 .. x]
+
+fuseFoldl'Sum :: Int -> Int
+fuseFoldl'Sum x = foldl' (+) 0 [1 .. x]
+
+fuseFoldrSum :: Int -> Int
+fuseFoldrSum x = foldr (+) 0 [1 .. x]
+
+-- foldr sums
+tailSum :: (Num a) => [a] -> a
+tailSum [] = 0
+tailSum (x:xs) = x + tailSum xs
+
+tailSumGo :: (Num a) => [a] -> a
+tailSumGo xs = go xs
+  where
+    go [] = 0
+    go (x:xs) = x + go xs
+
+foldrSum :: (Num a) => [a] -> a
+foldrSum xs = foldr (+) 0 xs
+
+
+-- * recursive sums
 recSum :: (Num a) => [a] -> a
 recSum = go 0
   where
     go acc [] = acc
-    go acc (x:xs) = go (acc+x) xs
+    go acc (x:xs) = go (x+acc) xs
 
-fuseSum :: Int -> Int
-fuseSum x = sum [1 .. x]
+cataSum :: [Int] -> Int
+cataSum= cata $ \case
+  Nil -> 0
+  Cons x acc -> x + acc
 
 monoSum :: [Int] -> Int
 monoSum xs = foldl' (+) 0 xs
@@ -127,6 +184,8 @@ polySum xs = foldl' (+) 0 xs
 lambdaSum :: [Int] -> Int
 lambdaSum = \xs -> foldl' (+) 0 xs
 
+
+-- * incrementals
 
 fuseConst :: Int -> ()
 fuseConst x = foldl' const () [1 .. x]

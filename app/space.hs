@@ -253,8 +253,8 @@ maybeCountFTest4 p x r = \ !a ->
 --
 -- cycle: Just 100000
 --          55,528 bytes allocated in the heap
-testCycle :: Int -> Maybe Int
-testCycle n =
+testWord64 :: Int -> Maybe Int
+testWord64 n =
   maybeCountRLocal (== 1) .
   fmap (validateGeneric (\x -> x >= 1 && x <= 10)) .
   take n $
@@ -277,8 +277,8 @@ maybeCountFLocal p x r = \ !a ->
 --
 -- cycle2: Just 100000
 --       8,179,160 bytes allocated in the heap
-testCycle2 :: Int -> Maybe Int
-testCycle2 n =
+testWord642 :: Int -> Maybe Int
+testWord642 n =
   maybeCountRLocal' (== 1) .
   fmap (validateGeneric (\x -> x >= 1 && x <= 10)) .
   take n $
@@ -300,8 +300,8 @@ maybeCountFLocal' p x r = \ !a ->
 
 -- cyclefail: Nothing
 --          55,944 bytes allocated in the heap
-testCycleFail :: Int -> Maybe Int
-testCycleFail n =
+testWord64Fail :: Int -> Maybe Int
+testWord64Fail n =
   maybeCountRTest3'' (==1) .
   fmap validate10 .
   take n $
@@ -473,10 +473,10 @@ main = do
           "xtest2" -> show $ testXTest2 n
           "xtest3" -> show $ testXTest3 n
           "xtest4" -> show $ testXTest4 n
-          "cycle" -> show $ testCycle n
-          "cycle2" -> show $ testCycle2 n
-          "cyclefail" -> show $ testCycleFail n
+          "cycle" -> show $ testWord64 n
+          "cycle2" -> show $ testWord642 n
+          "cyclefail" -> show $ testWord64Fail n
           "mapm" -> show $ testMapM n
           "foldvalidate" -> show $ testFoldValidate n
-          _ -> show $ testCycle n
+          _ -> show $ testWord64 n
   putStrLn $ t <> ": " <> res

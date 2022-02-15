@@ -27,7 +27,7 @@ import Perf
 import Perf.Stats
 import NumHask.Space (quantile)
 import Data.FormatN
-import Perf.Cycle
+import Perf.Tick
 import Prelude as P
 import Data.Foldable
 import qualified Data.Text as Text
@@ -38,14 +38,14 @@ import qualified Data.Text.IO as Text
 
 * tick
 
-The fundamental operation of Perf.Cycle is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
+The fundamental operation of Perf.Tick is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
 #+begin_src haskell
 :t tick
 #+end_src
 
 #+RESULTS:
-: tick :: (a -> b) -> a -> IO (Cycle, b)
+: tick :: (a -> b) -> a -> IO (Word64, b)
 
 tick returns in the IO monad, because reading a cycle counter is an IO effect. The trivial but fundamental point is that performance measurement effects the computation being measured.
 
@@ -60,7 +60,7 @@ tick_ measures the number of cycles between two clock reads.
 #+end_src
 
 #+RESULTS:
-: tick_ :: IO Cycle
+: tick_ :: IO Word64
 
 #+begin_src haskell
 replicateM 10 tick_
@@ -87,7 +87,7 @@ Alternatively, ~tickIO~ measures the evaluation of an IO value.
 #+end_src
 
 #+RESULTS:
-: tickIO :: IO a -> IO (Cycle, a)
+: tickIO :: IO a -> IO (Word64, a)
 
 #+begin_src haskell
 fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
@@ -155,7 +155,11 @@ fmap (median . fst) $ ticks 1000 fLambda 1000
 #+RESULTS:
 : 63,400
 
-* apps
+* perf results
+:PROPERTIES:
+:EXPORT_FILE_NAME: perf-results
+:export_date: 2022-2-13
+:END:
 
 ** example1
 
@@ -213,65 +217,278 @@ perf-basic issues:
 
 
 
-#+begin_src sh :results output
+#+begin_src sh :results drawer :exports both
 perf-basic -r 10000 --average -l 1000
 #+end_src
 
 #+RESULTS:
-#+begin_example
-tick_: [14,16,16,16,16,16,14,14,16,16]
-tick_: 16.0
-const (): [16,16,16,16,18,18,18,18,16,16]
-const ()|19.4
-tickIO (pure ()): 16.2
-ticks fuseSum | 2,060
-multi tick fuseSum | 1,990
-multi tickWHNF fuseSum | 2,030
-multi tickLazy fuseSum | 18.3
-multi tickForce fuseSum | 2,000
-multi tickForceArgs fuseSum | 1,980
-ticks fuseConst | 1,380
-multi tick fuseConst | 1,310
-multi tickWHNF fuseConst | 1,420
-multi tickLazy fuseConst | 18.7
-multi tickForce fuseConst | 1,340
-multi tickForceArgs fuseConst | 1,320
-ticks recSum | 10,700
-multi tick recSum | 5,750
-multi tickWHNF recSum | 5,780
-multi tickLazy recSum | 18.7
-multi tickForce recSum | 5,840
-multi tickForceArgs recSum | 5,940
-ticks monoSum | 11,100
-multi tick monoSum | 5,720
-multi tickWHNF monoSum | 5,770
-multi tickLazy monoSum | 18.5
-multi tickForce monoSum | 5,690
-multi tickForceArgs monoSum | 5,780
-ticks polySum | 11,200
-multi tick polySum | 5,680
-multi tickWHNF polySum | 5,800
-multi tickLazy polySum | 18.7
-multi tickForce polySum | 5,820
-multi tickForceArgs polySum | 5,850
-ticks lambdaSum | 11,200
-multi tick lambdaSum | 5,640
-multi tickWHNF lambdaSum | 5,750
-multi tickLazy lambdaSum | 18.1
-multi tickForce lambdaSum | 5,700
-multi tickForceArgs lambdaSum | 5,810
-ticks mapInc | 126
-multi tick mapInc | 107
-multi tickWHNF mapInc | 169
-multi tickLazy mapInc | 18.2
-multi tickForce mapInc | 202,000
-multi tickForceArgs mapInc | 57.8
-#+end_example
+:results:
+| average fams  |                             17.5 |
+| average faps  |                             80.8 |
+| best fams     |                             15.5 |
+| best faps     |                             15.7 |
+| first 10 fams | [148,36,16,16,16,18,18,16,16,18] |
+| first 10 faps | [200,14,16,18,18,18,16,20,16,16] |
+| first fam     |                              148 |
+| first fap     |                              200 |
+| median fams   |                             17.4 |
+| median faps   |                             17.8 |
+:end:
+
 
 #+begin_src sh :results output
 ghc app/basic.hs -O2
 ./app/basic -r 10000 --average -l 1000
 #+end_src
+
+** noops
+
+#+begin_src haskell
+:r
+:set prompt "> "
+:set -XOverloadedLabels
+import qualified Data.Text as Text
+import qualified Data.Map.Strict as Map
+import Chart
+import Prelude
+import Optics.Core
+m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Int])
+let (Just d) = Map.lookup "fap cycles'" m
+filter (> 100) d
+#+end_src
+
+#+RESULTS:
+| 4788 | 220 | 304 | 142 | 112 | 102 | 124 | 882950 |
+
+
+#+begin_src haskell :file other/noop.svg :results output graphics file :exports results
+writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
+#+end_src
+
+#+RESULTS:
+[[file:other/noop.svg]]
+
+** tick infrastructure
+
+#+begin_src sh
+perf-basic -r 1000 -l 1000 --best --ticktypes
+#+end_src
+
+#+RESULTS:
+|   |               |   count | countForce | countForceArgs | countLazy | countWHNF |  cycles |
+|   | cataSum       | 11700.0 |    11700.0 |        11700.0 |      17.2 |   11700.0 | 11600.0 |
+|   | foldrSum      |  9240.0 |     9260.0 |         9280.0 |      17.1 |    9270.0 |  9270.0 |
+|   | fuseFoldl'Sum |  1350.0 |     1350.0 |         1350.0 |      16.1 |    1350.0 |  1350.0 |
+|   | fuseFoldrSum  |  3890.0 |     3890.0 |         3890.0 |      14.9 |    3890.0 |  3890.0 |
+|   | fuseSum       |  1350.0 |     1340.0 |         1350.0 |      15.3 |    1350.0 |  1350.0 |
+|   | lambdaSum     | 11000.0 |    11000.0 |        11000.0 |      14.8 |   11000.0 | 11000.0 |
+|   | monoSum       |  8160.0 |     8160.0 |         8150.0 |      16.6 |    8170.0 |  8150.0 |
+|   | polySum       | 11000.0 |    11000.0 |        11000.0 |      16.8 |   11000.0 |  5990.0 |
+|   | recSum        | 10900.0 |     5720.0 |         5720.0 |      16.7 |    5720.0 |  5690.0 |
+|   | tailSum       | 11700.0 |    13500.0 |        13500.0 |      16.9 |   11700.0 | 14300.0 |
+|   | tailSumGo     | 14900.0 |    13900.0 |        13900.0 |      17.1 |   14700.0 | 14700.0 |
+
+#+begin_src sh
+perf-basic -r 10000 -l 1000 --best --ticktypes
+#+end_src
+
+#+RESULTS:
+|   |               |   count | countForce | countForceArgs | countLazy | countWHNF |  cycles |
+|   | cataSum       |  7050.0 |     7060.0 |         7070.0 |      16.8 |    7080.0 | 17000.0 |
+|   | foldrSum      |  9270.0 |     9270.0 |         9270.0 |      15.4 |    9300.0 |  9260.0 |
+|   | fuseFoldl'Sum |  1350.0 |     1350.0 |         1340.0 |      15.3 |    1350.0 |  1350.0 |
+|   | fuseFoldrSum  |  3890.0 |     3890.0 |         3890.0 |      16.1 |    3900.0 |  3890.0 |
+|   | fuseSum       |  1350.0 |     1350.0 |         1350.0 |      15.3 |    1350.0 |  1350.0 |
+|   | lambdaSum     |  5570.0 |     5560.0 |         5560.0 |      15.2 |    5560.0 |  5560.0 |
+|   | monoSum       | 11000.0 |     5550.0 |         5550.0 |      15.3 |    5550.0 |  5550.0 |
+|   | polySum       | 11000.0 |     5560.0 |         5510.0 |      16.8 |    5510.0 |  5520.0 |
+|   | recSum        |  5720.0 |     5700.0 |         5700.0 |      17.0 |    5720.0 |  5700.0 |
+|   | tailSum       |  6980.0 |     7000.0 |         7000.0 |      16.5 |    7000.0 |  6990.0 |
+|   | tailSumGo     |  9270.0 |    18600.0 |        18500.0 |      15.7 |   20800.0 | 20700.0 |
+
+
+*** short list
+#+begin_src sh
+perf-basic -r 10000 -l 10 --best --ticktypes
+#+end_src
+
+#+RESULTS:
+|   |               | count | countForce | countForceArgs | countLazy | countWHNF | cycles |
+|   | cataSum       | 104.0 |       90.4 |           93.4 |      15.5 |      93.0 |   91.1 |
+|   | foldrSum      |  99.6 |      100.0 |          100.0 |      16.0 |     101.0 |   98.8 |
+|   | fuseFoldl'Sum |  28.8 |       31.1 |           30.9 |      15.6 |      31.5 |   27.9 |
+|   | fuseFoldrSum  |  53.7 |       56.0 |           56.3 |      15.1 |      55.8 |   53.5 |
+|   | fuseSum       |  33.5 |       31.3 |           30.6 |      15.6 |      31.2 |   28.3 |
+|   | lambdaSum     |  78.1 |       63.6 |           63.6 |      15.0 |      65.3 |   64.2 |
+|   | monoSum       |  63.1 |       63.6 |           63.6 |      16.0 |      65.3 |   63.3 |
+|   | polySum       |  80.1 |       77.2 |           77.2 |      15.3 |      80.8 |   77.7 |
+|   | recSum        |  89.9 |       77.1 |           76.4 |      15.7 |      77.2 |   75.0 |
+|   | tailSum       | 104.0 |       90.0 |           90.1 |      15.2 |      91.7 |   91.2 |
+|   | tailSumGo     |  99.2 |      101.0 |          101.0 |      16.0 |     101.0 |   99.3 |
+
+*** long list
+#+begin_src sh
+perf-basic -r 100 -l 100000 --best --ticktypes
+#+end_src
+
+#+RESULTS:
+|   |               |     count | countForce | countForceArgs | countLazy | countWHNF |    cycles |
+|   | cataSum       | 2360000.0 |  4320000.0 |      2260000.0 |      15.9 | 4680000.0 | 2300000.0 |
+|   | foldrSum      | 2760000.0 |  2760000.0 |      2770000.0 |      16.6 | 2790000.0 | 2760000.0 |
+|   | fuseFoldl'Sum |  139000.0 |   128000.0 |       128000.0 |      16.2 |  128000.0 |  132000.0 |
+|   | fuseFoldrSum  | 1650000.0 |  1640000.0 |      1660000.0 |      16.1 | 1640000.0 | 1670000.0 |
+|   | fuseSum       |  128000.0 |   128000.0 |       132000.0 |      15.5 |  132000.0 |  128000.0 |
+|   | lambdaSum     | 1280000.0 |  1260000.0 |      1260000.0 |      15.8 | 1270000.0 | 1260000.0 |
+|   | monoSum       |  828000.0 |   723000.0 |       720000.0 |      15.0 |  826000.0 |  722000.0 |
+|   | polySum       |  731000.0 |   728000.0 |       728000.0 |      15.8 |  731000.0 |  724000.0 |
+|   | recSum        | 1400000.0 |  1370000.0 |      1360000.0 |      15.2 | 1380000.0 | 1370000.0 |
+|   | tailSum       | 2430000.0 |  2320000.0 |      2300000.0 |      15.9 | 2420000.0 | 2260000.0 |
+|   | tailSumGo     | 3150000.0 |  2770000.0 |      2790000.0 |      16.9 | 2750000.0 | 2750000.0 |
+
+* guage
+
+#+begin_src sh
+perf-basic -r 10000 -l 1000 --average --guage
+#+end_src
+
+#+RESULTS:
+| fuseSum       |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 600.3 | ns |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 594.7 | ns |
+|               |          |     |                 |      |       |    |
+| fuseFoldl'Sum |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 601.0 | ns |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 595.6 | ns |
+|               |          |     |                 |      |       |    |
+| fuseFoldrSum  |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 1.731 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 1.699 | μs |
+|               |          |     |                 |      |       |    |
+| tailSum       |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 3.123 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 3.119 | μs |
+|               |          |     |                 |      |       |    |
+| tailSumGo     |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 4.221 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 4.251 | μs |
+|               |          |     |                 |      |       |    |
+| foldrSum      |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 4.281 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 4.209 | μs |
+|               |          |     |                 |      |       |    |
+| recSum        |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.531 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.536 | μs |
+|               |          |     |                 |      |       |    |
+| cataSum       |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 3.116 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 3.113 | μs |
+|               |          |     |                 |      |       |    |
+| monoSum       |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.476 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.464 | μs |
+|               |          |     |                 |      |       |    |
+| polySum       |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.485 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.471 | μs |
+|               |          |     |                 |      |       |    |
+| lambdaSum     |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.476 | μs |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 2.456 | μs |
+|               |          |     |                 |      |       |    |
+| noop          |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 5.542 | ns |
+|               |          |     |                 |      |       |    |
+| benchmarking  | function | ... | function | time | 5.527 | ns |
+|               |          |     |                 |      |       |    |
+
+| fuseSum       | 616.6 ns |      |
+| fuseFoldl'Sum | 617.1 ns |      |
+| fuseFoldrSum  | 1.768 μs | 4596 |
+| tailSum       | 3.165 μs |      |
+| tailSumGo     | 4.205 μs |      |
+| foldrSum      | 4.194 μs |      |
+| recSum        | 2.551 μs |      |
+| cataSum       | 3.120 μs |      |
+| monoSum       | 2.517 μs | 6544 |
+| polySum       | 2.477 μs |      |
+| lambdaSum     | 2.467 μs |      |
+
+
+* ghc stats
+
+- allocated_bytes
+- gcs
+- gcdetails_live_bytes
+- max_live_bytes
+- max_mem_in_use_bytes
+
+#+begin_src haskell
+:load app/basic.hs
+m <- readGHCStats "other/ghcstats.show"
+xs = [x | (Just x) <- snd (head $ Map.toList m)]
+average $ mutator_cpu_ns <$> (\(x,y) -> diffRTSStats x y) <$> xs
+#+end_src
+
+#+RESULTS:
+: > > "4.56e6"
+
+#+begin_src haskell
+length $ filter (/=0) $ (\x -> mutator_cpu_ns x - cpu_ns x) . (\(x,y) -> diffRTSStats x y) <$> xs
+#+end_src
+
+#+RESULTS:
+: 1
+
+#+begin_src haskell
+length $ filter (/=0) $ (\x -> mutator_elapsed_ns x - elapsed_ns x) . (\(x,y) -> diffRTSStats x y) <$> xs
+#+end_src
+
+#+RESULTS:
+: 1
+
+#+begin_src haskell
+take 1 $ (\(x,y) -> diffRTSStats x y) <$> xs
+#+end_src
+
+#+RESULTS:
+| RTSStats | (gcs = 69 major_gcs = 5 allocated_bytes = 71248704 max_live_bytes = 24028400 max_large_objects_bytes = 32768 max_compact_bytes = 0 max_slop_bytes = 4115216 max_mem_in_use_bytes = 57671680 cumulative_live_bytes = 50755760 copied_bytes = 87690760 par_copied_bytes = 0 cumulative_par_max_copied_bytes = 0 cumulative_par_balanced_copied_bytes = 0 init_cpu_ns = 0 init_elapsed_ns = 0 mutator_cpu_ns = 7033000 mutator_elapsed_ns = 7393243 gc_cpu_ns = 52961000 gc_elapsed_ns = 67889554 cpu_ns = 59994000 elapsed_ns = 75282797 nonmoving_gc_sync_cpu_ns = 0 nonmoving_gc_sync_elapsed_ns = 0 nonmoving_gc_sync_max_elapsed_ns = 0 nonmoving_gc_cpu_ns = 0 nonmoving_gc_elapsed_ns = 0 nonmoving_gc_max_elapsed_ns = 0 gc = GCDetails (gcdetails_gen = 0 gcdetails_threads = 1 gcdetails_allocated_bytes = 1032192 gcdetails_live_bytes = 39511280 gcdetails_large_objects_bytes = 32768 gcdetails_compact_bytes = 0 gcdetails_slop_bytes = 6753040 gcdetails_mem_in_use_bytes = 57671680 gcdetails_copied_bytes = 573480 gcdetails_par_max_copied_bytes = 0 gcdetails_par_balanced_copied_bytes = 0 gcdetails_sync_elapsed_ns = 1023241209498342 gcdetails_cpu_ns = 316000 gcdetails_elapsed_ns = 319087 gcdetails_nonmoving_gc_sync_cpu_ns = 0 gcdetails_nonmoving_gc_sync_elapsed_ns = 0)) |
+
+
+#+begin_src haskell
+length $ filter (/=0) $ (\x -> allocated_bytes x) . (\(x,y) -> diffRTSStats x y) <$> xs
+#+end_src
+
+#+RESULTS:
+: 1
+
+#+begin_src haskell
+take 1 xs
+#+end_src
+
+#+RESULTS:
+| RTSStats | (gcs = 0 major_gcs = 0 allocated_bytes = 0 max_live_bytes = 0 max_large_objects_bytes = 0 max_compact_bytes = 0 max_slop_bytes = 0 max_mem_in_use_bytes = 0 cumulative_live_bytes = 0 copied_bytes = 0 par_copied_bytes = 0 cumulative_par_max_copied_bytes = 0 cumulative_par_balanced_copied_bytes = 0 init_cpu_ns = 296000 init_elapsed_ns = 3702626 mutator_cpu_ns = 252000 mutator_elapsed_ns = 414025 gc_cpu_ns = 0 gc_elapsed_ns = 0 cpu_ns = 252000 elapsed_ns = 414025 nonmoving_gc_sync_cpu_ns = 0 nonmoving_gc_sync_elapsed_ns = 0 nonmoving_gc_sync_max_elapsed_ns = 0 nonmoving_gc_cpu_ns = 0 nonmoving_gc_elapsed_ns = 0 nonmoving_gc_max_elapsed_ns = 0 gc = GCDetails (gcdetails_gen = 0 gcdetails_threads = 0 gcdetails_allocated_bytes = 0 gcdetails_live_bytes = 0 gcdetails_large_objects_bytes = 0 gcdetails_compact_bytes = 0 gcdetails_slop_bytes = 0 gcdetails_mem_in_use_bytes = 0 gcdetails_copied_bytes = 0 gcdetails_par_max_copied_bytes = 0 gcdetails_par_balanced_copied_bytes = 0 gcdetails_sync_elapsed_ns = 0 gcdetails_cpu_ns = 0 gcdetails_elapsed_ns = 0 gcdetails_nonmoving_gc_sync_cpu_ns = 0 gcdetails_nonmoving_gc_sync_elapsed_ns = 0)) | RTSStats | (gcs = 69 major_gcs = 5 allocated_bytes = 71248704 max_live_bytes = 24028400 max_large_objects_bytes = 32768 max_compact_bytes = 0 max_slop_bytes = 4115216 max_mem_in_use_bytes = 57671680 cumulative_live_bytes = 50755760 copied_bytes = 87690760 par_copied_bytes = 0 cumulative_par_max_copied_bytes = 0 cumulative_par_balanced_copied_bytes = 0 init_cpu_ns = 296000 init_elapsed_ns = 3702626 mutator_cpu_ns = 7285000 mutator_elapsed_ns = 7807268 gc_cpu_ns = 52961000 gc_elapsed_ns = 67889554 cpu_ns = 60246000 elapsed_ns = 75696822 nonmoving_gc_sync_cpu_ns = 0 nonmoving_gc_sync_elapsed_ns = 0 nonmoving_gc_sync_max_elapsed_ns = 0 nonmoving_gc_cpu_ns = 0 nonmoving_gc_elapsed_ns = 0 nonmoving_gc_max_elapsed_ns = 0 gc = GCDetails (gcdetails_gen = 0 gcdetails_threads = 1 gcdetails_allocated_bytes = 1032192 gcdetails_live_bytes = 39511280 gcdetails_large_objects_bytes = 32768 gcdetails_compact_bytes = 0 gcdetails_slop_bytes = 6753040 gcdetails_mem_in_use_bytes = 57671680 gcdetails_copied_bytes = 573480 gcdetails_par_max_copied_bytes = 0 gcdetails_par_balanced_copied_bytes = 0 gcdetails_sync_elapsed_ns = 1023241209498342 gcdetails_cpu_ns = 316000 gcdetails_elapsed_ns = 319087 gcdetails_nonmoving_gc_sync_cpu_ns = 0 gcdetails_nonmoving_gc_sync_elapsed_ns = 0)) |
+
+
+#+begin_src haskell
+take 1 . reverse $ xs
+#+end_src
+
+#+RESULTS:
+| RTSStats | (gcs = 3 major_gcs = 1 allocated_bytes = 2727088 max_live_bytes = 1806792 max_large_objects_bytes = 32768 max_compact_bytes = 0 max_slop_bytes = 32312 max_mem_in_use_bytes = 4194304 cumulative_live_bytes = 1806792 copied_bytes = 3430792 par_copied_bytes = 0 cumulative_par_max_copied_bytes = 0 cumulative_par_balanced_copied_bytes = 0 init_cpu_ns = 325000 init_elapsed_ns = 4215545 mutator_cpu_ns = 16826000 mutator_elapsed_ns = 18373905 gc_cpu_ns = 2555000 gc_elapsed_ns = 3204377 cpu_ns = 19381000 elapsed_ns = 21578282 nonmoving_gc_sync_cpu_ns = 0 nonmoving_gc_sync_elapsed_ns = 0 nonmoving_gc_sync_max_elapsed_ns = 0 nonmoving_gc_cpu_ns = 0 nonmoving_gc_elapsed_ns = 0 nonmoving_gc_max_elapsed_ns = 0 gc = GCDetails (gcdetails_gen = 1 gcdetails_threads = 1 gcdetails_allocated_bytes = 889344 gcdetails_live_bytes = 1806792 gcdetails_large_objects_bytes = 32768 gcdetails_compact_bytes = 0 gcdetails_slop_bytes = 32312 gcdetails_mem_in_use_b bbytes = 4194304 gcdetails_copied_bytes = 1774040 gcdetails_par_max_copied_bytes = 0 gcdetails_par_balanced_copied_bytes = 0 gcdetails_sync_elapsed_ns = 1016690408670729 gcdetails_cpu_ns = 1217000 gcdetails_elapsed_ns = 1567660 gcdetails_nonmoving_gc_sync_cpu_ns = 0 gcdetails_nonmoving_gc_sync_elapsed_ns = 0)) | RTSStats | (gcs = 3 major_gcs = 1 allocated_bytes = 2727088 max_live_bytes = 1806792 max_large_objects_bytes = 32768 max_compact_bytes = 0 max_slop_bytes = 32312 max_mem_in_use_bytes = 4194304 cumulative_live_bytes = 1806792 copied_bytes = 3430792 par_copied_bytes = 0 cumulative_par_max_copied_bytes = 0 cumulative_par_balanced_copied_bytes = 0 init_cpu_ns = 325000 init_elapsed_ns = 4215545 mutator_cpu_ns = 16838000 mutator_elapsed_ns = 18387036 gc_cpu_ns = 2555000 gc_elapsed_ns = 3204377 cpu_ns = 19393000 elapsed_ns = 21591413 nonmoving_gc_sync_cpu_ns = 0 nonmoving_gc_sync_elapsed_ns = 0 nonmoving_gc_sync_max_elapsed_ns = 0 nonmoving_gc_cpu_ns = 0 nonmoving_gc_elapsed_ns = 0 nonmoving_gc_max_elapsed_ns = 0 gc = GCDetails (gcdetails_gen = 1 gcdetails_threads = 1 gcdetails_allocated_bytes = 889344 gcdetails_live_bytes = 1806792 gcdetails_large_objects_bytes = 32768 gcdetails_compact_bytes = 0 gcdetails_slop_bytes = 32312 gcdetails_mem_in_use_bytes = 4194304 gcdetails_copied_bytes = 1774040 gcdetails_par_max_copied_bytes = 0 gcdetails_par_balanced_copied_bytes = 0 gcdetails_sync_elapsed_ns = 1016690408670729 gcdetails_cpu_ns = 1217000 gcdetails_elapsed_ns = 1567660 gcdetails_nonmoving_gc_sync_cpu_ns = 0 gcdetails_nonmoving_gc_sync_elapsed_ns = 0)) |
+
+
 
 
 * Resources

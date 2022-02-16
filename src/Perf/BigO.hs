@@ -37,7 +37,8 @@ where
 import qualified Data.List as GHC.List
 import qualified Data.List as List
 import qualified Data.Vector as V
-import Perf
+import Perf.Types
+import Perf.Time
 import Prelude
 import GHC.Generics
 import Data.Bool
@@ -149,7 +150,7 @@ instance (Num a) => Num (Order a) where
   fromInteger x = Order $ replicate 9 (fromInteger x)
 
 -- n' = [1,2,3,4,5,10,20,100,1000,10000]
--- cs' <- warmup 1000 >> (sequence $ (\n -> fst <$> count (\x -> List.nub [0 .. (x - 1)]) n) <$> [1,2,3,4,5,10,20,100,1000,10000])
+-- cs' <- warmup 1000 >> (sequence $ (\n -> fst <$> tick (\x -> List.nub [0 .. (x - 1)]) n) <$> [1,2,3,4,5,10,20,100,1000,10000])
 -- sum $ fmap abs $ zipWith (\n c -> c - demote N2 (n' List.!! 8) (P.fromIntegral (cs' List.!! 8))) n' (P.fromIntegral <$> cs')
 -- >>> estimateO (\x -> List.nub [0 .. (x - 1)]) [1,10,100,1000]
 --
@@ -157,7 +158,7 @@ instance (Num a) => Num (Order a) where
 estimateO :: (Int -> a) -> [Int] -> Order Double
 estimateO f ns = do
   warmup 100
-  cs <- sequence $ (\n -> fst <$> count f n) <$> ns
+  cs <- sequence $ (\n -> fst <$> tick f n) <$> ns
   undefined
 
 -}
@@ -226,7 +227,7 @@ stepOsB cs ns = (o, f, r)
 bigOTest :: Double -> IO (O, Double, Double)
 bigOTest n = do
   _ <- warmup 1000
-  cs <- sequence $ (\n -> fst <$> count (\x -> List.nub [0 .. (x - 1)]) n) <$> ns
+  cs <- sequence $ (\n -> fst <$> tick (\x -> List.nub [0 .. (x - 1)]) n) <$> ns
   pure (stepOsB (fromIntegral <$> cs) ns)
   where
     ns = reverse $ List.unfoldr (\n -> let n' = (fromIntegral (floor (n / 10) :: Integer) :: Double) in bool (Just (n', n')) Nothing (n' == 0)) n
@@ -237,7 +238,7 @@ bigOTest n = do
 bigOT :: (Double -> a) -> Double -> IO (O, Double, Double)
 bigOT f n = do
   _ <- warmup 1000
-  cs <- sequence $ (\n -> fst <$> count f n) <$> ns
+  cs <- sequence $ (\n -> fst <$> tick f n) <$> ns
   pure (stepOsB (fromIntegral <$> cs) ns)
   where
     ns = reverse $ List.unfoldr (\n -> let n' = (fromIntegral (floor (n / 10) :: Integer)) in bool (Just (n', n')) Nothing (n' == 0)) n

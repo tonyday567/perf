@@ -12,195 +12,281 @@
 -- | Algorithms and functions for testing purposes
 
 module Perf.Algos
-  ( AlgoType (..),
-    AlgoApplication(..),
-    parseAlgo,
-    allAlgos,
-    allApps,
-    SumAlgo (..),
+  (
+    -- * function application unifications
+    AlgoExample (..),
+    allAlgoExamples,
+    parseAlgoExample,
+    ExamplePattern (..),
+    examplePattern,
+
+    SumPattern (..),
     allSums,
 
+    LengthPattern (..),
+    allLengths,
+
     -- * sums
-    recSum,
-    fuseSum,
-    fuseFoldl'Sum,
-    fuseFoldrSum,
-    tailSum,
-    tailSumGo,
-    cataSum,
-    foldrSum,
-    monoSum,
-    polySum,
-    lambdaSum,
+    sumTail,
+    sumTailLazy,
+    sumFlip,
+    sumFlipLazy,
+    sumCo,
+    sumCoGo,
+    sumCoCase,
+    sumAux,
+    sumFoldr,
+    sumCata,
+    sumSum,
+    sumMono,
+    sumPoly,
+    sumLambda,
     sumF,
-    sumR,
+    sumFuse,
+    sumFusePoly,
+    sumFuseFoldl',
+    sumFuseFoldr,
 
     -- * length
     lengthTail,
     lengthTailLazy,
-    lengthPoly,
-    lengthMonoMaybe,
-    lengthr,
-    lengthR,
-    lengthR',
-    lengthRec,
-    lengthCase,
+    lengthFlip,
+    lengthFlipLazy,
+    lengthCo,
+    lengthCoCase,
     lengthAux,
+    lengthFoldr,
+    lengthFoldrConst,
+    lengthF,
+    lengthFMono,
 
-    -- * counting
-    maybeCount,
-    maybeCountLazy,
-    maybeCountR,
-
-
-    -- * recursive patterns
+    -- * recursion patterns
     recurseTail,
-    recurseCo,
     recurseTailLazy,
-    accTail,
-    accN,
+    recurseFlip,
+    recurseFlipLazy,
+    recurseCo,
+    recurseCoLazy,
+    recurseCata,
 
-    -- * other
+    -- * miscellaneous
     mapInc,
-    fuseConst,
+    constFuse,
     splitHalf,
-
   ) where
 
 import Data.Foldable
 import Data.Text (Text)
 import Options.Applicative
 import Data.Bifunctor
-import Data.Bool
 import Data.Functor.Foldable
 
-data AlgoType = AlgoRecSum | AlgoFuseSum | AlgoFuseConst | AlgoMonoSum | AlgoPolySum | AlgoLambdaSum deriving (Eq, Show)
+-- | Algorithm examples for testing
+data AlgoExample = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc deriving (Eq, Show)
 
-allAlgos :: [AlgoType]
-allAlgos =
+allAlgoExamples :: [AlgoExample]
+allAlgoExamples =
   [
-    AlgoRecSum,
-    AlgoFuseSum,
-    AlgoFuseConst,
-    AlgoMonoSum,
-    AlgoPolySum,
-    AlgoLambdaSum
+    ExampleSumFuse,
+    ExampleSum,
+    ExampleLengthF,
+    ExampleConstFuse,
+    ExampleMapInc
   ]
 
-data AlgoApplication a =
-  ApplicationFuseSum Text (Int -> Int) Int |
-  ApplicationFuseConst Text (Int -> ()) Int |
-  ApplicationRecSum Text ((Num a) => [a] -> a) [a] |
-  ApplicationMonoSum Text ([Int] -> Int) [Int] |
-  ApplicationPolySum Text ((Num a) => [a] -> a) [a] |
-  ApplicationLambdaSum Text ([Int] -> Int) [a]
+parseAlgoExample :: Parser AlgoExample
+parseAlgoExample =
+  flag' ExampleSumFuse (long "sumFuse" <> help "fused sum pipeline") <|>
+  flag' ExampleSum (long "sum" <> help "sum") <|>
+  flag' ExampleLengthF (long "lengthF" <> help "foldr id length") <|>
+  flag' ExampleConstFuse (long "constFuse" <> help "fused const pipeline") <|>
+  flag' ExampleMapInc (long "mapInc" <> help "fmap (+1)") <|>
+  pure ExampleSum
 
-data SumAlgo a =
+-- | Unification of example function applications
+data ExamplePattern a =
+  PatternSumFuse Text ((Num a) => (a -> a)) a |
+  PatternSum Text ((Num a) => [a] -> a) [a] |
+  PatternLengthF Text ([a] -> Int) [a] |
+  PatternConstFuse Text (Int -> ()) Int |
+  PatternMapInc Text ([Int] -> [Int]) [Int]
+
+examplePattern :: AlgoExample -> Int -> ExamplePattern Int
+examplePattern ExampleSumFuse l = PatternSumFuse "sumFuse" sumFuse l
+examplePattern ExampleSum l = PatternSum "sum" sum [1..l]
+examplePattern ExampleLengthF l = PatternLengthF "lengthF" lengthF [1..l]
+examplePattern ExampleConstFuse l = PatternConstFuse "constFuse" constFuse l
+examplePattern ExampleMapInc l = PatternMapInc "mapInc" mapInc [1..l]
+
+-- | Unification of sum function applications
+data SumPattern a =
   SumFuse Text (Int -> Int) Int |
+  SumFusePoly Text ((Enum a, Num a) => a -> a) a |
   SumPoly Text ((Num a) => [a] -> a) [a] |
-  SumMono Text ([Int] -> Int) [Int] |
-  SumLambda Text ([Int] -> Int) [a]
+  SumMono Text ([Int] -> Int) [Int]
 
-allSums :: Int -> [SumAlgo Int]
+allSums :: Int -> [SumPattern Int]
 allSums l =
-  [ SumFuse "fuseSum" fuseSum l,
-    SumFuse "fuseFoldl'Sum" fuseFoldl'Sum l,
-    SumFuse "fuseFoldrSum" fuseFoldrSum l,
-    SumPoly "tailSum" tailSum [1..l],
-    SumPoly "tailSumGo" tailSumGo [1..l],
-    SumPoly "foldrSum" foldrSum [1..l],
-    SumPoly "recSum" recSum [1..l],
-    SumPoly "cataSum" cataSum [1..l],
-    SumMono "monoSum" monoSum [1..l],
-    SumPoly "polySum" polySum [1..l],
-    SumLambda "lambdaSum" lambdaSum [1..l]
+  [ SumPoly "sumTail" sumTail [1..l],
+    SumPoly "sumTailLazy" sumTailLazy [1..l],
+    SumPoly "sumFlip" sumFlip [1..l],
+    SumPoly "sumFlipLazy" sumFlipLazy [1..l],
+    SumPoly "sumCo" sumCo [1..l],
+    SumPoly "sumCoGo" sumCoGo [1..l],
+    SumPoly "sumCoCase" sumCoCase [1..l],
+    SumPoly "sumAux" sumAux [1..l],
+    SumPoly "sumFoldr" sumFoldr [1..l],
+    SumPoly "sumCata" sumCata [1..l],
+    SumPoly "sumSum" sumSum [1..l],
+    SumMono "sumMono" sumMono [1..l],
+    SumPoly "sumPoly" sumPoly [1..l],
+    SumPoly "sumLambda" sumLambda [1..l],
+    SumPoly "sumF" sumF [1..l],
+    SumFuse "sumFuse" sumFuse l,
+    SumFusePoly "sumFusePoly" sumFusePoly l,
+    SumFuse "sumFuseFoldl'" sumFuseFoldl' l,
+    SumFuse "sumFuseFoldr" sumFuseFoldr l
   ]
 
-allApps :: Int -> [AlgoApplication Int]
-allApps l =
-  [ ApplicationFuseSum "fuseSum" fuseSum l,
-    ApplicationFuseConst "fuseConst" fuseConst l,
-    ApplicationRecSum "recSum" recSum [1..l],
-    ApplicationMonoSum "monoSum" monoSum [1..l],
-    ApplicationPolySum "polySum" polySum [1..l],
-    ApplicationLambdaSum "lambdaSum" lambdaSum [1..l]
-  ]
+-- | Unification of sum function applications
+data LengthPattern a =
+  LengthPoly Text ([a] -> Int) [a] |
+  LengthMono Text ([Int] -> Int) [Int]
 
-parseAlgo :: Parser AlgoType
-parseAlgo =
-  flag' AlgoFuseSum (long "fsum" <> help "fused sum") <|>
-  flag' AlgoFuseConst (long "fconst" <> help "fused const") <|>
-  flag' AlgoMonoSum (long "monosum" <> help "monomorphic sum") <|>
-  flag' AlgoPolySum (long "polysum" <> help "polymorphic sum") <|>
-  flag' AlgoLambdaSum (long "lambdasum" <> help "lambdaed sum") <|>
-  flag' AlgoRecSum (long "recsum" <> help "recursion sum") <|>
-  pure AlgoFuseSum
+allLengths :: Int -> [LengthPattern Int]
+allLengths l =
+  [ LengthPoly "lengthTail" lengthTail [1..l],
+    LengthPoly "lengthTailLazy" lengthTailLazy [1..l],
+    LengthPoly "lengthFlip" lengthFlip [1..l],
+    LengthPoly "lengthFlipLazy" lengthFlipLazy [1..l],
+    LengthPoly "lengthCo" lengthCo [1..l],
+    LengthPoly "lengthCoCase" lengthCoCase [1..l],
+    LengthPoly "lengthAux" lengthAux [1..l],
+    LengthPoly "lengthFoldr" lengthFoldr [1..l],
+    LengthPoly "lengthFoldrConst" lengthFoldrConst [1..l],
+    LengthPoly "lengthF" lengthF [1..l],
+    LengthMono "lengthFMono" lengthFMono [1..l]
+  ]
 
 -- various sums
+sumTail :: (Num a) => [a] -> a
+sumTail = go 0
+  where
+    go acc [] = acc
+    go acc (x:xs) = go (x+acc) $! xs
 
--- fusion pipelines
-fuseSum :: Int -> Int
-fuseSum x = sum [1 .. x]
+sumTailLazy :: (Num a) => [a] -> a
+sumTailLazy = go 0
+  where
+    go acc [] = acc
+    go acc (x:xs) = go (x+acc) $! xs
 
-fuseFoldl'Sum :: Int -> Int
-fuseFoldl'Sum x = foldl' (+) 0 [1 .. x]
+sumFlip :: (Num a) => [a] -> a
+sumFlip xs0 = go xs0 0
+  where
+    go [] s = s
+    go (x:xs) s = go xs $! x + s
 
-fuseFoldrSum :: Int -> Int
-fuseFoldrSum x = foldr (+) 0 [1 .. x]
+sumFlipLazy :: (Num a) => [a] -> a
+sumFlipLazy xs0 = go xs0 0
+  where
+    go [] s = s
+    go (x:xs) s = go xs $ x + s
 
--- foldr sums
-tailSum :: (Num a) => [a] -> a
-tailSum [] = 0
-tailSum (x:xs) = x + tailSum xs
+sumCo :: (Num a) => [a] -> a
+sumCo [] = 0
+sumCo (x:xs) = x + sumCo xs
 
-tailSumGo :: (Num a) => [a] -> a
-tailSumGo xs = go xs
+sumCoGo :: (Num a) => [a] -> a
+sumCoGo = go
   where
     go [] = 0
     go (x:xs) = x + go xs
 
-foldrSum :: (Num a) => [a] -> a
-foldrSum xs = foldr (+) 0 xs
+sumCoCase :: (Num a) => [a] -> a
+sumCoCase = \case
+  [] -> 0
+  (x:xs) -> x + sumCoCase xs
 
-
--- * recursive sums
-recSum :: (Num a) => [a] -> a
-recSum = go 0
+sumAux :: (Num a) => [a] -> a
+sumAux = \case
+  [] -> b
+  (x:xs) -> f x (sumAux xs)
   where
-    go acc [] = acc
-    go acc (x:xs) = go (x+acc) xs
+    b = 0
+    f x xs = x + xs
 
-cataSum :: [Int] -> Int
-cataSum= cata $ \case
+sumFoldr :: (Num a) => [a] -> a
+sumFoldr xs = foldr (+) 0 xs
+
+sumCata :: (Num a) => [a] -> a
+sumCata = cata $ \case
   Nil -> 0
   Cons x acc -> x + acc
 
-monoSum :: [Int] -> Int
-monoSum xs = foldl' (+) 0 xs
+sumSum :: (Num a) => [a] -> a
+sumSum xs = sum xs
 
-polySum :: (Num b) => [b] -> b
-polySum xs = foldl' (+) 0 xs
+sumMono :: [Int] -> Int
+sumMono xs = foldl' (+) 0 xs
 
-lambdaSum :: [Int] -> Int
-lambdaSum = \xs -> foldl' (+) 0 xs
+sumPoly :: (Num a) => [a] -> a
+sumPoly xs = foldl' (+) 0 xs
 
+sumLambda :: (Num a) => [a] -> a
+sumLambda = \xs -> foldl' (+) 0 xs
 
--- * incrementals
+sumF' :: (Num a) => a -> (a -> a) -> a -> a
+sumF' x r = \ !a -> r (x + a)
 
-fuseConst :: Int -> ()
-fuseConst x = foldl' const () [1 .. x]
+sumF :: (Num a) => [a] -> a
+sumF xs = foldr sumF' id xs 0
 
-mapInc :: [Int] -> [Int]
-mapInc xs = fmap (+1) xs
+sumFuse :: Int -> Int
+sumFuse x = sum [1 .. x]
 
-lengthRec :: [a] -> Int
-lengthRec [] = 0
-lengthRec (_:xs) = 1 + lengthRec xs
+sumFusePoly :: (Enum a, Num a) => a -> a
+sumFusePoly x = sum [1 .. x]
 
-lengthCase :: [a] -> Int
-lengthCase = \case
+sumFuseFoldl' :: Int -> Int
+sumFuseFoldl' x = foldl' (+) 0 [1 .. x]
+
+sumFuseFoldr :: Int -> Int
+sumFuseFoldr x = foldr (+) 0 [1 .. x]
+
+-- * lengths
+lengthTail :: [a] -> Int
+lengthTail xs0 = go 0 xs0
+  where
+    go s [] = s
+    go s (_:xs) = go (s+1) $! xs
+
+lengthTailLazy :: [a] -> Int
+lengthTailLazy xs0 = go 0 xs0
+  where
+    go s [] = s
+    go s (_:xs) = go (s+1) xs
+
+lengthFlip :: [a] -> Int
+lengthFlip xs0 = go xs0 0
+  where
+    go [] s = s
+    go (_:xs) s = go xs $! s + 1
+
+lengthFlipLazy :: [a] -> Int
+lengthFlipLazy xs0 = go xs0 0
+  where
+    go [] s = s
+    go (_:xs) s = go xs $ s + 1
+
+lengthCo :: [a] -> Int
+lengthCo [] = 0
+lengthCo (_:xs) = 1 + lengthCo xs
+
+lengthCoCase :: [a] -> Int
+lengthCoCase = \case
   [] -> 0
-  (_:xs) -> 1 + lengthCase xs
+  (_:xs) -> 1 + lengthCoCase xs
 
 lengthAux :: [a] -> Int
 lengthAux = \case
@@ -210,15 +296,14 @@ lengthAux = \case
     b = 0
     f _ xs = 1 + xs
 
-lengthR :: [a] -> Int
-lengthR = foldr f b
+lengthFoldr :: [a] -> Int
+lengthFoldr = foldr f b
   where
     b = 0
     f _ xs = 1 + xs
 
-lengthR' :: [a] -> Int
-lengthR' = foldr (const (1+)) 0
-
+lengthFoldrConst :: [a] -> Int
+lengthFoldrConst = foldr (const (1+)) 0
 {-
 -- from base:
 -- https://hackage.haskell.org/package/base-4.16.0.0/docs/src/GHC.List.html#length
@@ -229,71 +314,16 @@ lengthFB :: x -> (Int -> Int) -> Int -> Int
 lengthFB _ r !a = r (a + 1)
 
 -}
+lengthF' :: (Num a) => x -> (a -> a) -> a -> a
+lengthF' _ r = \ !a -> r (a+1)
 
--- just some interesting algorithms
-splitHalf :: [a] -> ([a],[a])
-splitHalf xs = go xs xs
-  where
-    go (y:ys) (_:_:zs) = first (y:) (go ys zs)
-    go ys _ = ([],ys)
+lengthF :: [a] -> Int
+lengthF xs0 = foldr lengthF' id xs0 0
 
-lengthTail :: [Int] -> Int
-lengthTail xs0 = go 0 xs0
-  where
-    go c [] = c
-    go c (_:xs) = go (c+1) $! xs
+lengthFMono :: [Int] -> Int
+lengthFMono xs0 = foldr lengthF' id xs0 0
 
-lengthTailLazy :: [Int] -> Int
-lengthTailLazy xs0 = go 0 xs0
-  where
-    go c [] = c
-    go c (_:xs) = go (c+1) xs
-
-lengthF :: (Num a) => x -> (a -> a) -> a -> a
-lengthF _ r = \ !a -> r (a+1)
-
-lengthr :: [Int] -> Int
-lengthr xs0 = foldr lengthF id xs0 0
-
-lengthPoly :: [a] -> Int
-lengthPoly xs0 = foldr lengthF id xs0 0
-
-lengthMonoMaybe :: [Maybe Int] -> Int
-lengthMonoMaybe xs0 = foldr lengthF id xs0 0
-
-maybeCount :: (Int -> Bool) -> [Maybe Int] -> Maybe Int
-maybeCount p xs0 = go 0 xs0
-  where
-    go :: Int -> [Maybe Int] -> Maybe Int
-    go c [] = Just c
-    go _ (Nothing:_) = Nothing
-    go c (Just x:xs) =
-      go (bool c (c+1) (p x)) $! xs
-
-maybeCountLazy :: (Int -> Bool) -> [Maybe Int] -> Maybe Int
-maybeCountLazy p xs0 = go 0 xs0
-  where
-    go :: Int -> [Maybe Int] -> Maybe Int
-    go c [] = Just c
-    go _ (Nothing:_) = Nothing
-    go c (Just x:xs) =
-      if p x then go (c + 1) xs else go c xs
-
-sumF :: (Num a) => a -> (a -> a) -> a -> a
-sumF x r = \ !a -> r (x + a)
-
-sumR :: [Int] -> Int
-sumR xs = foldr sumF id xs 0
-
-maybeCountF :: (Int -> Bool) -> Maybe Int -> (Maybe Int -> Maybe Int) -> Maybe Int -> Maybe Int
-maybeCountF p x r = \ !a ->
-  case x of
-    Nothing -> Nothing
-    Just x' -> if p x' then r (fmap (+1) a) else r a
-
-maybeCountR :: Foldable t => (Int -> Bool) -> t (Maybe Int) -> Maybe Int
-maybeCountR p xs0 = foldr (maybeCountF p) id xs0 (Just 0)
-
+-- * recursion patterns
 recurseTail :: (a -> b -> b) -> b -> [a] -> b
 recurseTail f = go
   where
@@ -306,17 +336,44 @@ recurseTailLazy f = go
     go s [] = s
     go s (x:xs) = go (f x s) xs
 
-accTail :: (Integral a) => a -> a
-accTail x = go x 1 where
-    go 1 y = y
-    go x y = go (x-1) $! (x+y)
+recurseFlip :: (a -> b -> b) -> b -> [a] -> b
+recurseFlip f s0 xs0 = go xs0 s0
+  where
+    go [] s = s
+    go (x:xs) s = go xs $! f x s
 
-accN :: (Integral a) => a -> a
-accN 1 = 1
-accN x = x + accN (x-1)
+recurseFlipLazy :: (a -> b -> b) -> b -> [a] -> b
+recurseFlipLazy f s0 xs0 = go xs0 s0
+  where
+    go [] s = s
+    go (x:xs) s = go xs $ f x s
 
 recurseCo :: (a -> b -> b) -> b -> [a] -> b
 recurseCo f s0 = go
   where
     go [] = s0
-    go (x:xs) = f x (go xs)
+    go (x:xs) = f x $! go xs
+
+recurseCoLazy :: (a -> b -> b) -> b -> [a] -> b
+recurseCoLazy f s0 = go
+  where
+    go [] = s0
+    go (x:xs) = f x $ go xs
+
+recurseCata :: (a -> b -> b) -> b -> [a] -> b
+recurseCata f s0 = cata $ \case
+  Nil -> s0
+  Cons x acc -> f x acc
+
+-- * miscellaneous
+constFuse :: Int -> ()
+constFuse x = foldl' const () [1 .. x]
+
+mapInc :: [Int] -> [Int]
+mapInc xs = fmap (+1) xs
+
+splitHalf :: [a] -> ([a],[a])
+splitHalf xs = go xs xs
+  where
+    go (y:ys) (_:_:zs) = first (y:) (go ys zs)
+    go ys _ = ([],ys)

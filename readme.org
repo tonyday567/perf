@@ -1,13 +1,18 @@
 #+TITLE: perf
 
-~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library focuses on using the rdtsc instruction set that comes with the x86 chip to measure performance as number of cycles.
+~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
+
+- provides a monad transformer, ~PerfT~, as a light-weight wrapper for use on existing code. ~PerfT~ modifications can be included in code bases, as opposed to performance being separated code and  process, with any effects able to be erased at compile time with ~evalPerfT~.
+
+- focuses on using the rdtsc instruction set that comes with the x86 chip to measure accurate time performance as number of clock cycles.
 
 * Usage
-
 
 #+begin_src haskell
 import Perf
 #+end_src
+
+
 
 * setup
 
@@ -18,16 +23,69 @@ Running this readme.org is very slow compared with an external process which acc
 :set -Wno-type-defaults
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
+putStrLn "ok"
 #+end_src
 
 #+RESULTS:
+#+begin_example
+Build profile: -w ghc-8.10.7 -O1
+In order, the following will be built (use -v for more details):
+ - perf-0.9.0 (lib) (file src/Perf/Algos.hs changed)
+Preprocessing library for perf-0.9.0..
+GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
+Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
+[1 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
+[2 of 8] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
+[3 of 8] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
+[4 of 8] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
+[5 of 8] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
+[6 of 8] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
+
+src/Perf/Algos.hs:344:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘lengthTailLocal’
+    |
+344 | lengthTailLocal xs0 = go 0 xs0
+    | ^^^^^^^^^^^^^^^
+
+src/Perf/Algos.hs:350:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘lengthF2’
+    |
+350 | lengthF2 _ r = \ !a -> r (a+1)
+    | ^^^^^^^^
+
+src/Perf/Algos.hs:353:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘lengthr2’
+    |
+353 | lengthr2 xs0 = foldr lengthF2 id xs0 0
+    | ^^^^^^^^
+
+src/Perf/Algos.hs:356:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘recurseTailLocal’
+    |
+356 | recurseTailLocal f = go
+    | ^^^^^^^^^^^^^^^^
+
+src/Perf/Algos.hs:362:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘accTail2’
+    |
+362 | accTail2 n = go [1..n] 0 where
+    | ^^^^^^^^
+
+src/Perf/Algos.hs:367:1: warning: [-Wunused-top-binds]
+    Defined but not used: ‘accTail3’
+    |
+367 | accTail3 n = go 0 [1..n] where
+    | ^^^^^^^^
+[7 of 8] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[8 of 8] Compiling Perf             ( src/Perf.hs, interpreted )
+Ok, 8 modules loaded.
+>  >  >  >  > ok
+#+end_example
+
 
 #+begin_src haskell :results output
 import Perf
-import Perf.Stats
-import NumHask.Space (quantile)
 import Data.FormatN
-import Perf.Tick
 import Prelude as P
 import Data.Foldable
 import qualified Data.Text as Text
@@ -253,7 +311,7 @@ import Chart
 import Prelude
 import Optics.Core
 m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Int])
-let (Just d) = Map.lookup "fap cycles'" m
+let (Just d) = Map.lookup "fap times" m
 filter (> 100) d
 #+end_src
 

@@ -3,34 +3,32 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | basic measurement and callibration
-
 module Main where
 
 import Prelude hiding ((.))
-import Perf.Tick
-import qualified Data.Text as T
-import Data.Function
+import Perf
 import Control.Category
 import Control.Monad
 import Options.Applicative
 import Control.DeepSeq
-import Perf.Algos
-import Perf.Stats
-import Data.Text (Text, unpack)
+import Data.Text (Text)
+import qualified Data.Map.Strict as Map
+import Control.Monad.State.Lazy
+import Data.FormatN
 
 data Options = Options
   { optionRuns :: Int,
     optionLength :: Int,
     optionAlgoType :: AlgoType,
-    optionStatType :: StatType
+    optionStatDType :: StatDType
   } deriving (Eq, Show)
 
 options :: Parser Options
 options = Options <$>
-  option auto (long "runs" <> short 'r' <> help "number of runs to perform") <*>
-  option auto (long "length" <> short 'l' <> help "length of list") <*>
+  option auto (value 1000 <> long "runs" <> short 'r' <> help "number of runs to perform") <*>
+  option auto (value 1000 <> long "length" <> short 'l' <> help "length of list") <*>
   parseAlgo <*>
-  parseStat
+  parseStatD
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
@@ -200,27 +198,31 @@ ticksInline2' n0 f a = go f a n0 []
         (t, _) <- tickInline2' f a
         go f' a' (n - 1) (t:ts)
 
-runs :: (NFData a, NFData b) => Text -> (a -> b) -> a -> Int -> StatType -> IO ()
-runs label f a n s = do
-  putStrLn $ unpack label
-  ticksNoPragma n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksNoPragma " <>)) & (>>= putStrLn)
-  ticksLazy n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksLazy " <>)) & (>>= putStrLn)
-  ticksInline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline " <>)) & (>>= putStrLn)
-  ticksInlineable n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInlineable " <>)) & (>>= putStrLn)
-  ticksNoinline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksNoinline " <>)) & (>>= putStrLn)
-  ticksInline1 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline1 " <>)) & (>>= putStrLn)
-  ticksInline2 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline2 " <>)) & (>>= putStrLn)
-  ticksInline1' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline1' " <>)) & (>>= putStrLn)
-  ticksInline2' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("ticksInline2' " <>)) & (>>= putStrLn)
-  multi tickNoPragma n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickNoPragma " <>)) & (>>= putStrLn)
-  multi tickInline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline " <>)) & (>>= putStrLn)
-  multi tickInlineable n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInlineable " <>)) & (>>= putStrLn)
-  multi tickNoinline n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickNoinline " <>)) & (>>= putStrLn)
-  multi tickInline1 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline1 " <>)) & (>>= putStrLn)
-  multi tickInline2 n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline2 " <>)) & (>>= putStrLn)
-  multi tickInline1' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline1' " <>)) & (>>= putStrLn)
-  multi tickInline2' n f a & fmap (fst >>> stat s >>> T.unpack >>> ("multi tickInline2' " <>)) & (>>= putStrLn)
-  ticks' n f a & reportStat ("ticks' " <> "" <> " | ") s
+-- | run the various incarnations of tick.
+runInlines :: (NFData t, NFData b) => Text -> (t -> b) -> t -> Int -> StatDType -> StateT (Map.Map [Text] Double) IO ()
+runInlines l f a n s = do
+  addStat [l,"tick"] . statD s =<< lift (fst <$> multi tick n f a)
+  addStat [l,"tickWHNF"] . statD s =<< lift (fst <$> multi tickWHNF n f a)
+  addStat [l,"tickLazy"] . statD s =<< lift (fst <$> multi tickLazy n f a)
+  addStat [l,"tickForce"] . statD s =<< lift (fst <$> multi tickForce n f a)
+  addStat [l,"tickForceArgs"] . statD s =<< lift (fst <$> multi tickForceArgs n f a)
+  addStat [l,"stepTime"] . statD s =<< lift (snd . head . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
+  addStat [l,"times"] . statD s =<< lift (snd . head . Map.toList <$> execPerfT (times n) (f |$| a))
+  addStat [l,"ticksNoPragma"] . statD s =<< lift (fst <$> ticksNoPragma n f a)
+  addStat [l,"ticksLazy"] . statD s =<< lift (fst <$> ticksLazy n f a)
+  addStat [l,"ticksInlineable"] . statD s =<< lift (fst <$> ticksInlineable n f a)
+  addStat [l,"ticksNoinline"] . statD s =<< lift (fst <$> ticksNoinline n f a)
+  addStat [l,"ticksInline1"] . statD s =<< lift (fst <$> ticksInline1 n f a)
+  addStat [l,"ticksInline2"] . statD s =<< lift (fst <$> ticksInline2 n f a)
+  addStat [l,"ticksInline1'"] . statD s =<< lift (fst <$> ticksInline1' n f a)
+  addStat [l,"ticksInline2'"] . statD s =<< lift (fst <$> ticksInline2' n f a)
+  addStat [l,"multi_tickNoPragma"] . statD s =<< lift (fst <$> multi tickNoPragma n f a)
+  addStat [l,"multi_tickInlineable"] . statD s =<< lift (fst <$> multi tickInlineable n f a)
+  addStat [l,"multi_tickNoinline"] . statD s =<< lift (fst <$> multi tickNoinline n f a)
+  addStat [l,"multi_tickInline1"] . statD s =<< lift (fst <$> multi tickInline1 n f a)
+  addStat [l,"multi_tickInline2"] . statD s =<< lift (fst <$> multi tickInline2 n f a)
+  addStat [l,"multi_tickInline1'"] . statD s =<< lift (fst <$> multi tickInline1' n f a)
+  addStat [l,"multi_tickInline2'"] . statD s =<< lift (fst <$> multi tickInline2' n f a)
 
 main :: IO ()
 main = do
@@ -228,14 +230,17 @@ main = do
   let !n = optionRuns o
   let !l = optionLength o
   let !ls = [1..l]
-  let s = optionStatType o
+  let s = optionStatDType o
   let !a = optionAlgoType o
   _ <- warmup 100
 
-  case a of
-    AlgoFuseSum -> runs "fuseSum" fuseSum l n s
-    AlgoFuseConst -> runs "fuseConst" fuseConst l n s
-    AlgoRecSum -> runs "recSum" recSum ls n s
-    AlgoMonoSum -> runs "monoSum" monoSum ls n s
-    AlgoPolySum -> runs "polySum" polySum ls n s
-    AlgoLambdaSum -> runs "lambdaSum" lambdaSum ls n s
+  m <- flip execStateT Map.empty $
+    case a of
+      AlgoFuseSum -> runInlines "fuseSum" fuseSum l n s
+      AlgoFuseConst -> runInlines "fuseConst" fuseConst l n s
+      AlgoRecSum -> runInlines "recSum" recSum ls n s
+      AlgoMonoSum -> runInlines "monoSum" monoSum ls n s
+      AlgoPolySum -> runInlines "polySum" polySum ls n s
+      AlgoLambdaSum -> runInlines "lambdaSum" lambdaSum ls n s
+
+  printOrg (fmap (expt (Just 3)) m)

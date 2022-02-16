@@ -26,6 +26,8 @@ module Perf.Stats
 
     -- * algos
     testSum,
+    testSum',
+    testSums,
     testAlgos,
     testStyleBySum,
   ) where
@@ -109,11 +111,11 @@ readStats fp = do
 
 testCountStyles :: (NFData t, NFData b) => Text -> (t -> b) -> t -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
 testCountStyles l f a n s = do
-  addStat [l,"count"] . stat s =<< lift (fst <$> multi count n f a)
-  addStat [l,"countWHNF"] . stat s =<< lift (fst <$> multi countWHNF n f a)
-  addStat [l,"countLazy"] . stat s =<< lift (fst <$> multi countLazy n f a)
-  addStat [l,"countForce"] . stat s =<< lift (fst <$> multi countForce n f a)
-  addStat [l,"countForceArgs"] . stat s =<< lift (fst <$> multi countForceArgs n f a)
+  addStat [l,"count"] . stat s =<< lift (fst <$> multiple count n f a)
+  addStat [l,"countWHNF"] . stat s =<< lift (fst <$> multiple countWHNF n f a)
+  addStat [l,"countLazy"] . stat s =<< lift (fst <$> multiple countLazy n f a)
+  addStat [l,"countForce"] . stat s =<< lift (fst <$> multiple countForce n f a)
+  addStat [l,"countForceArgs"] . stat s =<< lift (fst <$> multiple countForceArgs n f a)
   addStat [l,"cycles"] . stat s =<< lift (snd . head . Map.toList <$> execPerfT (ticks n) (f |$| a))
 
 testAlgos :: AlgoApplication Int -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
@@ -124,14 +126,23 @@ testAlgos (ApplicationMonoSum label f a) n s = testCountStyles label f a n s
 testAlgos (ApplicationPolySum label f a) n s = testCountStyles label f a n s
 testAlgos (ApplicationLambdaSum label f a) n s = testCountStyles label f a n s
 
-testSum :: SumAlgo Int -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
-testSum (SumFuse label f a) n s = testCountStyles label f a n s
-testSum (SumMono label f a) n s = testCountStyles label f a n s
-testSum (SumPoly label f a) n s = testCountStyles label f a n s
-testSum (SumLambda label f a) n s = testCountStyles label f a n s
+testSum :: (Semigroup a, MonadIO m) => SumAlgo Int -> PerfT m a Int
+testSum (SumFuse label f a) = fap label f a
+testSum (SumMono label f a) = fap label f a
+testSum (SumPoly label f a) = fap label f a
+testSum (SumLambda label f a) = fap label f a
+
+testSums :: (MonadIO m) => Int -> Int -> StepMeasure m a -> m (Map.Map Text [a])
+testSums n l m = execPerfT (toMeasureN n m) $ mapM_ testSum (allSums l)
 
 testStyleBySum :: Int -> Int -> StatType -> IO (Map.Map [Text] Text)
-testStyleBySum n l s = flip execStateT Map.empty $ mapM_ (\x -> testSum x n s) (allSums l)
+testStyleBySum n l s = flip execStateT Map.empty $ mapM_ (\x -> testSum' x n s) (allSums l)
+
+testSum' :: SumAlgo Int -> Int -> StatType -> StateT (Map.Map [Text] Text) IO ()
+testSum' (SumFuse label f a) n s = testCountStyles label f a n s
+testSum' (SumMono label f a) n s = testCountStyles label f a n s
+testSum' (SumPoly label f a) n s = testCountStyles label f a n s
+testSum' (SumLambda label f a) n s = testCountStyles label f a n s
 
 runNoOps :: Int -> Maybe FilePath -> IO (Map.Map Text [Word64])
 runNoOps n fp = do

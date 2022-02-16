@@ -40,6 +40,7 @@ library
     Perf.BigO
     Perf.Tick
     Perf.Algos
+    Perf.Degrade
     Perf.Stats
   hs-source-dirs:     src
 
@@ -66,9 +67,9 @@ library
   default-extensions:
   ghc-options: -O2
 
-executable perf-basic
+executable perf-explore
   import: ghc-options-stanza
-  main-is: basic.hs
+  main-is: explore.hs
   hs-source-dirs: app
   build-depends:
     base,
@@ -84,25 +85,6 @@ executable perf-basic
     chart-svg,
     optics-core,
     deepseq,
-  default-language:   Haskell2010
-  ghc-options: -O2
-
-executable perf-example1
-  import: ghc-options-stanza
-  main-is: example1.hs
-  hs-source-dirs: app
-  build-depends:
-    base,
-    perf,
-    optparse-applicative,
-    mtl           ^>=2.2.2,
-    text,
-    containers,
-    box-csv,
-    formatn,
-    gauge,
-    box,
-    attoparsec,
   default-language:   Haskell2010
   ghc-options: -O2
 

@@ -6,7 +6,7 @@
 
 module Main where
 
-import Prelude
+import Prelude hiding (cycle)
 import Options.Applicative
 import Perf.Stats
 import Gauge
@@ -27,7 +27,8 @@ data Options = Options
   { optionRuns :: Int,
     optionLength :: Int,
     optionStatType :: StatType,
-    optionRunType :: RunType
+    optionRunType :: RunType,
+    optionReportSum :: Text
   } deriving (Eq, Show)
 
 parseRun :: Parser RunType
@@ -40,13 +41,13 @@ parseRun =
   flag' RunSpaceTime (long "spacetime" <> help "space and time stats") <|>
   pure RunNoOp
 
-
 options :: Parser Options
 options = Options <$>
   option auto (long "runs" <> short 'r' <> help "number of runs to perform") <*>
   option auto (long "length" <> short 'l' <> help "length of list") <*>
   parseStat <*>
-  parseRun
+  parseRun <*>
+  strOption (long "sum" <> short 's' <> help "type of sum code")
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
@@ -98,7 +99,7 @@ testSumInModule (SumLambda label f a) n s = testTickInModule label f a n s
 
 recordSpaceStats :: FilePath -> (a -> b) -> a -> Int -> IO ()
 recordSpaceStats fp f a n = do
-  xs <- execPerfT (multi' n space) (f |$| a)
+  xs <- execPerfT (toMeasureN n (space False)) (f |$| a)
   writeFile fp (show xs)
 
 readSpaceStats :: FilePath -> IO (Map.Map Text [SpaceStats])
@@ -111,7 +112,7 @@ readSpaceStats fp = do
 
 recordGHCStats :: FilePath -> (a -> b) -> a -> Int -> IO ()
 recordGHCStats fp f a n = do
-  xs <- execPerfT (multi' n ghcStats) (f |$| a)
+  xs <- execPerfT (toMeasureN n ghcStats) (f |$| a)
   writeFile fp (show xs)
 
 readGHCStats :: FilePath -> IO (Map.Map Text [Maybe (RTSStats, RTSStats)])
@@ -134,6 +135,7 @@ main = do
   let !l = optionLength o
   let s = optionStatType o
   let r = optionRunType o
+  let reportSum = optionReportSum o
 
   case r of
     RunNoOp -> do
@@ -158,3 +160,7 @@ main = do
     RunSpace -> do
       recordSpaceStats "other/space.stats" polySum [1..l] n
       putStrLn "Space stats recorded for polySum in other/space.stats"
+    RunSpaceTime -> do
+      m <- testSums n l ((,) <$> cycle <*> space2)
+      writeFile "other/spacetime.stats" (show m)
+      printOrgSpaceTime (m Map.! reportSum)

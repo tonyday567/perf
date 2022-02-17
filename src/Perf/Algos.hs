@@ -19,6 +19,7 @@ module Perf.Algos
     parseAlgoExample,
     ExamplePattern (..),
     examplePattern,
+    exampleLabel,
 
     SumPattern (..),
     allSums,
@@ -110,6 +111,14 @@ data ExamplePattern a =
   PatternLengthF Text ([a] -> Int) [a] |
   PatternConstFuse Text (Int -> ()) Int |
   PatternMapInc Text ([Int] -> [Int]) [Int]
+
+exampleLabel :: ExamplePattern a -> Text
+exampleLabel (PatternSumFuse l _ _) = l
+exampleLabel (PatternSum l _ _) = l
+exampleLabel (PatternLengthF l _ _) = l
+exampleLabel (PatternConstFuse l _ _) = l
+exampleLabel (PatternMapInc l _ _) = l
+
 
 examplePattern :: AlgoExample -> Int -> ExamplePattern Int
 examplePattern ExampleSumFuse l = PatternSumFuse "sumFuse" sumFuse l

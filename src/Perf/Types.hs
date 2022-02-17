@@ -47,6 +47,9 @@ module Perf.Types
     runPerfT,
     evalPerfT,
     execPerfT,
+
+    outer,
+    slop,
   )
 where
 
@@ -203,3 +206,16 @@ evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
 execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
 
+-- | run a PerfT and also calculate performance over the entire computation
+outer :: (MonadIO m, Semigroup t) => Text -> Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
+outer label meas p =
+  (\((a,m),m') -> (a, m<>m')) <$>
+  runPerfT meas (
+   fam label (runPerfT meas p))
+
+-- | run a PerfT and calculate excess performance over the entire computation
+slop :: (MonadIO m, Num t, Semigroup t) => Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
+slop meas p =
+  (\((a,m),m') -> (a, m' <> Map.insert "slop" (m Map.! "outer" - Map.foldl' (+) 0 m') m')) <$>
+  runPerfT meas (
+   fam "outer" (runPerfT meas p))

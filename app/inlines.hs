@@ -36,88 +36,88 @@ opts = info (options <**> helper)
 
 -- * in-module variations on a tick counter
 
-tickNoPragma :: (a -> b) -> a -> IO (Word64, b)
+tickNoPragma :: (a -> b) -> a -> IO (Cycles, b)
 tickNoPragma !f !a = do
   !t <- rdtsc
   !a' <- pure $! f a
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
-tickLazyS :: (a -> b) -> a -> IO (Word64, b)
+tickLazyS :: (a -> b) -> a -> IO (Cycles, b)
 tickLazyS f a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE tickLazyS #-}
 
-tickInline :: (a -> b) -> a -> IO (Word64, b)
+tickInline :: (a -> b) -> a -> IO (Cycles, b)
 tickInline !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE tickInline #-}
 
-tickInlineable :: (a -> b) -> a -> IO (Word64, b)
+tickInlineable :: (a -> b) -> a -> IO (Cycles, b)
 tickInlineable !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINEABLE tickInlineable #-}
 
 -- | tick where the arguments are lazy, so measurement may include evaluation of thunks that may constitute f and/or a
-tickNoinline :: (a -> b) -> a -> IO (Word64, b)
+tickNoinline :: (a -> b) -> a -> IO (Cycles, b)
 tickNoinline !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# NOINLINE tickNoinline #-}
 
-tickInline1 :: (a -> b) -> a -> IO (Word64, b)
+tickInline1 :: (a -> b) -> a -> IO (Cycles, b)
 tickInline1 !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE [1] tickInline1 #-}
 
-tickInline2 :: (a -> b) -> a -> IO (Word64, b)
+tickInline2 :: (a -> b) -> a -> IO (Cycles, b)
 tickInline2 !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE [2] tickInline2 #-}
 
-tickInline1' :: (a -> b) -> a -> IO (Word64, b)
+tickInline1' :: (a -> b) -> a -> IO (Cycles, b)
 tickInline1' !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE [~1] tickInline1' #-}
 
-tickInline2' :: (a -> b) -> a -> IO (Word64, b)
+tickInline2' :: (a -> b) -> a -> IO (Cycles, b)
 tickInline2' !f !a = do
   !t <- rdtsc
   !a' <- pure (f a)
   !t' <- rdtsc
-  pure (t' - t, a')
+  pure (Cycles (t' - t), a')
 {-# INLINE [~2] tickInline2' #-}
 
-multi' :: ((a -> b) -> a -> IO (Word64, b)) -> Int -> (a -> b) -> a -> IO ([Word64], b)
+multi' :: ((a -> b) -> a -> IO (Cycles, b)) -> Int -> (a -> b) -> a -> IO ([Cycles], b)
 multi' tickf n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickf f a))
 {-# INLINEABLE multi' #-}
 
-ticks' :: (NFData a, NFData b) => Int -> (a -> b) -> a -> IO ([Word64], b)
+ticks' :: (NFData a, NFData b) => Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticks' n0 f a = fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n0 (tickForce f a))
 {-# INLINEABLE ticks' #-}
 
-ticksNoPragma :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksNoPragma :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksNoPragma n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -126,7 +126,7 @@ ticksNoPragma n0 f a = go f a n0 []
         (t, _) <- tickNoPragma f a
         go f' a' (n - 1) (t:ts)
 
-ticksLazy :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksLazy :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksLazy n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -135,7 +135,7 @@ ticksLazy n0 f a = go f a n0 []
         (t, _) <- tickLazy f a
         go f' a' (n - 1) (t:ts)
 
-ticksInline :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInline :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInline n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -144,7 +144,7 @@ ticksInline n0 f a = go f a n0 []
         (t, _) <- tickInline f a
         go f' a' (n - 1) (t:ts)
 
-ticksInlineable :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInlineable :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInlineable n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -153,7 +153,7 @@ ticksInlineable n0 f a = go f a n0 []
         (t, _) <- tickInlineable f a
         go f' a' (n - 1) (t:ts)
 
-ticksNoinline :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksNoinline :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksNoinline n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -162,7 +162,7 @@ ticksNoinline n0 f a = go f a n0 []
         (t, _) <- tickNoinline f a
         go f' a' (n - 1) (t:ts)
 
-ticksInline1 :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInline1 :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInline1 n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -171,7 +171,7 @@ ticksInline1 n0 f a = go f a n0 []
         (t, _) <- tickInline1 f a
         go f' a' (n - 1) (t:ts)
 
-ticksInline2 :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInline2 :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInline2 n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -180,7 +180,7 @@ ticksInline2 n0 f a = go f a n0 []
         (t, _) <- tickInline2 f a
         go f' a' (n - 1) (t:ts)
 
-ticksInline1' :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInline1' :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInline1' n0 f a = go f a n0 []
   where
     go f' a' n ts
@@ -189,7 +189,7 @@ ticksInline1' n0 f a = go f a n0 []
         (t, _) <- tickInline1' f a
         go f' a' (n - 1) (t:ts)
 
-ticksInline2' :: Int -> (a -> b) -> a -> IO ([Word64], b)
+ticksInline2' :: Int -> (a -> b) -> a -> IO ([Cycles], b)
 ticksInline2' n0 f a = go f a n0 []
   where
     go f' a' n ts

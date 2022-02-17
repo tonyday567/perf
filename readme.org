@@ -19,10 +19,12 @@ import Perf
 Running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
 #+begin_src haskell :results output
+:r
 :set prompt " > "
 :set -Wno-type-defaults
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
+import Perf
 putStrLn "ok"
 #+end_src
 
@@ -30,55 +32,20 @@ putStrLn "ok"
 #+begin_example
 Build profile: -w ghc-8.10.7 -O1
 In order, the following will be built (use -v for more details):
- - perf-0.9.0 (lib) (file src/Perf/Algos.hs changed)
+ - perf-0.9.0 (lib) (file src/Perf/Time.hs changed)
 Preprocessing library for perf-0.9.0..
 GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
 Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
-[1 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
-[2 of 8] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
-[3 of 8] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
-[4 of 8] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
-[5 of 8] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
-[6 of 8] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
-
-src/Perf/Algos.hs:344:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘lengthTailLocal’
-    |
-344 | lengthTailLocal xs0 = go 0 xs0
-    | ^^^^^^^^^^^^^^^
-
-src/Perf/Algos.hs:350:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘lengthF2’
-    |
-350 | lengthF2 _ r = \ !a -> r (a+1)
-    | ^^^^^^^^
-
-src/Perf/Algos.hs:353:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘lengthr2’
-    |
-353 | lengthr2 xs0 = foldr lengthF2 id xs0 0
-    | ^^^^^^^^
-
-src/Perf/Algos.hs:356:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘recurseTailLocal’
-    |
-356 | recurseTailLocal f = go
-    | ^^^^^^^^^^^^^^^^
-
-src/Perf/Algos.hs:362:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘accTail2’
-    |
-362 | accTail2 n = go [1..n] 0 where
-    | ^^^^^^^^
-
-src/Perf/Algos.hs:367:1: warning: [-Wunused-top-binds]
-    Defined but not used: ‘accTail3’
-    |
-367 | accTail3 n = go 0 [1..n] where
-    | ^^^^^^^^
-[7 of 8] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[1 of 8] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
+[2 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
+[3 of 8] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
+[4 of 8] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
+[5 of 8] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[6 of 8] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
+[7 of 8] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
 [8 of 8] Compiling Perf             ( src/Perf.hs, interpreted )
 Ok, 8 modules loaded.
+> Ok, 8 modules loaded.
 >  >  >  >  > ok
 #+end_example
 
@@ -90,26 +57,31 @@ import Prelude as P
 import Data.Foldable
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+putStrLn "ok"
 #+end_src
 
 #+RESULTS:
+:
+: >  >  >  >  > ok
 
-* tick
+* time
 
-The fundamental operation of Perf.Tick is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
+** What a ~tick~ is
+
+The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
 #+begin_src haskell
 :t tick
 #+end_src
 
 #+RESULTS:
-: tick :: (a -> b) -> a -> IO (Word64, b)
+: tick :: (a -> b) -> a -> IO (Cycles, b)
 
 tick returns in the IO monad, because reading a cycle counter is an IO effect. The trivial but fundamental point is that performance measurement effects the computation being measured.
 
 Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
 
-* tick_
+*** tick_
 
 tick_ measures the number of cycles between two clock reads.
 
@@ -118,16 +90,17 @@ tick_ measures the number of cycles between two clock reads.
 #+end_src
 
 #+RESULTS:
-: tick_ :: IO Word64
+: tick_ :: IO Cycles
 
 #+begin_src haskell
+import Control.Monad
 replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-| 8530 | 910 | 730 | 668 | 642 | 648 | 644 | 642 | 646 | 640 |
+| 10260 | 998 | 838 | 794 | 800 | 788 | 790 | 832 | 802 | 818 |
 
-* function application
+*** multiple ticks
 
 #+begin_src haskell
 fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
@@ -138,14 +111,16 @@ fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 
 Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, reducing down to 2.2k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
-Alternatively, ~tickIO~ measures the evaluation of an IO value.
+*** tickIO
+
+~tickIO~ measures the evaluation of an IO value.
 
 #+begin_src haskell
 :t tickIO
 #+end_src
 
 #+RESULTS:
-: tickIO :: IO a -> IO (Word64, a)
+: tickIO :: IO a -> IO (Cycles, a)
 
 #+begin_src haskell
 fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
@@ -161,7 +136,7 @@ ticks 100 (const ()) ()
 #+RESULTS:
 | 8226 | 3298 | 3254 | 2686 | 2694 | 2724 | 2868 | 2732 | 2644 | 2678 | 2680 | 2896 | 2734 | 2606 | 2608 | 2598 | 2606 | 2738 | 2742 | 2610 | 2554 | 2532 | 2576 | 2592 | 2600 | 2562 | 2786 | 2592 | 2646 | 2624 | 2666 | 2640 | 2640 | 2602 | 2672 | 2560 | 3478 | 2556 | 2552 | 2572 | 2622 | 2492 | 2572 | 2706 | 2544 | 2604 | 2748 | 2570 | 2596 | 3078 | 2666 | 2592 | 2612 | 2648 | 2594 | 2564 | 2716 | 2564 | 2594 | 2596 | 2554 | 2766 | 2552 | 3026 | 2602 | 2860 | 2632 | 2614 | 2620 | 2586 | 3014 | 2626 | 2626 | 2614 | 2830 | 2624 | 2616 | 2648 | 2610 | 2626 | 2610 | 2590 | 2930 | 2622 | 2732 | 2698 | 3004 | 2664 | 2948 | 2630 | 2588 | 2766 | 2726 | 2600 | 2634 | 2792 | 2704 | 2774 | 2638 | 2634 |
 
-* sum example
+*** sum example
 
 #+begin_src haskell
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
@@ -179,77 +154,86 @@ putStrLn $ Text.unpack $ average (fst ts)
 #+RESULTS:
 : 58,800
 
-#+begin_src haskell
-:set -XAllowAmbiguousTypes
+* PerfT
 
-fMono :: Int -> Int
-fMono x = foldl' (+) 0 [1 .. x]
+~PerfT~ allows for multiple measurement points and is polymorphic in what is being measured. It returns a Map of results held in State.
 
-fPoly :: (Enum b, Num b, Additive b) => b -> b
-fPoly x = foldl' (+) 0 [1 .. x]
-
-fLambda :: Int -> Int
-fLambda = \x -> foldl' (+) 0 [1 .. x]
-#+end_src
+Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
 
 #+begin_src haskell
-fmap (median . fst) (ticks 1000 fMono 1000)
+averageD . fst <$> ticks 1000 sum [1..1000]
 #+end_src
 
 #+RESULTS:
-: 63,400
+: 69231.902
+
+... with PerfT usage
 
 #+begin_src haskell
-fmap (median . fst) $ ticks 1000 fPoly 1000
+import qualified Data.Map.Strict as Map
+fmap averageD <$> execPerfT (times 1000) (sum |$| [1..1000])
 #+end_src
 
 #+RESULTS:
-: 63,000
+: fromList [("",71529.594)]
+
+Comparing performance of sum versus a list fusion approach:
 
 #+begin_src haskell
-fmap (median . fst) $ ticks 1000 fLambda 1000
+import qualified Data.Map.Strict as Map
+:set -Wno-unused-do-bind
+fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap "fusion" (\x -> sum [1..x]) 1000))
 #+end_src
 
 #+RESULTS:
-: 63,400
+: > fromList [("fusion",118589.68),("sum",73765.894)]
 
-* perf results
-:PROPERTIES:
-:EXPORT_FILE_NAME: perf-results
-:export_date: 2022-2-13
-:END:
+An IO example
 
-** example1
+#+begin_src haskell
+exampleIO :: IO ()
+exampleIO = do
+  txt <- Text.readFile "src/Perf.hs"
+  let n = Text.length txt
+  Text.putStrLn $ "length of file is: " <> Text.pack (show n)
+#+end_src
 
-- [ ] laziness kicks in on second run of ~fap "" f a~
-- [ ] cycles' best multi run
+#+RESULTS:
+: >  > length of file is: 1927
+
+#+begin_src haskell
+import Data.Semigroup
+:{
+exampleIO'' = execPerfT time (do
+  txt <- fam "file read" (Text.readFile "src/Perf.hs")
+  n <- fap "length" Text.length txt
+  fam "print result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
+:}
+exampleIO''
+#+end_src
+
+#+RESULTS:
+: *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup|  > length of file is: 1927
+: fromList [("file read",Cycles {word = 177852}),("length",Cycles {word = 10248}),("print result",Cycles {word = 204568})]
+
+
+** callibration
+
+~perf-explore~ contains some exploratory routines to help develop =perf=
 
 #+begin_src sh :results output
-perf-example1 -r 10000 --average -l 1000
-#+end_src
-
-#+RESULTS:
-: example1
-: sum of one to 7132 is: 25436278
-: (25436278,fromList [("",Sum {getSum = 273196}),("file read",Sum {getSum = 375068}),("length",Sum {getSum = 18702}),("print result",Sum {getSum = 27104})])
-: raw results
-: fromList [("PerfT cycle'",18.0),("PerfT cycles'",5925.9436),("PerfT mtick",27764.0),("PerfT mtick 0",16.0),("PerfT mtick 1",14.0),("PerfT mtick 2",16.0),("PerfT mtick 3",16.0),("PerfT mtick 4",18.0),("PerfT mticks",7282.1758),("raw multi tick",8568.6478),("raw ticks",8803.8314)]
-: regressions:
-: ["PerfT mtick","PerfT mticks","raw multi tick","raw ticks"]
-
-
-** baseline callibration
-
-#+begin_src sh :results output
-perf-basic --help
+perf-explore --help
 #+end_src
 
 #+RESULTS:
 #+begin_example
 basic perf callibration
 
-Usage: perf-basic (-r|--runs ARG) (-l|--length ARG)
-                  [--best | --median | --average | --averagesecs]
+Usage: perf-explore [-r|--runs ARG] [-l|--length ARG]
+                    [--best | --median | --average | --averagesecs]
+                    [--default | --sums | --noop | --ticks | --gauge | --space |
+                      --spacetime] [-s|--sum ARG]
+                    [--sumFuse | --sum | --lengthF | --constFuse | --mapInc]
 
   perf benchmarking
 
@@ -260,64 +244,79 @@ Available options:
   --median                 report median
   --average                report average
   --averagesecs            report average in seconds
+  --default                default measurement (polySum)
+  --sums                   sums
+  --noop                   no-ops
+  --ticks                  tick types
+  --gauge                  gauge comparison
+  --space                  space stats
+  --spacetime              space and time stats
+  -s,--sum ARG             type of sum code
+  --sumFuse                fused sum pipeline
+  --sum                    sum
+  --lengthF                foldr id length
+  --constFuse              fused const pipeline
+  --mapInc                 fmap (+1)
   -h,--help                Show this help text
 #+end_example
 
-perf-basic issues:
+#+begin_src haskell
+import qualified Data.Map.Strict as Map
+fmap averageD <$> execPerfT (times 10000) (sum |$| [1..1000])
+#+end_src
 
-- [ ] ~ticks~ runs are sometimes double ~multi tick~.
-- [ ] ~tickLazy~ computation escapes
-- [ ] ~tick~, ~tickWHNF~, ~tickForce~, ~tickForceArgs~ same for sums
-- [ ] ~tickForce~ blows out for mapInc:
+#+RESULTS:
+: fromList [("",59721.9976)]
 
-  multi tickForce mapInc | 202,000, multi tickForceArgs mapInc | 57.8
-- [ ] fuseSum 2000 | recSum, polySum, lambdaSum: 5750
-
-
+The equivalent to the above code is:
 
 #+begin_src sh :results drawer :exports both
-perf-basic -r 10000 --average -l 1000
+perf-explore -r 10000 -l 1000 --sum
 #+end_src
 
 #+RESULTS:
 :results:
-| average fams  |                             17.5 |
-| average faps  |                             80.8 |
-| best fams     |                             15.5 |
-| best faps     |                             15.7 |
-| first 10 fams | [148,36,16,16,16,18,18,16,16,18] |
-| first 10 faps | [200,14,16,18,18,18,16,20,16,16] |
-| first fam     |                              148 |
-| first fap     |                              200 |
-| median fams   |                             17.4 |
-| median faps   |                             17.8 |
+| stat | result |
+|------+--------|
+| sum  | 8.80e3 |
 :end:
-
-
-#+begin_src sh :results output
-ghc app/basic.hs -O2
-./app/basic -r 10000 --average -l 1000
-#+end_src
 
 ** noops
 
+#+begin_src sh :results drawer
+perf-explore --noop
+#+end_src
+
+#+RESULTS:
+:results:
+| stat     | result |                                                     |
+|----------+--------+-----------------------------------------------------|
+| average  | fams   |                                              2.28e1 |
+| average  | faps   |                                              2.54e1 |
+| best     | fams   |                                              1.94e1 |
+| best     | faps   |                                              1.73e1 |
+| first 10 | fams   |  302.0 44.0 22.0 20.0 22.0 20.0 20.0 20.0 22.0 20.0 |
+| first 10 | faps   | 4560.0 36.0 18.0 18.0 18.0 18.0 20.0 18.0 20.0 16.0 |
+| median   | fams   |                                              2.11e1 |
+| median   | faps   |                                              1.91e1 |
+:end:
+
+
 #+begin_src haskell
 :r
-:set prompt "> "
 :set -XOverloadedLabels
 import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
 import Chart
 import Prelude
 import Optics.Core
-m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Int])
+m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Cycles])
 let (Just d) = Map.lookup "fap times" m
 filter (> 100) d
 #+end_src
 
 #+RESULTS:
-| 4788 | 220 | 304 | 142 | 112 | 102 | 124 | 882950 |
-
+| Cycles | (word = 4560) | Cycles | (word = 166) |
 
 #+begin_src haskell :file other/noop.svg :results output graphics file :exports results
 writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
@@ -331,181 +330,180 @@ writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb l
 Exploration of how the code surrounding measurement effects performance.
 
 #+begin_src sh
-app/explore -r 10000 -l 1000 --ticktypes -s polySum
+perf-explore -r 1000 -l 1000 --ticks
 #+end_src
 
 #+RESULTS:
-|   |               |   count | countForce | countForceArgs | countLazy | countWHNF |  cycles |
-|   | cataSum       | 19000.0 |    18700.0 |        35000.0 |      17.9 |   18300.0 | 32700.0 |
-|   | foldrSum      | 20200.0 |    21300.0 |        20500.0 |      18.1 |   20300.0 | 20300.0 |
-|   | fuseFoldl'Sum |  2030.0 |     2240.0 |         2250.0 |      17.7 |    1980.0 |  2250.0 |
-|   | fuseFoldrSum  | 13500.0 |    13400.0 |        13300.0 |      18.3 |   15400.0 | 13300.0 |
-|   | fuseSum       |  2010.0 |     1990.0 |         2240.0 |      18.5 |    2160.0 |  2360.0 |
-|   | lambdaSum     |  6460.0 |     5700.0 |         5660.0 |      18.1 |    5940.0 |  5990.0 |
-|   | monoSum       | 11800.0 |     5920.0 |         6000.0 |      17.8 |    5840.0 |  5670.0 |
-|   | polySum       | 11300.0 |     6060.0 |         5770.0 |      18.8 |    7470.0 |  5700.0 |
-|   | recSum        |  9320.0 |     5810.0 |         6080.0 |      17.9 |    5880.0 |  6160.0 |
-|   | tailSum       | 18700.0 |    18400.0 |        18400.0 |      18.2 |   18300.0 | 18500.0 |
-|   | tailSumGo     | 21000.0 |    31500.0 |        31200.0 |      17.6 |   40600.0 | 34500.0 |
+|   |               | stepTime |    tick | tickForce | tickForceArgs | tickLazy | tickWHNF |   times |
+|   | sumAux        |  29900.0 | 17000.0 |   29800.0 |       29200.0 |     16.7 |  15600.0 | 29900.0 |
+|   | sumCata       |  18300.0 | 20400.0 |   19500.0 |       18600.0 |     16.4 |  19000.0 | 18200.0 |
+|   | sumCo         |  16700.0 | 23700.0 |   16400.0 |       15900.0 |     16.8 |  16300.0 | 17100.0 |
+|   | sumCoCase     |  15900.0 | 18200.0 |   16100.0 |       15700.0 |     17.2 |  17200.0 | 15600.0 |
+|   | sumCoGo       |  18700.0 | 19300.0 |   20500.0 |       19000.0 |     16.9 |  19900.0 | 19800.0 |
+|   | sumF          |   9990.0 | 10500.0 |    9790.0 |        9780.0 |     17.0 |  10400.0 |  9980.0 |
+|   | sumFlip       |  11400.0 | 10500.0 |   12200.0 |       10700.0 |     19.8 |  16800.0 | 11900.0 |
+|   | sumFlipLazy   |  16500.0 | 14000.0 |   12000.0 |       13200.0 |     17.7 |  12100.0 | 17900.0 |
+|   | sumFoldr      |  18900.0 | 20600.0 |   19900.0 |       19600.0 |     17.0 |  19400.0 | 20100.0 |
+|   | sumFuse       |   1950.0 |  1960.0 |    1950.0 |        1950.0 |     19.3 |   3240.0 |  1970.0 |
+|   | sumFuseFoldl' |   1960.0 |  2010.0 |    1950.0 |        1950.0 |     20.3 |   1960.0 |  1960.0 |
+|   | sumFuseFoldr  |   8580.0 |  9820.0 |    8790.0 |        8580.0 |     19.0 |   8570.0 |  8590.0 |
+|   | sumFusePoly   |   1970.0 |  1970.0 |    1960.0 |        1970.0 |     19.5 |   1970.0 |  1980.0 |
+|   | sumLambda     |  15300.0 | 11200.0 |   11300.0 |       13100.0 |     17.0 |  11100.0 | 15000.0 |
+|   | sumMono       |   9820.0 | 11100.0 |    9690.0 |        9680.0 |     16.6 |  11000.0 |  9820.0 |
+|   | sumPoly       |  10500.0 | 10700.0 |   10300.0 |       10300.0 |     16.3 |  10500.0 | 18500.0 |
+|   | sumSum        |  10200.0 | 11100.0 |   10700.0 |        9930.0 |     16.5 |  11100.0 | 10300.0 |
+|   | sumTail       |   9640.0 | 11200.0 |   11000.0 |       10400.0 |     17.5 |  11000.0 |  9630.0 |
+|   | sumTailLazy   |  10000.0 | 11000.0 |    9890.0 |        9990.0 |     16.9 |  11000.0 | 11200.0 |
+
 
 #+begin_src sh
-app/basic -r 10000 -l 1000 --ticktypes -s polySum +RTS -T -RTS
+perf-explore -r 100000 -l 1000 --ticks
 #+end_src
 
 #+RESULTS:
-|   |               |   count | countForce | countForceArgs | countLazy | countWHNF |  cycles |
-|   | cataSum       | 19000.0 |    18400.0 |        35600.0 |      18.1 |   18400.0 | 30100.0 |
-|   | foldrSum      | 20500.0 |    20500.0 |        20400.0 |      18.1 |   20600.0 | 20400.0 |
-|   | fuseFoldl'Sum |  1970.0 |     2350.0 |         2260.0 |      17.7 |    1970.0 |  2220.0 |
-|   | fuseFoldrSum  | 13500.0 |    13500.0 |        13400.0 |      17.9 |   16200.0 | 13600.0 |
-|   | fuseSum       |  1970.0 |     2090.0 |         2290.0 |      18.2 |    2420.0 |  2310.0 |
-|   | lambdaSum     |  6390.0 |     5640.0 |         5610.0 |      17.6 |    6060.0 |  5930.0 |
-|   | monoSum       | 11100.0 |     6010.0 |         5990.0 |      17.4 |    5620.0 |  5790.0 |
-|   | polySum       | 11300.0 |     6070.0 |         5640.0 |      17.7 |    7010.0 |  5670.0 |
-|   | recSum        |  9380.0 |     5770.0 |         6050.0 |      18.1 |    5790.0 |  6040.0 |
-|   | tailSum       | 18700.0 |    18500.0 |        18600.0 |      17.8 |   18400.0 | 19100.0 |
-|   | tailSumGo     | 20900.0 |    31000.0 |        30500.0 |      17.5 |   38900.0 | 34300.0 |
-
-#+begin_src sh
-perf-basic -r 10000 -l 1000 --best --ticktypes
-#+end_src
-
-*** FIXME: old run with very different stats
-
-|   |               |   count | countForce | countForceArgs | countLazy | countWHNF |  cycles |
-|   | cataSum       |  7050.0 |     7060.0 |         7070.0 |      16.8 |    7080.0 | 17000.0 |
-|   | foldrSum      |  9270.0 |     9270.0 |         9270.0 |      15.4 |    9300.0 |  9260.0 |
-|   | fuseFoldl'Sum |  1350.0 |     1350.0 |         1340.0 |      15.3 |    1350.0 |  1350.0 |
-|   | fuseFoldrSum  |  3890.0 |     3890.0 |         3890.0 |      16.1 |    3900.0 |  3890.0 |
-|   | fuseSum       |  1350.0 |     1350.0 |         1350.0 |      15.3 |    1350.0 |  1350.0 |
-|   | lambdaSum     |  5570.0 |     5560.0 |         5560.0 |      15.2 |    5560.0 |  5560.0 |
-|   | monoSum       | 11000.0 |     5550.0 |         5550.0 |      15.3 |    5550.0 |  5550.0 |
-|   | polySum       | 11000.0 |     5560.0 |         5510.0 |      16.8 |    5510.0 |  5520.0 |
-|   | recSum        |  5720.0 |     5700.0 |         5700.0 |      17.0 |    5720.0 |  5700.0 |
-|   | tailSum       |  6980.0 |     7000.0 |         7000.0 |      16.5 |    7000.0 |  6990.0 |
-|   | tailSumGo     |  9270.0 |    18600.0 |        18500.0 |      15.7 |   20800.0 | 20700.0 |
-
+|   |               | stepTime |    tick | tickForce | tickForceArgs | tickLazy | tickWHNF |   times |
+|   | sumAux        |  18300.0 | 18300.0 |   18400.0 |       18200.0 |     16.8 |  18300.0 | 18300.0 |
+|   | sumCata       |  20800.0 | 20900.0 |   20600.0 |       20500.0 |     16.7 |  20900.0 | 20900.0 |
+|   | sumCo         |  18200.0 | 18000.0 |   17900.0 |       18200.0 |     16.7 |  18000.0 | 18000.0 |
+|   | sumCoCase     |  15100.0 | 18000.0 |   15500.0 |       15200.0 |     17.1 |  18000.0 | 15200.0 |
+|   | sumCoGo       |  20800.0 | 20800.0 |   20600.0 |       21000.0 |     16.8 |  20800.0 | 20700.0 |
+|   | sumF          |   9030.0 |  8790.0 |    8590.0 |        9820.0 |     16.8 |   8640.0 |  8590.0 |
+|   | sumFlip       |   8770.0 |  8600.0 |    8610.0 |        8420.0 |     17.1 |   8610.0 |  8780.0 |
+|   | sumFlipLazy   |  19500.0 |  8620.0 |    8410.0 |       21900.0 |     16.7 |   8540.0 | 19000.0 |
+|   | sumFoldr      |  20900.0 | 20900.0 |   20900.0 |       20500.0 |     16.9 |  20800.0 | 20800.0 |
+|   | sumFuse       |   2040.0 |  2040.0 |    2050.0 |        2040.0 |     19.2 |   2050.0 |  2160.0 |
+|   | sumFuseFoldl' |   2070.0 |  2050.0 |    2070.0 |        2100.0 |     19.1 |   2040.0 |  2180.0 |
+|   | sumFuseFoldr  |  11800.0 | 11100.0 |   11200.0 |       11200.0 |     19.3 |  11100.0 | 11200.0 |
+|   | sumFusePoly   |   2060.0 |  2070.0 |    2070.0 |        2060.0 |     19.2 |   2070.0 |  1990.0 |
+|   | sumLambda     |   8660.0 |  8640.0 |    9050.0 |        8830.0 |     17.1 |   8770.0 |  8740.0 |
+|   | sumMono       |  20800.0 |  8690.0 |   20700.0 |       20200.0 |     17.4 |   8810.0 | 21200.0 |
+|   | sumPoly       |   8660.0 |  8740.0 |    8630.0 |        8640.0 |     16.9 |   8690.0 |  8640.0 |
+|   | sumSum        |   8570.0 |  8860.0 |    8450.0 |        8470.0 |     16.8 |   8460.0 |  8450.0 |
+|   | sumTail       |   5980.0 |  6270.0 |    5790.0 |        5760.0 |     16.8 |   5830.0 |  5990.0 |
+|   | sumTailLazy   |  12000.0 | 10700.0 |   11900.0 |       11600.0 |     16.9 |  12000.0 | 12100.0 |
 
 *** short list
 #+begin_src sh
-perf-basic -r 10000 -l 10 --best --ticktypes
+perf-explore -r 10000 -l 10 --best --ticks
 #+end_src
 
 #+RESULTS:
-|   |               | count | countForce | countForceArgs | countLazy | countWHNF | cycles |
-|   | cataSum       | 104.0 |       90.4 |           93.4 |      15.5 |      93.0 |   91.1 |
-|   | foldrSum      |  99.6 |      100.0 |          100.0 |      16.0 |     101.0 |   98.8 |
-|   | fuseFoldl'Sum |  28.8 |       31.1 |           30.9 |      15.6 |      31.5 |   27.9 |
-|   | fuseFoldrSum  |  53.7 |       56.0 |           56.3 |      15.1 |      55.8 |   53.5 |
-|   | fuseSum       |  33.5 |       31.3 |           30.6 |      15.6 |      31.2 |   28.3 |
-|   | lambdaSum     |  78.1 |       63.6 |           63.6 |      15.0 |      65.3 |   64.2 |
-|   | monoSum       |  63.1 |       63.6 |           63.6 |      16.0 |      65.3 |   63.3 |
-|   | polySum       |  80.1 |       77.2 |           77.2 |      15.3 |      80.8 |   77.7 |
-|   | recSum        |  89.9 |       77.1 |           76.4 |      15.7 |      77.2 |   75.0 |
-|   | tailSum       | 104.0 |       90.0 |           90.1 |      15.2 |      91.7 |   91.2 |
-|   | tailSumGo     |  99.2 |      101.0 |          101.0 |      16.0 |     101.0 |   99.3 |
+|   |               | stepTime | tick | tickForce | tickForceArgs | tickLazy | tickWHNF | times |
+|   | sumAux        |     89.4 | 92.8 |      91.4 |          89.5 |     14.8 |     89.4 |  89.8 |
+|   | sumCata       |     89.3 | 93.4 |      95.5 |          93.9 |     14.8 |     89.1 |  92.4 |
+|   | sumCo         |     89.3 | 93.1 |      90.4 |          92.8 |     14.9 |     89.3 |  89.1 |
+|   | sumCoCase     |     89.4 | 93.1 |      89.3 |          89.6 |     15.0 |     89.5 |  91.1 |
+|   | sumCoGo       |     89.6 | 93.1 |      95.1 |          93.8 |     14.9 |     89.4 |  92.0 |
+|   | sumF          |     75.4 | 78.1 |      79.2 |          77.5 |     14.9 |     75.4 |  76.1 |
+|   | sumFlip       |     74.2 | 78.7 |      79.1 |          77.3 |     15.0 |     75.4 |  75.9 |
+|   | sumFlipLazy   |     73.9 | 78.5 |      77.8 |          77.3 |     14.8 |     75.1 |  75.9 |
+|   | sumFoldr      |     89.5 | 93.2 |      95.4 |          93.9 |     15.0 |     89.5 |  92.8 |
+|   | sumFuse       |     35.1 | 35.1 |      33.1 |          33.9 |     17.1 |     34.6 |  35.1 |
+|   | sumFuseFoldl' |     35.2 | 35.0 |      32.0 |          33.7 |     17.2 |     34.5 |  35.1 |
+|   | sumFuseFoldr  |     47.4 | 47.1 |      45.8 |          45.8 |     17.2 |     46.6 |  45.7 |
+|   | sumFusePoly   |     49.7 | 49.9 |      46.9 |          49.3 |     17.2 |     49.6 |  49.1 |
+|   | sumLambda     |     75.2 | 79.4 |      79.3 |          79.4 |     14.9 |     77.4 |  79.4 |
+|   | sumMono       |     63.2 | 65.2 |      65.3 |          64.9 |     14.9 |     63.5 |  65.2 |
+|   | sumPoly       |     77.2 | 79.9 |      79.7 |          79.6 |     15.0 |     78.2 |  79.2 |
+|   | sumSum        |     77.2 | 79.6 |      79.4 |          79.6 |     14.8 |     78.2 |  79.3 |
+|   | sumTail       |     64.5 | 78.5 |      67.1 |          66.9 |     14.8 |     65.2 |  65.4 |
+|   | sumTailLazy   |     64.9 | 67.3 |      67.2 |          65.9 |     14.8 |     64.8 |  65.4 |
 
 *** long list
 #+begin_src sh
-perf-basic -r 100 -l 100000 --best --ticktypes
+perf-explore -r 100 -l 100000 --best --ticks
 #+end_src
 
 #+RESULTS:
-|   |               |     count | countForce | countForceArgs | countLazy | countWHNF |    cycles |
-|   | cataSum       | 2360000.0 |  4320000.0 |      2260000.0 |      15.9 | 4680000.0 | 2300000.0 |
-|   | foldrSum      | 2760000.0 |  2760000.0 |      2770000.0 |      16.6 | 2790000.0 | 2760000.0 |
-|   | fuseFoldl'Sum |  139000.0 |   128000.0 |       128000.0 |      16.2 |  128000.0 |  132000.0 |
-|   | fuseFoldrSum  | 1650000.0 |  1640000.0 |      1660000.0 |      16.1 | 1640000.0 | 1670000.0 |
-|   | fuseSum       |  128000.0 |   128000.0 |       132000.0 |      15.5 |  132000.0 |  128000.0 |
-|   | lambdaSum     | 1280000.0 |  1260000.0 |      1260000.0 |      15.8 | 1270000.0 | 1260000.0 |
-|   | monoSum       |  828000.0 |   723000.0 |       720000.0 |      15.0 |  826000.0 |  722000.0 |
-|   | polySum       |  731000.0 |   728000.0 |       728000.0 |      15.8 |  731000.0 |  724000.0 |
-|   | recSum        | 1400000.0 |  1370000.0 |      1360000.0 |      15.2 | 1380000.0 | 1370000.0 |
-|   | tailSum       | 2430000.0 |  2320000.0 |      2300000.0 |      15.9 | 2420000.0 | 2260000.0 |
-|   | tailSumGo     | 3150000.0 |  2770000.0 |      2790000.0 |      16.9 | 2750000.0 | 2750000.0 |
+|   |               |  stepTime |      tick | tickForce | tickForceArgs | tickLazy |  tickWHNF |     times |
+|   | sumAux        | 4970000.0 | 2270000.0 | 2570000.0 |     4900000.0 |     14.8 | 2560000.0 | 2430000.0 |
+|   | sumCata       | 2760000.0 | 2980000.0 | 3170000.0 |     2760000.0 |     15.4 | 3600000.0 | 4160000.0 |
+|   | sumCo         | 2610000.0 | 2320000.0 | 4810000.0 |     2570000.0 |     15.4 | 2560000.0 | 4360000.0 |
+|   | sumCoCase     | 2490000.0 | 2300000.0 | 2270000.0 |     2260000.0 |     14.4 | 2900000.0 | 2490000.0 |
+|   | sumCoGo       | 2750000.0 | 2800000.0 | 6150000.0 |     2790000.0 |     14.8 | 3130000.0 | 2750000.0 |
+|   | sumF          |  811000.0 |  823000.0 |  819000.0 |      808000.0 |     15.1 |  817000.0 |  712000.0 |
+|   | sumFlip       |  747000.0 |  744000.0 |  740000.0 |      746000.0 |     14.8 |  744000.0 |  746000.0 |
+|   | sumFlipLazy   |  979000.0 | 1010000.0 |  981000.0 |      964000.0 |     15.4 |  996000.0 |  981000.0 |
+|   | sumFoldr      | 2750000.0 | 2770000.0 | 2760000.0 |     2760000.0 |     14.6 | 2750000.0 | 2790000.0 |
+|   | sumFuse       |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     17.0 |  192000.0 |  192000.0 |
+|   | sumFuseFoldl' |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     17.1 |  192000.0 |  192000.0 |
+|   | sumFuseFoldr  | 1550000.0 | 1560000.0 | 1550000.0 |     1530000.0 |     17.2 | 1550000.0 | 1540000.0 |
+|   | sumFusePoly   |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     16.6 |  192000.0 |  192000.0 |
+|   | sumLambda     |  805000.0 |  805000.0 |  806000.0 |      808000.0 |     14.8 |  803000.0 |  805000.0 |
+|   | sumMono       |  789000.0 |  785000.0 |  783000.0 |      785000.0 |     14.9 |  788000.0 |  787000.0 |
+|   | sumPoly       |  791000.0 |  793000.0 |  792000.0 |      793000.0 |     14.6 |  793000.0 |  788000.0 |
+|   | sumSum        |  767000.0 |  778000.0 |  768000.0 |      771000.0 |     14.6 |  767000.0 |  772000.0 |
+|   | sumTail       |  783000.0 |  780000.0 |  782000.0 |      778000.0 |     15.1 |  776000.0 |  783000.0 |
+|   | sumTailLazy   | 1280000.0 | 1390000.0 | 1270000.0 |     1290000.0 |     15.1 | 1310000.0 | 1270000.0 |
 
-* guage
+
+* gauge
 
 #+begin_src sh
-perf-basic -r 10000 -l 1000 --average --guage
+perf-explore -r 1000 -l 1000 --average --gauge
 #+end_src
 
 #+RESULTS:
-| fuseSum       |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 600.3 | ns |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 594.7 | ns |
-|               |          |     |                 |      |       |    |
-| fuseFoldl'Sum |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 601.0 | ns |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 595.6 | ns |
-|               |          |     |                 |      |       |    |
-| fuseFoldrSum  |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 1.731 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 1.699 | μs |
-|               |          |     |                 |      |       |    |
-| tailSum       |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 3.123 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 3.119 | μs |
-|               |          |     |                 |      |       |    |
-| tailSumGo     |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 4.221 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 4.251 | μs |
-|               |          |     |                 |      |       |    |
-| foldrSum      |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 4.281 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 4.209 | μs |
-|               |          |     |                 |      |       |    |
-| recSum        |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.531 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.536 | μs |
-|               |          |     |                 |      |       |    |
-| cataSum       |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 3.116 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 3.113 | μs |
-|               |          |     |                 |      |       |    |
-| monoSum       |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.476 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.464 | μs |
-|               |          |     |                 |      |       |    |
-| polySum       |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.485 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.471 | μs |
-|               |          |     |                 |      |       |    |
-| lambdaSum     |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.476 | μs |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 2.456 | μs |
-|               |          |     |                 |      |       |    |
-| noop          |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 5.542 | ns |
-|               |          |     |                 |      |       |    |
-| benchmarking  | function | ... | function | time | 5.527 | ns |
-|               |          |     |                 |      |       |    |
+| sumFuse      |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 886.7 | ns |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 873.1 | ns |
+|              |          |     |                 |      |       |    |
+| sum          |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 3.838 | μs |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 3.833 | μs |
+|              |          |     |                 |      |       |    |
+| lengthF      |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 1.881 | μs |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 1.873 | μs |
+|              |          |     |                 |      |       |    |
+| constFuse    |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 578.9 | ns |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 571.7 | ns |
+|              |          |     |                 |      |       |    |
+| mapInc       |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 8.961 | ns |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 11.78 | μs |
+|              |          |     |                 |      |       |    |
+| noop         |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 5.076 | ns |
+|              |          |     |                 |      |       |    |
+| benchmarking | function | ... | function | time | 4.969 | ns |
+|              |          |     |                 |      |       |    |
 
-| fuseSum       | 616.6 ns |      |
-| fuseFoldl'Sum | 617.1 ns |      |
-| fuseFoldrSum  | 1.768 μs | 4596 |
-| tailSum       | 3.165 μs |      |
-| tailSumGo     | 4.205 μs |      |
-| foldrSum      | 4.194 μs |      |
-| recSum        | 2.551 μs |      |
-| cataSum       | 3.120 μs |      |
-| monoSum       | 2.517 μs | 6544 |
-| polySum       | 2.477 μs |      |
-| lambdaSum     | 2.467 μs |      |
+Canned results
+
+| algo      | gauge     |
+|-----------+-----------|
+| sumFuse   | 886.7 ns  |
+| sum       | 3.838 μs  |
+| lengthF   | 1.881 μs  |
+| constFuse | 578.9  ns |
+| mapInc    | 8.961  ns |
+| noop      | 5.076  ns |
+|           |           |
+
+#+begin_src sh
+perf-explore --examples -r 10000 --averagesecs
+#+end_src
+
+#+RESULTS:
+|   | stat      |   result |
+|   | ---       |      --- |
+|   | constFuse | 7.63e-07 |
+|   | lengthF   | 1.64e-06 |
+|   | mapInc    | 9.71e-09 |
+|   | sum       | 3.28e-06 |
+|   | sumFuse   | 8.12e-07 |
 
 
-* ghc stats
+* space
+
+Data is collected from GHCStats
 
 - allocated_bytes
 - gcs
@@ -513,150 +511,60 @@ perf-basic -r 10000 -l 1000 --average --guage
 - max_live_bytes
 - max_mem_in_use_bytes
 
-#+begin_src sh
-app/basic -r 100 -l 100 --spacetime +RTS -T -RTS
+#+begin_src sh :results output
+perf-explore -r 10 -l 100000 --time +RTS -T -RTS
 #+end_src
+
+| label1 | label2 | results |
+|--------+--------+---------|
+| sum    |      0 |  1.74e7 |
+| sum    |      1 |  9.43e5 |
+| sum    |      2 |  9.62e5 |
+| sum    |      3 |  9.25e5 |
+| sum    |      4 |  8.04e5 |
+| sum    |      5 |  8.15e5 |
+| sum    |      6 |  8.14e5 |
+| sum    |      7 |  8.20e5 |
+| sum    |      8 |  8.52e5 |
+| sum    |      9 |  8.37e5 |
+
+#+begin_src sh :results output
+perf-explore -r 10 -l 100000 --space +RTS -T -RTS
+#+end_src
+
+| label1 | label2 | allocated | gcollects | maxLiveBytes | gcLiveBytes | MaxMem |
+|--------+--------+-----------+-----------+--------------+-------------+--------|
+| sum    |      0 |    7.25e6 |         7 |       3.95e6 |      3.95e6 | 1.05e7 |
+| sum    |      1 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      2 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      3 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      4 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      6 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      7 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      8 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      9 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
 
 ** spacetime
 
-#+begin_src sh
-app/basic -r 10 -l 1 --spacetime -s polySum +RTS -T -RTS
+#+begin_src sh :results output
+perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 #+end_src
 
-#+RESULTS:
-|   |   cycles | allocated | gcollects | maxLiveBytes | gcLiveBytes |    MaxMem | allocated | gcollects | maxLiveBytes | gcLiveBytes |    MaxMem |
-|   |      --- |           |           |              |             |           |           |           |              |             |           |
-|   | 380000.0 |  579000.0 |        91 |     246000.0 |    246000.0 | 2100000.0 |  579000.0 |        91 |     246000.0 |    246000.0 | 2100000.0 |
-|   | 378000.0 |  581000.0 |        92 |     248000.0 |    248000.0 | 2100000.0 |  581000.0 |        92 |     248000.0 |    248000.0 | 2100000.0 |
-|   | 480000.0 |  584000.0 |        93 |     250000.0 |    250000.0 | 2100000.0 |  584000.0 |        93 |     250000.0 |    250000.0 | 2100000.0 |
-|   | 398000.0 |  587000.0 |        94 |     253000.0 |    253000.0 | 2100000.0 |  587000.0 |        94 |     253000.0 |    253000.0 | 2100000.0 |
-|   | 384000.0 |  589000.0 |        95 |     255000.0 |    255000.0 | 2100000.0 |  589000.0 |        95 |     255000.0 |    255000.0 | 2100000.0 |
-|   | 391000.0 |  596000.0 |        96 |     257000.0 |    257000.0 | 2100000.0 |  596000.0 |        96 |     257000.0 |    257000.0 | 2100000.0 |
-|   | 391000.0 |  599000.0 |        97 |     259000.0 |    259000.0 | 2100000.0 |  599000.0 |        97 |     259000.0 |    259000.0 | 2100000.0 |
-|   | 395000.0 |  601000.0 |        98 |     262000.0 |    262000.0 | 2100000.0 |  601000.0 |        98 |     262000.0 |    262000.0 | 2100000.0 |
-|   | 393000.0 |  604000.0 |        99 |     264000.0 |    264000.0 | 2100000.0 |  604000.0 |        99 |     264000.0 |    264000.0 | 2100000.0 |
-|   | 396000.0 |  610000.0 |       100 |     266000.0 |    266000.0 | 2100000.0 |  610000.0 |       100 |     266000.0 |    266000.0 | 2100000.0 |
-
-#+begin_src haskell
-:load app/basic.hs
- m <- read <$> readFile "other/spacetime.stats" :: IO (Map.Map Text [(Word64,(SpaceStats,SpaceStats))])
- Map.size m
-#+end_src
-
-#+RESULTS:
-: > 11
-
-#+begin_src haskell
-Text.putStrLn $ "|" <> "cycles" <> prettyOrgHeaderSpace <> prettyOrgHeaderSpace
-#+end_src
-
-#+RESULTS:
-: |cycles|allocated|gcollects|maxLiveBytes|gcLiveBytes|MaxMem||allocated|gcollects|maxLiveBytes|gcLiveBytes|MaxMem|
-
-#+begin_src haskell
-mapM_ Text.putStrLn $ (\(c,(s,s')) -> "|" <> expt (Just 3) (fromIntegral c) <> prettyOrgSpace s <> prettyOrgSpace s') <$> m Map.! "polySum"
-#+end_src
+| label1 | label2 |   time | allocated | gcollects | maxLiveBytes | gcLiveBytes | MaxMem |
+|--------+--------+--------+-----------+-----------+--------------+-------------+--------|
+| sum    |      0 | 1.90e7 |    7.25e6 |         7 |       3.95e6 |      3.95e6 | 1.05e7 |
+| sum    |      1 | 9.25e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      2 | 9.29e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      3 | 9.09e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      4 | 8.71e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      5 | 8.26e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      6 | 8.18e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      7 | 8.26e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      8 | 8.03e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+| sum    |      9 | 8.50e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
 
 * Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
 
-
-* ToDo zipping
-
-#+begin_src haskell
--- * zipping
--- from https://doisinkidney.com/posts/2019-05-08-list-manipulation-tricks.html
-
--- what is the name of this type of recursion?
-zipRec :: [a] -> [b] -> [(a,b)]
-zipRec [] _ = []
-zipRec _ [] = []
-zipRec (x:xs) (y:ys) = (x,y) : zipRec xs ys
-
--- step 1: write as a case statement on the first argument
-
-zipCase :: [a] -> [b] -> [(a,b)]
-zipCase xs = case xs of
-  [] -> const []
-  (x:xs') -> \case
-    [] -> []
-    (y:ys) -> (x,y):zipCase xs' ys
-
--- step 2: rewrite the case statements as auxillary functions
-zipAux :: [a] -> [b] -> [(a,b)]
-zipAux xs = case xs of
-  [] -> b
-  (x:xs') -> f x xs'
-  where
-    b _ = []
-    f x xs' = \case
-      [] -> []
-      (y:ys) -> (x,y):zipAux xs' ys
-
--- step 3: refactor the recursive call to the first case expression
-zipRef :: [a] -> [b] -> [(a,b)]
-zipRef xs = case xs of
-  [] -> b
-  (x:xs') -> f x (zipRef xs')
-  where
-    b _ = []
-    f x xs' = \case
-      [] -> []
-      (y:ys) -> (x,y): xs' ys
-
--- step 4 pass the auxillary functions to foldr
--- zipR :: [a] -> [b] -> [(a,b)]
-zipR :: [a] -> [b] -> [(a, b)]
-zipR = foldr f b
-  where
-    b _ = []
-    f x xs = \case
-      [] -> []
-      (y:ys) -> (x,y): xs ys
-
-zipR' :: [a] -> [b] -> [(a, b)]
-zipR' = foldr f (const [])
-  where
-    f x xs ys = case ys of
-      [] -> []
-      (y:ys') -> (x,y): xs ys'
-
--- from https://doisinkidney.com/posts/2020-08-22-some-more-list-algorithms.html
-newtype Zip a b =
-  Zip { runZip :: a -> (Zip a b -> b) -> b }
-
-zipZ :: [a] -> [b] -> [(a,b)]
-zipZ xs ys = foldr xf (const []) xs (Zip (foldr yf yb ys))
-  where
-    xf x xk yk = runZip yk x xk
-
-    yf y yk x xk = (x,y) : xk (Zip yk)
-    yb _ _ = []
-
-newtype a -&> b = Hyp { invoke :: (b -&> a) -> b }
-
-{-
-FIXME:
-
-zipHyp :: forall a b. [a] -> [b] -> [(a,b)]
-zipHyp xs ys = invoke xz yz
-  where
-    xz :: (a -> [(a,b)]) -&> [(a,b)]
-    xz = foldr f b xs
-      where
-        f x xk = Hyp (\yk -> invoke yk xk x)
-        b = Hyp (\_ -> [])
-
-    yz :: [(a,b)] -&> (a -> [(a,b)])
-    yz = foldr f b ys
-      where
-        f y yk = Hyp (\xk x -> (x,y) : invoke xk yk)
-        b = Hyp (\_ _ -> [])
-
--}
-
--- a -&> a ~ Fix (Cont a)
-newtype HypP p a b = HypP { invokeP :: p (HypP p b a) b }
-newtype HypM m a b = HypM { invokeM :: m ((HypM m a b -> a) -> b) }
-#+end_src

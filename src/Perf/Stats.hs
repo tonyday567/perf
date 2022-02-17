@@ -16,9 +16,12 @@ module Perf.Stats
     addStat,
     readStats,
     writeStats,
+    printOrgHeader,
     printOrg,
     printOrg2D,
     printOrg2DTranspose,
+    unlistify,
+    outercalate,
 
     -- * algos
     -- no ops
@@ -129,7 +132,7 @@ testExample (PatternLengthF label f a) = void $ fap label f a
 testExample (PatternConstFuse label f a) = void $ fap label f a
 testExample (PatternMapInc label f a) = void $ fap label f a
 
-noOps :: Int -> Maybe FilePath -> IO (Map.Map Text [Word64])
+noOps :: Int -> Maybe FilePath -> IO (Map.Map Text [Cycles])
 noOps n fp = do
     m <- execPerfT (times n) $ do
       liftIO $ warmup 1000
@@ -143,8 +146,8 @@ noOps n fp = do
 runNoOps :: Maybe FilePath -> Int -> Int -> IO (Map.Map [Text] Text)
 runNoOps fp f n = flip execStateT Map.empty $ do
   m <- lift (noOps n fp)
-  mapM_ (addStat ["first " <> Text.pack (show f), " faps"] . Text.pack . show . take f) (Map.lookup "fap times" m)
-  mapM_ (addStat ["first " <> Text.pack (show f), " fams"] . Text.pack . show . take f) (Map.lookup "fam times" m)
+  mapM_ (addStat ["first " <> (fixed (Just 0) . fromIntegral) f, "faps"] . Text.intercalate " " . fmap (fixed Nothing . fromIntegral) . take f) (Map.lookup "fap times" m)
+  mapM_ (addStat ["first " <> (fixed (Just 0) . fromIntegral) f, "fams"] . Text.intercalate " " . fmap (fixed Nothing . fromIntegral) . take f) (Map.lookup "fam times" m)
   mapM_ (addStat ["best","faps"] . expt (Just 3) . tenthD) (Map.lookup "fap times" m)
   mapM_ (addStat ["best","fams"] . expt (Just 3) . tenthD) (Map.lookup "fam times" m)
   mapM_ (addStat ["median","faps"] . expt (Just 3) . medianD) (Map.lookup "fap times" m)
@@ -152,12 +155,25 @@ runNoOps fp f n = flip execStateT Map.empty $ do
   mapM_ (addStat ["average","faps"] . expt (Just 3) . averageD) (Map.lookup "fap times" m)
   mapM_ (addStat ["average","fams"] . expt (Just 3) . averageD) (Map.lookup "fam times" m)
 
+outercalate :: Text -> [Text] -> Text
+outercalate c ts = c <> Text.intercalate c ts <> c
+
+printOrgHeader :: Map.Map [Text] a -> [Text] -> IO ()
+printOrgHeader m ts = do
+  Text.putStrLn $ outercalate "|" ((("label" <>) . Text.pack . show <$> [1..labelCols]) <> ts)
+  Text.putStrLn $ outercalate "|" (replicate (labelCols+1) "---")
+  pure ()
+    where
+      labelCols = maximum $ length <$> Map.keys m
+
 printOrg :: Map.Map [Text] Text -> IO ()
 printOrg m = do
-    Text.putStrLn "|stat|result|"
-    Text.putStrLn "|---|---|"
-    _ <- Map.traverseWithKey (\k a -> Text.putStrLn ("|" <> Text.intercalate "|" k <> "|" <> a <> "|")) m
-    pure ()
+  printOrgHeader m ["results"]
+  _ <- Map.traverseWithKey (\k a -> Text.putStrLn (outercalate "|" (k <> [a]))) m
+  pure ()
+
+unlistify :: Map.Map [Text] [a] -> Map.Map [Text] a
+unlistify m = Map.fromList $ mconcat $ (\(ks,vs) -> (\(v,i) -> (ks <> [Text.pack (show i)], v)) <$> zip vs [(0::Int)..]) <$> Map.toList m
 
 printOrg2D :: Map.Map [Text] Text -> IO ()
 printOrg2D m = do

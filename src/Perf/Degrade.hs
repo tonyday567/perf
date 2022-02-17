@@ -9,7 +9,6 @@ import Data.Map.Merge.Strict
 import Data.Bool
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
-import Data.Monoid
 
 csvFile :: CsvConfig
 csvFile = CsvConfig "./other/example1.csv" ',' NoHeader
@@ -22,8 +21,8 @@ readMap fp = do
   r <- runCsv (csvFile { file = fp  }) (\c -> (,) <$> field c <*> double)
   pure $ Map.fromList [x | (Right x) <- r]
 
-extract :: (a1, Map.Map a2 (Sum c)) -> c
-extract = snd . head . Map.toList . Map.map getSum . snd
+extract :: (a1, Map.Map a2 c) -> c
+extract = snd . head . Map.toList . snd
 
 extractList :: (a1, Map.Map a2 [c]) -> [c]
 extractList = snd . head . Map.toList . snd

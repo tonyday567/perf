@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- | basic measurement and callibration
 module Main where
@@ -15,26 +16,28 @@ import Control.DeepSeq
 import qualified Data.Map.Strict as Map
 import Data.FormatN
 
-data RunType = RunSums | RunGuage | RunNoOp | RunTicks | RunSpace | RunSpaceTime deriving (Eq, Show)
+data RunType = RunDefault | RunExamples | RunSums | RunGauge | RunNoOp | RunTicks | RunTime | RunSpace | RunSpaceTime deriving (Eq, Show)
 
 data Options = Options
   { optionRuns :: Int,
     optionLength :: Int,
     optionStatDType :: StatDType,
     optionRunType :: RunType,
-    optionReportSum :: Text,
     optionsAlgoExample :: AlgoExample
   } deriving (Eq, Show)
 
 parseRun :: Parser RunType
 parseRun =
+  flag' RunDefault (long "default" <> help "default measurement (polySum)") <|>
   flag' RunSums (long "sums" <> help "sums") <|>
+  flag' RunExamples (long "examples" <> help "examples") <|>
   flag' RunNoOp (long "noop" <> help "no-ops") <|>
   flag' RunTicks (long "ticks" <> help "tick types") <|>
-  flag' RunGuage (long "guage" <> help "guage comparison") <|>
+  flag' RunGauge (long "gauge" <> help "gauge comparison") <|>
+  flag' RunTime (long "time" <> help "time stats") <|>
   flag' RunSpace (long "space" <> help "space stats") <|>
   flag' RunSpaceTime (long "spacetime" <> help "space and time stats") <|>
-  pure RunSums
+  pure RunDefault
 
 options :: Parser Options
 options = Options <$>
@@ -42,7 +45,6 @@ options = Options <$>
   option auto (value 1000 <> long "length" <> short 'l' <> help "length of list") <*>
   parseStatD <*>
   parseRun <*>
-  strOption (value "polySum" <> long "sum" <> short 's' <> help "type of sum code") <*>
   parseAlgoExample
 
 opts :: ParserInfo Options
@@ -83,9 +85,21 @@ main = do
   let s = optionStatDType o
   let a = optionsAlgoExample o
   let r = optionRunType o
-  let reportSum = optionReportSum o
 
   case r of
+    RunDefault-> do
+      m <- execPerfT (times n) $ testExample (examplePattern a l)
+      printOrg (expt (Just 3) . statD s <$> Map.mapKeys (:[]) m)
+
+    RunExamples -> do
+      printOrg =<<
+        Map.mapKeys (:[]) .
+        fmap (expt (Just 3) . statD s) <$>
+        (execPerfT (times n) $
+         mapM_ testExample $
+         (`examplePattern` l) <$>
+         allAlgoExamples)
+
     RunSums-> do
       m <- runAllSums n l times
       writeFile "other/runsum.stats" (show m)
@@ -94,7 +108,7 @@ main = do
     RunNoOp -> do
       -- noop check
       noopPerf <- runNoOps (Just "other/noop.map") 10 n
-      writeStats "other/noop.csv" id noopPerf
+      -- writeStats "other/noop.csv" id noopPerf
       printOrg noopPerf
     RunTicks -> do
       -- algo by tick style
@@ -102,18 +116,23 @@ main = do
       writeStats "other/basic.csv" id (fmap (expt (Just 3)) tickStylePerf)
       printOrg2DTranspose (fmap (expt (Just 3)) tickStylePerf)
 
-    RunGuage -> do
+    RunGauge -> do
       -- algo by tick style
       mapM_ testGaugeExample ((`examplePattern` l) <$> allAlgoExamples)
       testGauge "noop" (const ()) ()
 
     RunSpace -> do
-      -- recordSpaceStats "other/space.stats" polySum [1..l] n
-      -- putStrLn "Space stats recorded for polySum in other/space.stats"
       m <- execPerfT (toMeasureN n (space False)) $ testExample (examplePattern a l)
-      printOrg (Map.map (prettyOrgSpace . foldl1 addSpace ) $ Map.mapKeys (:[]) m)
+      printOrgSpace $ unlistify $ Map.mapKeys (:[]) m
 
     RunSpaceTime -> do
-      m <- runAllSums n l (\x -> toMeasureN x ((,) <$> stepTime <*> space2))
-      writeFile "other/spacetime.stats" (show m)
-      printOrgSpaceTime (m Map.! reportSum)
+      let st = toMeasureN n ((,) <$> stepTime <*> space False)
+      let pat = examplePattern a l
+      m <- execPerfT st $ testExample pat
+      printOrgSpaceTime $ unlistify $ Map.mapKeys (:[]) m
+
+    RunTime -> do
+      let st = toMeasureN n stepTime
+      let pat = examplePattern a l
+      m <- execPerfT st $ testExample pat
+      printOrg (unlistify $ fmap (expt (Just 3) . fromIntegral) <$> Map.mapKeys (:[]) m)

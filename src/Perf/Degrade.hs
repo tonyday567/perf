@@ -1,6 +1,15 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- | Check versus a canned file for performance degradation
 
-module Perf.Degrade where
+module Perf.Degrade
+  ( writeResult,
+    readResult,
+    compareResults,
+    resultToTrial,
+    degradeCheck,
+    degradePrint,
+  ) where
 
 import Box.Csv hiding (header)
 import Box
@@ -9,26 +18,52 @@ import Data.Map.Merge.Strict
 import Data.Bool
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import Trial
+import Data.Semigroup
+import Data.List.NonEmpty
+import qualified Data.Text.IO as Text
+import qualified Data.Text as Text
+import Data.Bifunctor
+import qualified Data.Attoparsec.Text as A
+import qualified Data.List as List
+import Data.Either (fromRight)
 
-csvFile :: CsvConfig
-csvFile = CsvConfig "./other/example1.csv" ',' NoHeader
+writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
+writeResult fp m = glue <$> rowCommitter (CsvConfig fp ',' NoHeader) (\(ls,v) -> ls <> [expt (Just 3) v]) <*|> qList (Map.toList m)
 
-writeMap :: FilePath -> Map.Map Text Double -> IO ()
-writeMap fp m = glue <$> rowCommitter (csvFile { file = fp }) (\(l,v) -> [l,prec (Just 3) v]) <*|> qList (Map.toList m)
+readResult :: FilePath -> IO (Map.Map [Text] Double)
+readResult fp = do
+  r <- runCsv (CsvConfig fp ',' NoHeader) fields
+  let r' = [x | (Right x) <- r]
+  let l = (\x -> (List.init x, fromRight 0 (A.parseOnly double (List.last x)))) <$> r'
+  pure $ Map.fromList l
 
-readMap :: FilePath -> IO (Map.Map Text Double)
-readMap fp = do
-  r <- runCsv (csvFile { file = fp  }) (\c -> (,) <$> field c <*> double)
-  pure $ Map.fromList [x | (Right x) <- r]
+data CompareResult a = Missing1 | Missing2 | Equivalent | Improved a | Degraded a
 
-extract :: (a1, Map.Map a2 c) -> c
-extract = snd . head . Map.toList . snd
+compareResults :: (Ord a) => Map.Map a Double -> Map.Map a Double -> Map.Map a (CompareResult Double)
+compareResults x y =
+  merge
+  (mapMissing (\_ _ -> Missing2))
+  (mapMissing (\_ _ -> Missing1))
+  (zipWithMatched (\_ x' y' ->
+                     bool
+                     (bool (Improved (y'/x'-1)) (Degraded (y'/x'-1)) (x' < y'))
+                     Equivalent (x' == y'))) x y
 
-extractList :: (a1, Map.Map a2 [c]) -> [c]
-extractList = snd . head . Map.toList . snd
+resultToTrial :: Double -> Double -> ([Text], CompareResult Double) -> Trial (Text, [Text]) ()
+resultToTrial _ _ (ts, Missing1) = result ("original missing", ts) ()
+resultToTrial _ _ (ts, Missing2) = result ("latest missing", ts) ()
+resultToTrial _ _ (_, Equivalent) = pure ()
+resultToTrial _ _ (_, Improved _) = pure ()
+resultToTrial w e (ts, Degraded x) = bool (bool (pure ()) (result ("worse", ts) ()) (x > w)) (fiasco ("degraded", ts)) (x > e)
 
-divP :: Map.Map Text Double -> Map.Map Text Double -> Map.Map Text Double
-divP x y = merge dropMissing dropMissing (zipWithMatched (\_ x' y' -> x' / y')) x y
+degradeCheck :: Double -> Double -> FilePath -> Map.Map [Text] Double -> IO (Trial (Text, [Text]) ())
+degradeCheck w e fp m = do
+  mOrig <- readResult fp
+  pure $ sconcat $ fromList $ resultToTrial w e <$> Map.toList (compareResults mOrig m)
 
-divFilter :: (Double -> Bool) -> Map.Map Text Double -> Map.Map Text Double -> Map.Map Text Double
-divFilter p x y = merge dropMissing dropMissing (zipWithMaybeMatched (\_ x' y' -> bool Nothing (Just (x' / y')) (p $ x' / y'))) x y
+degradePrint :: Double -> Double -> FilePath -> Map.Map [Text] Double -> IO ()
+degradePrint w e fp m =
+  (Text.putStrLn . prettyTrial) .
+  first (\(l,ts) -> Text.intercalate "|" ([l]<>ts)) =<<
+  degradeCheck w e fp m

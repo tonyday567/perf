@@ -14,15 +14,19 @@
 module Perf.Algos
   (
     -- * function application unifications
-    AlgoExample (..),
-    allAlgoExamples,
-    parseAlgoExample,
+    Example (..),
+    allExamples,
+    parseExample,
     ExamplePattern (..),
     examplePattern,
     exampleLabel,
+    testExample,
+    statExamples,
 
     SumPattern (..),
     allSums,
+    testSum,
+    statSums,
 
     LengthPattern (..),
     allLengths,
@@ -81,12 +85,16 @@ import Data.Text (Text)
 import Options.Applicative
 import Data.Bifunctor
 import Data.Functor.Foldable
+import Perf.Types
+import qualified Data.Map.Strict as Map
+import Control.Monad (void)
+import Control.Monad.IO.Class (MonadIO (..))
 
 -- | Algorithm examples for testing
-data AlgoExample = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc deriving (Eq, Show)
+data Example = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc deriving (Eq, Show)
 
-allAlgoExamples :: [AlgoExample]
-allAlgoExamples =
+allExamples :: [Example]
+allExamples =
   [
     ExampleSumFuse,
     ExampleSum,
@@ -95,8 +103,8 @@ allAlgoExamples =
     ExampleMapInc
   ]
 
-parseAlgoExample :: Parser AlgoExample
-parseAlgoExample =
+parseExample :: Parser Example
+parseExample =
   flag' ExampleSumFuse (long "sumFuse" <> help "fused sum pipeline") <|>
   flag' ExampleSum (long "sum" <> help "sum") <|>
   flag' ExampleLengthF (long "lengthF" <> help "foldr id length") <|>
@@ -120,12 +128,22 @@ exampleLabel (PatternConstFuse l _ _) = l
 exampleLabel (PatternMapInc l _ _) = l
 
 
-examplePattern :: AlgoExample -> Int -> ExamplePattern Int
+examplePattern :: Example -> Int -> ExamplePattern Int
 examplePattern ExampleSumFuse l = PatternSumFuse "sumFuse" sumFuse l
 examplePattern ExampleSum l = PatternSum "sum" sum [1..l]
 examplePattern ExampleLengthF l = PatternLengthF "lengthF" lengthF [1..l]
 examplePattern ExampleConstFuse l = PatternConstFuse "constFuse" constFuse l
 examplePattern ExampleMapInc l = PatternMapInc "mapInc" mapInc [1..l]
+
+testExample :: (Semigroup a, MonadIO m) => ExamplePattern Int -> PerfT m a ()
+testExample (PatternSumFuse label f a) = void $ fap label f a
+testExample (PatternSum label f a) = void $ fap label f a
+testExample (PatternLengthF label f a) = void $ fap label f a
+testExample (PatternConstFuse label f a) = void $ fap label f a
+testExample (PatternMapInc label f a) = void $ fap label f a
+
+statExamples :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
+statExamples n l m = execPerfT (m n) $ mapM_ testExample ((`examplePattern` l) <$> allExamples)
 
 -- | Unification of sum function applications
 data SumPattern a =
@@ -156,6 +174,15 @@ allSums l =
     SumFuse "sumFuseFoldl'" sumFuseFoldl' l,
     SumFuse "sumFuseFoldr" sumFuseFoldr l
   ]
+
+testSum :: (Semigroup a, MonadIO m) => SumPattern Int -> PerfT m a Int
+testSum (SumFuse label f a) = fap label f a
+testSum (SumFusePoly label f a) = fap label f a
+testSum (SumMono label f a) = fap label f a
+testSum (SumPoly label f a) = fap label f a
+
+statSums :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
+statSums n l m = execPerfT (m n) $ mapM_ testSum (allSums l)
 
 -- | Unification of sum function applications
 data LengthPattern a =

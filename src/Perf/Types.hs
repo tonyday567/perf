@@ -50,6 +50,7 @@ module Perf.Types
 
     outer,
     slop,
+    slops,
   )
 where
 
@@ -182,40 +183,37 @@ fam label a =
 
 -- | Run the performance measure, returning (computational result, measurement).
 --
--- >>> (cs, result) <- runPerfT cycle' $ (foldl' (+) 0) |$| [0..10000]
---
--- > (50005000,fromList [("sum",562028)])
--- runPerfT :: Measure m t -> PerfT m t a -> Measure m t -> m (a, Map.Map Text t)
 runPerfT :: (Functor m) => Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
 runPerfT m p = fmap (second snd) <$> flip runStateT (m, Map.empty) $ measurePerf p
 
 -- | Consume the PerfT layer and return the original monadic result.
 -- Fingers crossed, PerfT structure should be completely compiled away.
 --
--- >>> result <- evalPerfT $ perf "sum" cycle' (foldl' (+) 0) [0..10000]
---
--- > 50005000
 evalPerfT :: Monad m => Measure m t -> PerfT m t a -> m a
 evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
 
 -- | Consume a PerfT layer and return the measurement.
 --
--- >>> cs <- execPerfT $ perf "sum" cycle' (foldl' (+) 0) [0..10000]
---
--- > fromList [("sum",562028)]
 execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
 
 -- | run a PerfT and also calculate performance over the entire computation
-outer :: (MonadIO m, Semigroup t) => Text -> Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
-outer label meas p =
-  (\((a,m),m') -> (a, m<>m')) <$>
-  runPerfT meas (
+outer :: (MonadIO m, Semigroup s) => Text -> Measure m s -> Measure m t -> PerfT m t a -> m (a, (Map.Map Text s, Map.Map Text t))
+outer label outerm meas p =
+  (\((a,m),m') -> (a, (m', m))) <$>
+  runPerfT outerm (
    fam label (runPerfT meas p))
 
 -- | run a PerfT and calculate excess performance over the entire computation
-slop :: (MonadIO m, Num t, Semigroup t) => Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
-slop meas p =
-  (\((a,m),m') -> (a, m' <> Map.insert "slop" (m Map.! "outer" - Map.foldl' (+) 0 m') m')) <$>
+slop :: (MonadIO m, Num t, Semigroup t) => Text -> Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
+slop l meas p =
+  (\((a,m),m') -> (a, m <> Map.insert "slop" (m' Map.! l - Map.foldl' (+) 0 m) m')) <$>
   runPerfT meas (
-   fam "outer" (runPerfT meas p))
+   fam l (runPerfT meas p))
+
+-- | run a multi PerfT and calculate excess performance over the entire computation
+slops :: (MonadIO m, Num t, Semigroup t) => Int -> Measure m t -> PerfT m [t] a -> m (a, (Map.Map Text t, Map.Map Text [t]))
+slops n meas p =
+  (\((a,ms),m') -> (a, (Map.insert "slop" (m' Map.! "outer" - Map.foldl' (+) 0 (fmap sum ms)) m', ms))) <$>
+  runPerfT meas (
+   fam "outer" (runPerfT (repeated n meas) p))

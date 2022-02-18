@@ -7,6 +7,8 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant bracket" #-}
 
 -- | BigO numbers
 --
@@ -208,7 +210,7 @@ stepOs_ n cs ns = go n 0 cs ns
             (o, cs)
             (n == 0)
         )
-        (o + bool (order N0 (List.head cs)) 0 (length cs == 0), [])
+        (o + bool (order N0 (List.head cs)) 0 (null cs), [])
         (length cs <= 1)
 
 stepOs :: [Double] -> [Double] -> Order Double
@@ -227,7 +229,7 @@ stepOsB cs ns = (o, f, r)
 bigOTest :: Double -> IO (O, Double, Double)
 bigOTest n = do
   _ <- warmup 1000
-  cs <- sequence $ (\n -> fst <$> tick (\x -> List.nub [0 .. (x - 1)]) n) <$> ns
+  cs <- sequence $ fmap fst . tick (\ x -> List.nub [0 .. (x - 1)]) <$> ns
   pure (stepOsB (fromIntegral <$> cs) ns)
   where
     ns = reverse $ List.unfoldr (\n -> let n' = (fromIntegral (floor (n / 10) :: Integer) :: Double) in bool (Just (n', n')) Nothing (n' == 0)) n
@@ -238,7 +240,7 @@ bigOTest n = do
 bigOT :: (Double -> a) -> Double -> IO (O, Double, Double)
 bigOT f n = do
   _ <- warmup 1000
-  cs <- sequence $ (\n -> fst <$> tick f n) <$> ns
+  cs <- sequence $ (fmap fst . tick f) <$> ns
   pure (stepOsB (fromIntegral <$> cs) ns)
   where
     ns = reverse $ List.unfoldr (\n -> let n' = (fromIntegral (floor (n / 10) :: Integer)) in bool (Just (n', n')) Nothing (n' == 0)) n

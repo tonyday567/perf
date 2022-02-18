@@ -191,8 +191,8 @@ fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap 
 An IO example
 
 #+begin_src haskell
-exampleIO :: IO ()
-exampleIO = do
+exampleIO' :: IO ()
+exampleIO' = do
   txt <- Text.readFile "src/Perf.hs"
   let n = Text.length txt
   Text.putStrLn $ "length of file is: " <> Text.pack (show n)
@@ -203,18 +203,46 @@ exampleIO = do
 
 #+begin_src haskell
 import Data.Semigroup
-:{
-exampleIO'' = execPerfT time (do
+exampleIO = execPerfT time (do
   txt <- fam "file read" (Text.readFile "src/Perf.hs")
   n <- fap "length" Text.length txt
   fam "print result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
-:}
-exampleIO''
+#+end_src
+
+#+begin_src sh :results drawer
+perf-explore -r 10 -l 100000 --exampleIO +RTS -T -RTS
 #+end_src
 
 #+RESULTS:
-: *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup| *Perf Perf Data.FormatN P Data.Foldable Text Text Data.Semigroup|  > length of file is: 1927
-: fromList [("file read",Cycles {word = 177852}),("length",Cycles {word = 10248}),("print result",Cycles {word = 204568})]
+:results:
+length of file is: 1927
+|label1|results|
+|---|---|
+|file read|4.37e5|
+|length|4.75e3|
+|print result|5.52e4|
+
+outer version
+
+length of file is: 1927
+|label1|results|
+|---|---|
+|file read|1.01e5|
+|length|4.51e3|
+|print result|5.29e3|
+|total|1.16e5|
+
+slop version
+
+length of file is: 1927
+|label1|results|
+|---|---|
+|file read|9.16e4|
+|length|4.43e3|
+|print result|5.07e3|
+|slop|1.35e3|
+|total|1.02e5|
+:end:
 
 
 ** callibration
@@ -563,6 +591,17 @@ perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 | sum    |      7 | 8.26e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
 | sum    |      8 | 8.03e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
 | sum    |      9 | 8.50e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+
+
+** slop
+
+#+begin_src haskell
+import qualified Data.Map.Strict as Map
+(\m -> (Map.!) m "slop") . fst . snd <$> slops 10 time (sum |$| [1..1000])
+#+end_src
+
+#+RESULTS:
+: Cycles {word = 5487960}
 
 * Resources
 

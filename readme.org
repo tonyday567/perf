@@ -34,7 +34,7 @@ putStrLn "ok"
 
 The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 :t tick
 #+end_src
 
@@ -49,14 +49,14 @@ Unlike benchmarking-style libraries, such as criterion, the result of the comput
 
 tick_ measures the number of cycles between two clock reads.
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 :t tick_
 #+end_src
 
 #+RESULTS:
 : tick_ :: IO Cycles
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import Control.Monad
 replicateM 10 tick_
 #+end_src
@@ -66,7 +66,7 @@ replicateM 10 tick_
 
 ** multiple ticks
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 #+end_src
 
@@ -79,21 +79,21 @@ Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, red
 
 ~tickIO~ measures the evaluation of an IO value.
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 :t tickIO
 #+end_src
 
 #+RESULTS:
 : tickIO :: IO a -> IO (Cycles, a)
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
 | 5840 | 2602 | 1910 | 1698 | 1668 | 1660 | 1672 | 1676 | 1680 | 1662 |
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 ticks 100 (const ()) ()
 #+end_src
 
@@ -102,7 +102,7 @@ ticks 100 (const ()) ()
 
 ** sum example
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
 #+end_src
 
@@ -110,7 +110,7 @@ fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Doub
 | 3,680,000 | 5,020,000 | 726,000 | 693,000 | 2,880,000 | 746,000 | 671,000 | 1,730,000 | 626,000 | 618,000 |
 
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 ts <- ticks 10000 sum ([1..1000] :: [Double])
 putStrLn $ Text.unpack $ average (fst ts)
 #+end_src
@@ -124,7 +124,7 @@ putStrLn $ Text.unpack $ average (fst ts)
 
 Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 averageD . fst <$> ticks 1000 sum [1..1000]
 #+end_src
 
@@ -133,7 +133,7 @@ averageD . fst <$> ticks 1000 sum [1..1000]
 
 ... with PerfT usage
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import qualified Data.Map.Strict as Map
 fmap averageD <$> execPerfT (times 1000) (sum |$| [1..1000])
 #+end_src
@@ -143,7 +143,7 @@ fmap averageD <$> execPerfT (times 1000) (sum |$| [1..1000])
 
 Comparing performance of sum versus a list fusion approach:
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import qualified Data.Map.Strict as Map
 :set -Wno-unused-do-bind
 fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap "fusion" (\x -> sum [1..x]) 1000))
@@ -154,7 +154,7 @@ fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap 
 
 An IO example
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 exampleIO' :: IO ()
 exampleIO' = do
   txt <- Text.readFile "src/Perf.hs"
@@ -165,7 +165,7 @@ exampleIO' = do
 #+RESULTS:
 : >  > length of file is: 1927
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import Data.Semigroup
 exampleIO = execPerfT time (do
   txt <- fam "file read" (Text.readFile "src/Perf.hs")
@@ -213,7 +213,7 @@ length of file is: 1927
 
 ~perf-explore~ contains some exploratory routines to help develop =perf=
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore --help
 #+end_src
 
@@ -252,7 +252,7 @@ Available options:
   -h,--help                Show this help text
 #+end_example
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import qualified Data.Map.Strict as Map
 fmap averageD <$> execPerfT (times 10000) (sum |$| [1..1000])
 #+end_src
@@ -275,7 +275,7 @@ perf-explore -r 10000 -l 1000 --sum
 
 ** noops
 
-#+begin_src sh :results drawer
+#+begin_src sh :results drawer :exports both
 perf-explore --noop
 #+end_src
 
@@ -294,7 +294,7 @@ perf-explore --noop
 |median|faps|2.18e1|
 :end:
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 :r
 :set -XOverloadedLabels
 import qualified Data.Text as Text
@@ -310,7 +310,7 @@ filter (> 100) d
 #+RESULTS:
 | Cycles | (word = 792) | Cycles | (word = 258) |
 
-#+begin_src haskell :file other/noop.svg :results output graphics file :exports results
+#+begin_src haskell :file other/noop.svg :results output graphics file :exports both
 writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
 #+end_src
 
@@ -379,7 +379,7 @@ perf-explore -r 100000 -l 1000 --ticks
 :end:
 
 *** short list
-#+begin_src sh :results drawer
+#+begin_src sh :results drawer :exports both
 perf-explore -r 10000 -l 10 --best --ticks
 #+end_src
 
@@ -408,7 +408,7 @@ perf-explore -r 10000 -l 10 --best --ticks
 :end:
 
 *** long list
-#+begin_src sh :results drawer
+#+begin_src sh :results drawer :exports both
 perf-explore -r 100 -l 100000 --best --ticks
 #+end_src
 
@@ -438,7 +438,7 @@ perf-explore -r 100 -l 100000 --best --ticks
 
 * Gauge
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore -r 1000 -l 1000 --average --gauge
 #+end_src
 
@@ -488,7 +488,7 @@ Canned results
 | noop      | 5.076  ns |
 |           |           |
 
-#+begin_src sh :results drawer
+#+begin_src sh :results drawer :exports both
 perf-explore --examples -r 10000 --averagesecs
 #+end_src
 
@@ -511,7 +511,7 @@ Data is collected from GHCStats
 - max_live_bytes
 - max_mem_in_use_bytes
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore -r 10 -l 100000 --time +RTS -T -RTS
 #+end_src
 
@@ -528,7 +528,7 @@ perf-explore -r 10 -l 100000 --time +RTS -T -RTS
 | sum    |      8 |  8.52e5 |
 | sum    |      9 |  8.37e5 |
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore -r 10 -l 100000 --space +RTS -T -RTS
 #+end_src
 
@@ -547,7 +547,7 @@ perf-explore -r 10 -l 100000 --space +RTS -T -RTS
 
 ** spacetime
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 #+end_src
 
@@ -567,7 +567,7 @@ perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 
 ** slop
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 import qualified Data.Map.Strict as Map
 (\m -> (Map.!) m "slop") . fst . snd <$> slops 10 time (sum |$| [1..1000])
 #+end_src
@@ -577,7 +577,7 @@ import qualified Data.Map.Strict as Map
 
 * Check
 
-#+begin_src sh :results output
+#+begin_src sh :results output :exports both
 perf-explore -r 1000 -l 1000 --examples --check
 #+end_src
 

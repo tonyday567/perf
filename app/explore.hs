@@ -20,7 +20,7 @@ import Control.Monad.State.Lazy
 import qualified Data.List as List
 import Data.Bool
 import Data.Maybe
-import Box.Csv hiding (header)
+-- import Box.Csv hiding (header)
 
 data RunType = RunDefault | RunExamples | RunExampleIO | RunSums | RunGauge | RunNoOp | RunTicks | RunTime | RunSpace | RunSpaceTime deriving (Eq, Show)
 
@@ -225,7 +225,6 @@ main = do
   let record = bool Nothing (Just fp) (optionsRecord o)
   let check = bool Nothing (Just fp) (optionsRecordCheck o)
 
-  print fp
   case r of
     RunDefault-> do
       m <- execPerfT (times n) $ testExample (examplePattern a l)

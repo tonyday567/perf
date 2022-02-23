@@ -6,17 +6,11 @@
 
 - focuses on using the rdtsc instruction set that comes with the x86 chip to measure accurate time performance as number of clock cycles.
 
-* Usage
+- abstracts the concept of what is being measured, so that concepts such as counters, debug checks, time and space performance can be treated equivalently.
 
-#+begin_src haskell
-import Perf
-#+end_src
+* Setup
 
-
-
-* setup
-
-Running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
+Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
 #+begin_src haskell :results output
 :r
@@ -29,43 +23,12 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-#+begin_example
-Build profile: -w ghc-8.10.7 -O1
-In order, the following will be built (use -v for more details):
- - perf-0.9.0 (lib) (file src/Perf/Time.hs changed)
-Preprocessing library for perf-0.9.0..
-GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
-Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
-[1 of 8] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
-[2 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
-[3 of 8] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
-[4 of 8] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
-[5 of 8] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
-[6 of 8] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
-[7 of 8] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
-[8 of 8] Compiling Perf             ( src/Perf.hs, interpreted )
-Ok, 8 modules loaded.
-> Ok, 8 modules loaded.
->  >  >  >  > ok
-#+end_example
-
-
-#+begin_src haskell :results output
-import Perf
-import Data.FormatN
-import Prelude as P
-import Data.Foldable
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
-putStrLn "ok"
-#+end_src
-
-#+RESULTS:
-:
+: [7 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
+: [8 of 8] Compiling Perf             ( src/Perf.hs, interpreted )
+: Ok, 8 modules loaded.
 : >  >  >  >  > ok
 
 * time
-
 ** What a ~tick~ is
 
 The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
@@ -81,7 +44,7 @@ tick returns in the IO monad, because reading a cycle counter is an IO effect. T
 
 Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
 
-*** tick_
+** tick_
 
 tick_ measures the number of cycles between two clock reads.
 
@@ -100,7 +63,7 @@ replicateM 10 tick_
 #+RESULTS:
 | 10260 | 998 | 838 | 794 | 800 | 788 | 790 | 832 | 802 | 818 |
 
-*** multiple ticks
+** multiple ticks
 
 #+begin_src haskell
 fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
@@ -111,7 +74,7 @@ fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 
 Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, reducing down to 2.2k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
-*** tickIO
+** tickIO
 
 ~tickIO~ measures the evaluation of an IO value.
 
@@ -136,7 +99,7 @@ ticks 100 (const ()) ()
 #+RESULTS:
 | 8226 | 3298 | 3254 | 2686 | 2694 | 2724 | 2868 | 2732 | 2644 | 2678 | 2680 | 2896 | 2734 | 2606 | 2608 | 2598 | 2606 | 2738 | 2742 | 2610 | 2554 | 2532 | 2576 | 2592 | 2600 | 2562 | 2786 | 2592 | 2646 | 2624 | 2666 | 2640 | 2640 | 2602 | 2672 | 2560 | 3478 | 2556 | 2552 | 2572 | 2622 | 2492 | 2572 | 2706 | 2544 | 2604 | 2748 | 2570 | 2596 | 3078 | 2666 | 2592 | 2612 | 2648 | 2594 | 2564 | 2716 | 2564 | 2594 | 2596 | 2554 | 2766 | 2552 | 3026 | 2602 | 2860 | 2632 | 2614 | 2620 | 2586 | 3014 | 2626 | 2626 | 2614 | 2830 | 2624 | 2616 | 2648 | 2610 | 2626 | 2610 | 2590 | 2930 | 2622 | 2732 | 2698 | 3004 | 2664 | 2948 | 2630 | 2588 | 2766 | 2726 | 2600 | 2634 | 2792 | 2704 | 2774 | 2638 | 2634 |
 
-*** sum example
+** sum example
 
 #+begin_src haskell
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
@@ -245,7 +208,7 @@ length of file is: 1927
 :end:
 
 
-** callibration
+** perf-explore
 
 ~perf-explore~ contains some exploratory routines to help develop =perf=
 
@@ -317,18 +280,18 @@ perf-explore --noop
 
 #+RESULTS:
 :results:
-| stat     | result |                                                     |
-|----------+--------+-----------------------------------------------------|
-| average  | fams   |                                              2.28e1 |
-| average  | faps   |                                              2.54e1 |
-| best     | fams   |                                              1.94e1 |
-| best     | faps   |                                              1.73e1 |
-| first 10 | fams   |  302.0 44.0 22.0 20.0 22.0 20.0 20.0 20.0 22.0 20.0 |
-| first 10 | faps   | 4560.0 36.0 18.0 18.0 18.0 18.0 20.0 18.0 20.0 16.0 |
-| median   | fams   |                                              2.11e1 |
-| median   | faps   |                                              1.91e1 |
+"other/RunNoOp.csv"
+|label1|label2|results|
+|---|---|---|
+|average|fams|2.32e1|
+|average|faps|2.43e1|
+|best|fams|1.94e1|
+|best|faps|1.94e1|
+|first 10|fams|132.0 46.0 18.0 22.0 22.0 22.0 22.0 26.0 22.0 118.0|
+|first 10|faps|792.0 16.0 20.0 20.0 18.0 20.0 22.0 22.0 22.0 24.0|
+|median|fams|2.15e1|
+|median|faps|2.18e1|
 :end:
-
 
 #+begin_src haskell
 :r
@@ -344,7 +307,7 @@ filter (> 100) d
 #+end_src
 
 #+RESULTS:
-| Cycles | (word = 4560) | Cycles | (word = 166) |
+| Cycles | (word = 792) | Cycles | (word = 258) |
 
 #+begin_src haskell :file other/noop.svg :results output graphics file :exports results
 writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
@@ -464,44 +427,45 @@ perf-explore -r 100 -l 100000 --best --ticks
 |   | sumTail       |  783000.0 |  780000.0 |  782000.0 |      778000.0 |     15.1 |  776000.0 |  783000.0 |
 |   | sumTailLazy   | 1280000.0 | 1390000.0 | 1270000.0 |     1290000.0 |     15.1 | 1310000.0 | 1270000.0 |
 
-
 * gauge
 
-#+begin_src sh
+#+begin_src sh :results output
 perf-explore -r 1000 -l 1000 --average --gauge
 #+end_src
 
 #+RESULTS:
-| sumFuse      |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 886.7 | ns |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 873.1 | ns |
-|              |          |     |                 |      |       |    |
-| sum          |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 3.838 | μs |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 3.833 | μs |
-|              |          |     |                 |      |       |    |
-| lengthF      |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 1.881 | μs |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 1.873 | μs |
-|              |          |     |                 |      |       |    |
-| constFuse    |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 578.9 | ns |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 571.7 | ns |
-|              |          |     |                 |      |       |    |
-| mapInc       |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 8.961 | ns |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 11.78 | μs |
-|              |          |     |                 |      |       |    |
-| noop         |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 5.076 | ns |
-|              |          |     |                 |      |       |    |
-| benchmarking | function | ... | function | time | 4.969 | ns |
-|              |          |     |                 |      |       |    |
+#+begin_example
+sumFuse
+benchmarking function ... function                                 time                 583.5 ns
+
+benchmarking function ... function                                 time                 583.5 ns
+
+sum
+benchmarking function ... function                                 time                 3.691 μs
+
+benchmarking function ... function                                 time                 3.645 μs
+
+lengthF
+benchmarking function ... function                                 time                 1.871 μs
+
+benchmarking function ... function                                 time                 1.874 μs
+
+constFuse
+benchmarking function ... function                                 time                 293.0 ns
+
+benchmarking function ... function                                 time                 299.8 ns
+
+mapInc
+benchmarking function ... function                                 time                 9.618 ns
+
+benchmarking function ... function                                 time                 10.65 μs
+
+noop
+benchmarking function ... function                                 time                 5.254 ns
+
+benchmarking function ... function                                 time                 5.249 ns
+
+#+end_example
 
 Canned results
 
@@ -527,7 +491,6 @@ perf-explore --examples -r 10000 --averagesecs
 |   | mapInc    | 9.71e-09 |
 |   | sum       | 3.28e-06 |
 |   | sumFuse   | 8.12e-07 |
-
 
 * space
 
@@ -602,6 +565,29 @@ import qualified Data.Map.Strict as Map
 
 #+RESULTS:
 : Cycles {word = 5487960}
+
+* check
+
+#+begin_src sh :results output
+perf-explore -r 1000 -l 1000 --examples --check
+#+end_src
+
+#+RESULTS:
+#+begin_example
+|label1|results|
+|---|---|
+|constFuse|6.77e2|
+|lengthF|9.12e3|
+|mapInc|6.59e2|
+|sum|1.14e4|
+|sumFuse|1.56e3|
+Result:
+  ()
+
+With the following warnings:
+  * [Warning] degraded by 2,200%|mapInc
+
+#+end_example
 
 * Resources
 

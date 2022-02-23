@@ -38,7 +38,7 @@ readResult fp = do
   let l = (\x -> (List.init x, fromRight 0 (A.parseOnly double (List.last x)))) <$> r'
   pure $ Map.fromList l
 
-data CompareResult a = Missing1 | Missing2 | Equivalent | Improved a | Degraded a
+data CompareResult a = Missing1 | Missing2 | Equivalent | Improved a | Degraded a deriving (Show, Eq)
 
 compareResults :: (Ord a) => Map.Map a Double -> Map.Map a Double -> Map.Map a (CompareResult Double)
 compareResults x y =
@@ -55,7 +55,16 @@ resultToTrial _ _ (ts, Missing1) = result ("original missing", ts) ()
 resultToTrial _ _ (ts, Missing2) = result ("latest missing", ts) ()
 resultToTrial _ _ (_, Equivalent) = pure ()
 resultToTrial _ _ (_, Improved _) = pure ()
-resultToTrial w e (ts, Degraded x) = bool (bool (pure ()) (result ("worse", ts) ()) (x > w)) (fiasco ("degraded", ts)) (x > e)
+resultToTrial w e (ts, Degraded x) =
+  bool
+    (bool
+     (pure ())
+     (result ("worse by " <> x', ts) ())
+     (x > w))
+    (fiasco ("degraded by " <> x', ts))
+    (x > e)
+  where
+    x' = percent commaSF (Just 2) x
 
 degradeCheck :: Double -> Double -> FilePath -> Map.Map [Text] Double -> IO (Trial (Text, [Text]) ())
 degradeCheck w e fp m = do

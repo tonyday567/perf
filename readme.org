@@ -13,7 +13,7 @@
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
-#+begin_src haskell :results output
+#+begin_src haskell :results output :exports both
 :r
 :set prompt " > "
 :set -Wno-type-defaults

@@ -1,5 +1,5 @@
 #+TITLE: perf
-#+PROPERTY: exports both
+#+PROPERTY: header-args :exports both
 
 ~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 

@@ -28,12 +28,12 @@ putStrLn "ok"
 : Ok, 8 modules loaded.
 : >  >  >  >  > ok
 
-* time
-** What a ~tick~ is
+* Time
+** What is a tick?
 
 The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
-#+begin_src haskell
+#+begin_src haskell :results output
 :t tick
 #+end_src
 
@@ -48,14 +48,14 @@ Unlike benchmarking-style libraries, such as criterion, the result of the comput
 
 tick_ measures the number of cycles between two clock reads.
 
-#+begin_src haskell
+#+begin_src haskell :results output
 :t tick_
 #+end_src
 
 #+RESULTS:
 : tick_ :: IO Cycles
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import Control.Monad
 replicateM 10 tick_
 #+end_src
@@ -65,7 +65,7 @@ replicateM 10 tick_
 
 ** multiple ticks
 
-#+begin_src haskell
+#+begin_src haskell :results output
 fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 #+end_src
 
@@ -78,21 +78,21 @@ Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, red
 
 ~tickIO~ measures the evaluation of an IO value.
 
-#+begin_src haskell
+#+begin_src haskell :results output
 :t tickIO
 #+end_src
 
 #+RESULTS:
 : tickIO :: IO a -> IO (Cycles, a)
 
-#+begin_src haskell
+#+begin_src haskell :results output
 fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
 | 5840 | 2602 | 1910 | 1698 | 1668 | 1660 | 1672 | 1676 | 1680 | 1662 |
 
-#+begin_src haskell
+#+begin_src haskell :results output
 ticks 100 (const ()) ()
 #+end_src
 
@@ -101,7 +101,7 @@ ticks 100 (const ()) ()
 
 ** sum example
 
-#+begin_src haskell
+#+begin_src haskell :results output
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
 #+end_src
 
@@ -109,7 +109,7 @@ fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Doub
 | 3,680,000 | 5,020,000 | 726,000 | 693,000 | 2,880,000 | 746,000 | 671,000 | 1,730,000 | 626,000 | 618,000 |
 
 
-#+begin_src haskell
+#+begin_src haskell :results output
 ts <- ticks 10000 sum ([1..1000] :: [Double])
 putStrLn $ Text.unpack $ average (fst ts)
 #+end_src
@@ -123,7 +123,7 @@ putStrLn $ Text.unpack $ average (fst ts)
 
 Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
 
-#+begin_src haskell
+#+begin_src haskell :results output
 averageD . fst <$> ticks 1000 sum [1..1000]
 #+end_src
 
@@ -132,7 +132,7 @@ averageD . fst <$> ticks 1000 sum [1..1000]
 
 ... with PerfT usage
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import qualified Data.Map.Strict as Map
 fmap averageD <$> execPerfT (times 1000) (sum |$| [1..1000])
 #+end_src
@@ -142,7 +142,7 @@ fmap averageD <$> execPerfT (times 1000) (sum |$| [1..1000])
 
 Comparing performance of sum versus a list fusion approach:
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import qualified Data.Map.Strict as Map
 :set -Wno-unused-do-bind
 fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap "fusion" (\x -> sum [1..x]) 1000))
@@ -153,7 +153,7 @@ fmap averageD <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap 
 
 An IO example
 
-#+begin_src haskell
+#+begin_src haskell :results output
 exampleIO' :: IO ()
 exampleIO' = do
   txt <- Text.readFile "src/Perf.hs"
@@ -164,7 +164,7 @@ exampleIO' = do
 #+RESULTS:
 : >  > length of file is: 1927
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import Data.Semigroup
 exampleIO = execPerfT time (do
   txt <- fam "file read" (Text.readFile "src/Perf.hs")
@@ -251,7 +251,7 @@ Available options:
   -h,--help                Show this help text
 #+end_example
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import qualified Data.Map.Strict as Map
 fmap averageD <$> execPerfT (times 10000) (sum |$| [1..1000])
 #+end_src
@@ -293,7 +293,7 @@ perf-explore --noop
 |median|faps|2.18e1|
 :end:
 
-#+begin_src haskell
+#+begin_src haskell :results output
 :r
 :set -XOverloadedLabels
 import qualified Data.Text as Text
@@ -320,114 +320,122 @@ writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb l
 
 Exploration of how the code surrounding measurement effects performance.
 
-#+begin_src sh
+#+begin_src sh :results drawer
 perf-explore -r 1000 -l 1000 --ticks
 #+end_src
 
 #+RESULTS:
-|   |               | stepTime |    tick | tickForce | tickForceArgs | tickLazy | tickWHNF |   times |
-|   | sumAux        |  29900.0 | 17000.0 |   29800.0 |       29200.0 |     16.7 |  15600.0 | 29900.0 |
-|   | sumCata       |  18300.0 | 20400.0 |   19500.0 |       18600.0 |     16.4 |  19000.0 | 18200.0 |
-|   | sumCo         |  16700.0 | 23700.0 |   16400.0 |       15900.0 |     16.8 |  16300.0 | 17100.0 |
-|   | sumCoCase     |  15900.0 | 18200.0 |   16100.0 |       15700.0 |     17.2 |  17200.0 | 15600.0 |
-|   | sumCoGo       |  18700.0 | 19300.0 |   20500.0 |       19000.0 |     16.9 |  19900.0 | 19800.0 |
-|   | sumF          |   9990.0 | 10500.0 |    9790.0 |        9780.0 |     17.0 |  10400.0 |  9980.0 |
-|   | sumFlip       |  11400.0 | 10500.0 |   12200.0 |       10700.0 |     19.8 |  16800.0 | 11900.0 |
-|   | sumFlipLazy   |  16500.0 | 14000.0 |   12000.0 |       13200.0 |     17.7 |  12100.0 | 17900.0 |
-|   | sumFoldr      |  18900.0 | 20600.0 |   19900.0 |       19600.0 |     17.0 |  19400.0 | 20100.0 |
-|   | sumFuse       |   1950.0 |  1960.0 |    1950.0 |        1950.0 |     19.3 |   3240.0 |  1970.0 |
-|   | sumFuseFoldl' |   1960.0 |  2010.0 |    1950.0 |        1950.0 |     20.3 |   1960.0 |  1960.0 |
-|   | sumFuseFoldr  |   8580.0 |  9820.0 |    8790.0 |        8580.0 |     19.0 |   8570.0 |  8590.0 |
-|   | sumFusePoly   |   1970.0 |  1970.0 |    1960.0 |        1970.0 |     19.5 |   1970.0 |  1980.0 |
-|   | sumLambda     |  15300.0 | 11200.0 |   11300.0 |       13100.0 |     17.0 |  11100.0 | 15000.0 |
-|   | sumMono       |   9820.0 | 11100.0 |    9690.0 |        9680.0 |     16.6 |  11000.0 |  9820.0 |
-|   | sumPoly       |  10500.0 | 10700.0 |   10300.0 |       10300.0 |     16.3 |  10500.0 | 18500.0 |
-|   | sumSum        |  10200.0 | 11100.0 |   10700.0 |        9930.0 |     16.5 |  11100.0 | 10300.0 |
-|   | sumTail       |   9640.0 | 11200.0 |   11000.0 |       10400.0 |     17.5 |  11000.0 |  9630.0 |
-|   | sumTailLazy   |  10000.0 | 11000.0 |    9890.0 |        9990.0 |     16.9 |  11000.0 | 11200.0 |
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   2.54e4 | 1.89e4 |    3.36e4 |        2.90e4 |   1.90e1 |   1.70e4 | 2.86e4 |
+| sumCata       |   2.10e4 | 2.34e4 |    1.98e4 |        2.00e4 |   1.88e1 |   1.96e4 | 1.91e4 |
+| sumCo         |   1.86e4 | 2.58e4 |    1.84e4 |        1.85e4 |   1.91e1 |   1.89e4 | 1.92e4 |
+| sumCoCase     |   1.82e4 | 2.03e4 |    1.82e4 |        1.65e4 |   1.95e1 |   1.64e4 | 1.83e4 |
+| sumCoGo       |   2.01e4 | 2.20e4 |    2.24e4 |        1.85e4 |   1.89e1 |   2.33e4 | 1.86e4 |
+| sumF          |   1.14e4 | 1.07e4 |    1.41e4 |        1.15e4 |   2.00e1 |   1.10e4 | 1.26e4 |
+| sumFlip       |   1.26e4 | 1.08e4 |    1.39e4 |        1.15e4 |   2.08e1 |   1.29e4 | 1.29e4 |
+| sumFlipLazy   |   1.40e4 | 1.22e4 |    1.28e4 |        1.10e4 |   1.91e1 |   1.06e4 | 1.66e4 |
+| sumFoldr      |   2.10e4 | 1.99e4 |    2.22e4 |        1.94e4 |   1.87e1 |   2.06e4 | 1.93e4 |
+| sumFuse       |   1.35e3 | 1.64e3 |    1.59e3 |        1.35e3 |   1.63e1 |   2.81e3 | 1.35e3 |
+| sumFuseFoldl' |   1.35e3 | 1.35e3 |    1.35e3 |        1.35e3 |   1.75e1 |   1.35e3 | 1.35e3 |
+| sumFuseFoldr  |   1.15e4 | 1.09e4 |    8.89e3 |        8.71e3 |   1.72e1 |   9.40e3 | 1.04e4 |
+| sumFusePoly   |   1.97e3 | 2.01e3 |    1.97e3 |        2.01e3 |   1.65e1 |   1.97e3 | 2.50e3 |
+| sumLambda     |   1.14e4 | 1.11e4 |    1.33e4 |        1.13e4 |   2.04e1 |   1.22e4 | 1.13e4 |
+| sumMono       |   1.11e4 | 1.17e4 |    1.37e4 |        1.26e4 |   1.88e1 |   1.12e4 | 1.30e4 |
+| sumPoly       |   1.14e4 | 1.17e4 |    1.43e4 |        1.27e4 |   1.99e1 |   1.15e4 | 1.96e4 |
+| sumSum        |   1.21e4 | 1.32e4 |    1.50e4 |        1.35e4 |   1.92e1 |   1.11e4 | 1.27e4 |
+| sumTail       |   1.03e4 | 1.12e4 |    1.26e4 |        1.06e4 |   2.03e1 |   1.20e4 | 1.19e4 |
+| sumTailLazy   |   1.22e4 | 1.14e4 |    1.43e4 |        1.28e4 |   1.97e1 |   1.10e4 | 1.25e4 |
+:end:
 
 
-#+begin_src sh
+#+begin_src sh :results drawer
 perf-explore -r 100000 -l 1000 --ticks
 #+end_src
 
 #+RESULTS:
-|   |               | stepTime |    tick | tickForce | tickForceArgs | tickLazy | tickWHNF |   times |
-|   | sumAux        |  18300.0 | 18300.0 |   18400.0 |       18200.0 |     16.8 |  18300.0 | 18300.0 |
-|   | sumCata       |  20800.0 | 20900.0 |   20600.0 |       20500.0 |     16.7 |  20900.0 | 20900.0 |
-|   | sumCo         |  18200.0 | 18000.0 |   17900.0 |       18200.0 |     16.7 |  18000.0 | 18000.0 |
-|   | sumCoCase     |  15100.0 | 18000.0 |   15500.0 |       15200.0 |     17.1 |  18000.0 | 15200.0 |
-|   | sumCoGo       |  20800.0 | 20800.0 |   20600.0 |       21000.0 |     16.8 |  20800.0 | 20700.0 |
-|   | sumF          |   9030.0 |  8790.0 |    8590.0 |        9820.0 |     16.8 |   8640.0 |  8590.0 |
-|   | sumFlip       |   8770.0 |  8600.0 |    8610.0 |        8420.0 |     17.1 |   8610.0 |  8780.0 |
-|   | sumFlipLazy   |  19500.0 |  8620.0 |    8410.0 |       21900.0 |     16.7 |   8540.0 | 19000.0 |
-|   | sumFoldr      |  20900.0 | 20900.0 |   20900.0 |       20500.0 |     16.9 |  20800.0 | 20800.0 |
-|   | sumFuse       |   2040.0 |  2040.0 |    2050.0 |        2040.0 |     19.2 |   2050.0 |  2160.0 |
-|   | sumFuseFoldl' |   2070.0 |  2050.0 |    2070.0 |        2100.0 |     19.1 |   2040.0 |  2180.0 |
-|   | sumFuseFoldr  |  11800.0 | 11100.0 |   11200.0 |       11200.0 |     19.3 |  11100.0 | 11200.0 |
-|   | sumFusePoly   |   2060.0 |  2070.0 |    2070.0 |        2060.0 |     19.2 |   2070.0 |  1990.0 |
-|   | sumLambda     |   8660.0 |  8640.0 |    9050.0 |        8830.0 |     17.1 |   8770.0 |  8740.0 |
-|   | sumMono       |  20800.0 |  8690.0 |   20700.0 |       20200.0 |     17.4 |   8810.0 | 21200.0 |
-|   | sumPoly       |   8660.0 |  8740.0 |    8630.0 |        8640.0 |     16.9 |   8690.0 |  8640.0 |
-|   | sumSum        |   8570.0 |  8860.0 |    8450.0 |        8470.0 |     16.8 |   8460.0 |  8450.0 |
-|   | sumTail       |   5980.0 |  6270.0 |    5790.0 |        5760.0 |     16.8 |   5830.0 |  5990.0 |
-|   | sumTailLazy   |  12000.0 | 10700.0 |   11900.0 |       11600.0 |     16.9 |  12000.0 | 12100.0 |
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   1.90e4 | 1.89e4 |    1.91e4 |        1.91e4 |   1.91e1 |   1.91e4 | 1.90e4 |
+| sumCata       |   2.04e4 | 2.02e4 |    2.05e4 |        2.03e4 |   1.91e1 |   2.03e4 | 2.03e4 |
+| sumCo         |   1.86e4 | 1.87e4 |    1.88e4 |        1.86e4 |   1.91e1 |   1.87e4 | 1.86e4 |
+| sumCoCase     |   1.58e4 | 1.83e4 |    1.64e4 |        1.59e4 |   1.94e1 |   1.83e4 | 1.59e4 |
+| sumCoGo       |   2.06e4 | 2.06e4 |    2.07e4 |        2.06e4 |   1.91e1 |   2.06e4 | 2.07e4 |
+| sumF          |   1.03e4 | 9.30e3 |    8.77e3 |        9.39e3 |   1.99e1 |   8.65e3 | 1.10e4 |
+| sumFlip       |   8.61e3 | 8.49e3 |    8.39e3 |        8.44e3 |   1.91e1 |   8.42e3 | 8.73e3 |
+| sumFlipLazy   |   1.19e4 | 8.73e3 |    8.41e3 |        2.11e4 |   1.91e1 |   8.43e3 | 1.19e4 |
+| sumFoldr      |   2.08e4 | 2.11e4 |    2.06e4 |        2.07e4 |   1.90e1 |   2.06e4 | 2.06e4 |
+| sumFuse       |   1.38e3 | 2.09e3 |    1.47e3 |        1.37e3 |   1.70e1 |   1.43e3 | 1.44e3 |
+| sumFuseFoldl' |   1.39e3 | 1.59e3 |    1.40e3 |        1.59e3 |   1.79e1 |   1.41e3 | 1.39e3 |
+| sumFuseFoldr  |   1.56e4 | 1.23e4 |    1.21e4 |        1.41e4 |   1.69e1 |   1.13e4 | 1.33e4 |
+| sumFusePoly   |   2.40e3 | 2.61e3 |    2.24e3 |        2.05e3 |   1.97e1 |   2.25e3 | 2.39e3 |
+| sumLambda     |   9.03e3 | 9.29e3 |    8.84e3 |        8.88e3 |   1.95e1 |   8.71e3 | 9.27e3 |
+| sumMono       |   5.69e3 | 6.00e3 |    6.26e3 |        5.87e3 |   2.14e1 |   5.95e3 | 5.71e3 |
+| sumPoly       |   8.98e3 | 8.90e3 |    9.00e3 |        8.78e3 |   1.93e1 |   8.98e3 | 8.95e3 |
+| sumSum        |   7.95e3 | 8.47e3 |    8.02e3 |        7.97e3 |   1.92e1 |   8.02e3 | 7.93e3 |
+| sumTail       |   5.98e3 | 7.16e3 |    6.01e3 |        5.87e3 |   1.91e1 |   8.01e3 | 6.10e3 |
+| sumTailLazy   |   5.93e3 | 8.49e3 |    5.77e3 |        5.81e3 |   1.91e1 |   5.76e3 | 5.95e3 |
+:end:
 
 *** short list
-#+begin_src sh
+#+begin_src sh :results drawer
 perf-explore -r 10000 -l 10 --best --ticks
 #+end_src
 
 #+RESULTS:
-|   |               | stepTime | tick | tickForce | tickForceArgs | tickLazy | tickWHNF | times |
-|   | sumAux        |     89.4 | 92.8 |      91.4 |          89.5 |     14.8 |     89.4 |  89.8 |
-|   | sumCata       |     89.3 | 93.4 |      95.5 |          93.9 |     14.8 |     89.1 |  92.4 |
-|   | sumCo         |     89.3 | 93.1 |      90.4 |          92.8 |     14.9 |     89.3 |  89.1 |
-|   | sumCoCase     |     89.4 | 93.1 |      89.3 |          89.6 |     15.0 |     89.5 |  91.1 |
-|   | sumCoGo       |     89.6 | 93.1 |      95.1 |          93.8 |     14.9 |     89.4 |  92.0 |
-|   | sumF          |     75.4 | 78.1 |      79.2 |          77.5 |     14.9 |     75.4 |  76.1 |
-|   | sumFlip       |     74.2 | 78.7 |      79.1 |          77.3 |     15.0 |     75.4 |  75.9 |
-|   | sumFlipLazy   |     73.9 | 78.5 |      77.8 |          77.3 |     14.8 |     75.1 |  75.9 |
-|   | sumFoldr      |     89.5 | 93.2 |      95.4 |          93.9 |     15.0 |     89.5 |  92.8 |
-|   | sumFuse       |     35.1 | 35.1 |      33.1 |          33.9 |     17.1 |     34.6 |  35.1 |
-|   | sumFuseFoldl' |     35.2 | 35.0 |      32.0 |          33.7 |     17.2 |     34.5 |  35.1 |
-|   | sumFuseFoldr  |     47.4 | 47.1 |      45.8 |          45.8 |     17.2 |     46.6 |  45.7 |
-|   | sumFusePoly   |     49.7 | 49.9 |      46.9 |          49.3 |     17.2 |     49.6 |  49.1 |
-|   | sumLambda     |     75.2 | 79.4 |      79.3 |          79.4 |     14.9 |     77.4 |  79.4 |
-|   | sumMono       |     63.2 | 65.2 |      65.3 |          64.9 |     14.9 |     63.5 |  65.2 |
-|   | sumPoly       |     77.2 | 79.9 |      79.7 |          79.6 |     15.0 |     78.2 |  79.2 |
-|   | sumSum        |     77.2 | 79.6 |      79.4 |          79.6 |     14.8 |     78.2 |  79.3 |
-|   | sumTail       |     64.5 | 78.5 |      67.1 |          66.9 |     14.8 |     65.2 |  65.4 |
-|   | sumTailLazy   |     64.9 | 67.3 |      67.2 |          65.9 |     14.8 |     64.8 |  65.4 |
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   9.14e1 | 9.53e1 |    9.42e1 |        9.17e1 |   1.71e1 |   9.25e1 | 9.27e1 |
+| sumCata       |   8.81e1 | 9.05e1 |    8.97e1 |        8.95e1 |   1.71e1 |   8.80e1 | 8.91e1 |
+| sumCo         |   9.30e1 | 9.58e1 |    9.44e1 |        9.40e1 |   1.69e1 |   9.13e1 | 9.15e1 |
+| sumCoCase     |   9.31e1 | 9.56e1 |    9.43e1 |        9.46e1 |   1.71e1 |   9.20e1 | 9.22e1 |
+| sumCoGo       |   8.88e1 | 9.11e1 |    8.92e1 |        8.96e1 |   1.71e1 |   8.75e1 | 8.93e1 |
+| sumF          |   6.33e1 | 6.53e1 |    6.64e1 |        6.58e1 |   1.71e1 |   6.45e1 | 6.44e1 |
+| sumFlip       |   6.41e1 | 6.93e1 |    6.58e1 |        6.56e1 |   1.73e1 |   6.52e1 | 6.35e1 |
+| sumFlipLazy   |   6.44e1 | 6.63e1 |    6.55e1 |        6.58e1 |   1.68e1 |   6.38e1 | 6.36e1 |
+| sumFoldr      |   8.83e1 | 9.16e1 |    8.94e1 |        8.92e1 |   1.71e1 |   8.82e1 | 8.91e1 |
+| sumFuse       |   2.52e1 | 2.58e1 |    2.59e1 |        2.44e1 |   1.53e1 |   2.55e1 | 2.54e1 |
+| sumFuseFoldl' |   2.53e1 | 2.52e1 |    2.57e1 |        2.49e1 |   1.47e1 |   2.37e1 | 2.52e1 |
+| sumFuseFoldr  |   4.54e1 | 4.69e1 |    4.66e1 |        4.15e1 |   1.50e1 |   4.74e1 | 4.91e1 |
+| sumFusePoly   |   5.06e1 | 5.01e1 |    5.10e1 |        4.91e1 |   1.50e1 |   4.92e1 | 5.02e1 |
+| sumLambda     |   8.55e1 | 8.70e1 |    8.64e1 |        8.65e1 |   1.72e1 |   8.74e1 | 8.31e1 |
+| sumMono       |   7.12e1 | 7.19e1 |    7.14e1 |        7.12e1 |   1.70e1 |   6.95e1 | 7.03e1 |
+| sumPoly       |   8.54e1 | 8.71e1 |    8.61e1 |        8.67e1 |   1.71e1 |   8.42e1 | 8.35e1 |
+| sumSum        |   8.55e1 | 8.55e1 |    8.79e1 |        8.60e1 |   1.66e1 |   8.42e1 | 8.33e1 |
+| sumTail       |   7.36e1 | 9.00e1 |    7.91e1 |        7.56e1 |   1.93e1 |   8.56e1 | 7.72e1 |
+| sumTailLazy   |   7.59e1 | 7.93e1 |    7.77e1 |        7.64e1 |   1.71e1 |   7.72e1 | 7.60e1 |
+:end:
 
 *** long list
-#+begin_src sh
+#+begin_src sh :results drawer
 perf-explore -r 100 -l 100000 --best --ticks
 #+end_src
 
 #+RESULTS:
-|   |               |  stepTime |      tick | tickForce | tickForceArgs | tickLazy |  tickWHNF |     times |
-|   | sumAux        | 4970000.0 | 2270000.0 | 2570000.0 |     4900000.0 |     14.8 | 2560000.0 | 2430000.0 |
-|   | sumCata       | 2760000.0 | 2980000.0 | 3170000.0 |     2760000.0 |     15.4 | 3600000.0 | 4160000.0 |
-|   | sumCo         | 2610000.0 | 2320000.0 | 4810000.0 |     2570000.0 |     15.4 | 2560000.0 | 4360000.0 |
-|   | sumCoCase     | 2490000.0 | 2300000.0 | 2270000.0 |     2260000.0 |     14.4 | 2900000.0 | 2490000.0 |
-|   | sumCoGo       | 2750000.0 | 2800000.0 | 6150000.0 |     2790000.0 |     14.8 | 3130000.0 | 2750000.0 |
-|   | sumF          |  811000.0 |  823000.0 |  819000.0 |      808000.0 |     15.1 |  817000.0 |  712000.0 |
-|   | sumFlip       |  747000.0 |  744000.0 |  740000.0 |      746000.0 |     14.8 |  744000.0 |  746000.0 |
-|   | sumFlipLazy   |  979000.0 | 1010000.0 |  981000.0 |      964000.0 |     15.4 |  996000.0 |  981000.0 |
-|   | sumFoldr      | 2750000.0 | 2770000.0 | 2760000.0 |     2760000.0 |     14.6 | 2750000.0 | 2790000.0 |
-|   | sumFuse       |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     17.0 |  192000.0 |  192000.0 |
-|   | sumFuseFoldl' |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     17.1 |  192000.0 |  192000.0 |
-|   | sumFuseFoldr  | 1550000.0 | 1560000.0 | 1550000.0 |     1530000.0 |     17.2 | 1550000.0 | 1540000.0 |
-|   | sumFusePoly   |  192000.0 |  192000.0 |  192000.0 |      192000.0 |     16.6 |  192000.0 |  192000.0 |
-|   | sumLambda     |  805000.0 |  805000.0 |  806000.0 |      808000.0 |     14.8 |  803000.0 |  805000.0 |
-|   | sumMono       |  789000.0 |  785000.0 |  783000.0 |      785000.0 |     14.9 |  788000.0 |  787000.0 |
-|   | sumPoly       |  791000.0 |  793000.0 |  792000.0 |      793000.0 |     14.6 |  793000.0 |  788000.0 |
-|   | sumSum        |  767000.0 |  778000.0 |  768000.0 |      771000.0 |     14.6 |  767000.0 |  772000.0 |
-|   | sumTail       |  783000.0 |  780000.0 |  782000.0 |      778000.0 |     15.1 |  776000.0 |  783000.0 |
-|   | sumTailLazy   | 1280000.0 | 1390000.0 | 1270000.0 |     1290000.0 |     15.1 | 1310000.0 | 1270000.0 |
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   2.71e6 | 2.37e6 |    2.38e6 |        2.68e6 |   1.70e1 |   2.38e6 | 4.68e6 |
+| sumCata       |   2.81e6 | 3.01e6 |    2.78e6 |        3.61e6 |   1.69e1 |   2.81e6 | 3.18e6 |
+| sumCo         |   2.34e6 | 2.34e6 |    5.36e6 |        2.35e6 |   1.73e1 |   2.35e6 | 2.34e6 |
+| sumCoCase     |   2.36e6 | 2.44e6 |    2.40e6 |        2.36e6 |   1.67e1 |   5.26e6 | 2.33e6 |
+| sumCoGo       |   2.79e6 | 2.79e6 |    2.79e6 |        2.82e6 |   1.64e1 |   3.19e6 | 2.78e6 |
+| sumF          |   1.36e6 | 1.38e6 |    1.37e6 |        1.38e6 |   1.63e1 |   1.38e6 | 1.30e6 |
+| sumFlip       |   7.47e5 | 7.51e5 |    7.54e5 |        7.62e5 |   1.61e1 |   7.66e5 | 7.60e5 |
+| sumFlipLazy   |   9.97e5 | 1.00e6 |    1.00e6 |        9.96e5 |   1.70e1 |   1.00e6 | 1.00e6 |
+| sumFoldr      |   2.97e6 | 2.80e6 |    3.19e6 |        2.78e6 |   1.71e1 |   6.04e6 | 3.58e6 |
+| sumFuse       |   1.32e5 | 1.32e5 |    1.32e5 |        1.32e5 |   1.49e1 |   1.32e5 | 1.32e5 |
+| sumFuseFoldl' |   1.32e5 | 1.32e5 |    1.32e5 |        1.32e5 |   1.51e1 |   1.32e5 | 1.32e5 |
+| sumFuseFoldr  |   1.56e6 | 1.54e6 |    1.58e6 |        1.54e6 |   1.47e1 |   1.58e6 | 1.54e6 |
+| sumFusePoly   |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.48e1 |   1.92e5 | 1.92e5 |
+| sumLambda     |   8.15e5 | 8.11e5 |    8.10e5 |        8.08e5 |   1.63e1 |   8.13e5 | 8.15e5 |
+| sumMono       |   8.18e5 | 8.21e5 |    8.19e5 |        8.14e5 |   1.66e1 |   8.04e5 | 8.03e5 |
+| sumPoly       |   8.09e5 | 8.16e5 |    8.17e5 |        8.12e5 |   1.71e1 |   8.12e5 | 8.10e5 |
+| sumSum        |   7.97e5 | 7.86e5 |    7.80e5 |        7.96e5 |   1.70e1 |   7.83e5 | 7.84e5 |
+| sumTail       |   7.46e5 | 8.13e5 |    8.10e5 |        7.47e5 |   1.66e1 |   8.11e5 | 7.48e5 |
+| sumTailLazy   |   1.35e6 | 1.34e6 |    1.34e6 |        1.32e6 |   1.65e1 |   1.35e6 | 1.35e6 |
+:end:
 
-* gauge
+* Gauge
 
 #+begin_src sh :results output
 perf-explore -r 1000 -l 1000 --average --gauge
@@ -479,7 +487,7 @@ Canned results
 | noop      | 5.076  ns |
 |           |           |
 
-#+begin_src sh
+#+begin_src sh :results drawer
 perf-explore --examples -r 10000 --averagesecs
 #+end_src
 
@@ -492,7 +500,7 @@ perf-explore --examples -r 10000 --averagesecs
 |   | sum       | 3.28e-06 |
 |   | sumFuse   | 8.12e-07 |
 
-* space
+* Space
 
 Data is collected from GHCStats
 
@@ -558,7 +566,7 @@ perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 
 ** slop
 
-#+begin_src haskell
+#+begin_src haskell :results output
 import qualified Data.Map.Strict as Map
 (\m -> (Map.!) m "slop") . fst . snd <$> slops 10 time (sum |$| [1..1000])
 #+end_src
@@ -566,7 +574,7 @@ import qualified Data.Map.Strict as Map
 #+RESULTS:
 : Cycles {word = 5487960}
 
-* check
+* Check
 
 #+begin_src sh :results output
 perf-explore -r 1000 -l 1000 --examples --check

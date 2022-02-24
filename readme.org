@@ -532,18 +532,21 @@ perf-explore -r 10 -l 100000 --time +RTS -T -RTS
 perf-explore -r 10 -l 100000 --space +RTS -T -RTS
 #+end_src
 
-| label1 | label2 | allocated | gcollects | maxLiveBytes | gcLiveBytes | MaxMem |
-|--------+--------+-----------+-----------+--------------+-------------+--------|
-| sum    |      0 |    7.25e6 |         7 |       3.95e6 |      3.95e6 | 1.05e7 |
-| sum    |      1 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      2 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      3 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      4 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      6 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      7 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      8 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      9 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
+#+RESULTS:
+#+begin_example
+|label1|label2|allocated|gcollects|maxLiveBytes|gcLiveBytes|MaxMem|
+|---|---|---|
+|sum|0|7.25e6|7|3.94e6|3.94e6|1.05e7|
+|sum|1|0|0|0|0|0|
+|sum|2|0|0|0|0|0|
+|sum|3|0|0|0|0|0|
+|sum|4|0|0|0|0|0|
+|sum|5|0|0|0|0|0|
+|sum|6|0|0|0|0|0|
+|sum|7|0|0|0|0|0|
+|sum|8|0|0|0|0|0|
+|sum|9|0|0|0|0|0|
+#+end_example
 
 ** spacetime
 
@@ -551,19 +554,21 @@ perf-explore -r 10 -l 100000 --space +RTS -T -RTS
 perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 #+end_src
 
-| label1 | label2 |   time | allocated | gcollects | maxLiveBytes | gcLiveBytes | MaxMem |
-|--------+--------+--------+-----------+-----------+--------------+-------------+--------|
-| sum    |      0 | 1.90e7 |    7.25e6 |         7 |       3.95e6 |      3.95e6 | 1.05e7 |
-| sum    |      1 | 9.25e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      2 | 9.29e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      3 | 9.09e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      4 | 8.71e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      5 | 8.26e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      6 | 8.18e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      7 | 8.26e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      8 | 8.03e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-| sum    |      9 | 8.50e5 |      0e-2 |         0 |         0e-2 |        0e-2 |   0e-2 |
-
+#+RESULTS:
+#+begin_example
+|label1|label2|time|allocated|gcollects|maxLiveBytes|gcLiveBytes|MaxMem|
+|---|---|---|
+|sum|0|2.99e7|7.25e6|7|3.94e6|3.94e6|1.05e7|
+|sum|1|1.06e6|0|0|0|0|0|
+|sum|2|9.96e5|0|0|0|0|0|
+|sum|3|9.98e5|0|0|0|0|0|
+|sum|4|9.92e5|0|0|0|0|0|
+|sum|5|1.00e6|0|0|0|0|0|
+|sum|6|9.91e5|0|0|0|0|0|
+|sum|7|1.02e6|0|0|0|0|0|
+|sum|8|1.00e6|0|0|0|0|0|
+|sum|9|1.00e6|0|0|0|0|0|
+#+end_example
 
 ** slop
 

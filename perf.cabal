@@ -50,7 +50,7 @@ library
     , chart-svg             ^>=0.3
     , containers            ^>=0.6
     , deepseq
-    , formatn               ^>=0.2
+    , formatn               ^>=0.2.1
     , gauge
     , mtl                   ^>=2.2.2
     , numhask-space         ^>=0.10

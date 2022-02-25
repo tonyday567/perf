@@ -1,5 +1,12 @@
 #+TITLE: perf
 #+PROPERTY: header-args :exports both
+#+PROPERTY: header-args :eval no-export
+
+* perf
+:PROPERTIES:
+:EXPORT_FILE_NAME: perf
+:export_date: 2022-2-22
+:END:
 
 ~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 
@@ -9,7 +16,7 @@
 
 - abstracts the concept of what is being measured, so that concepts such as counters, debug checks, time and space performance can be treated equivalently.
 
-* Setup
+** Setup
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
@@ -29,8 +36,8 @@ putStrLn "ok"
 : Ok, 8 modules loaded.
 : >  >  >  >  > ok
 
-* Time
-** What is a tick?
+** Time
+*** What is a tick?
 
 The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
@@ -45,7 +52,7 @@ tick returns in the IO monad, because reading a cycle counter is an IO effect. T
 
 Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
 
-** tick_
+*** tick_
 
 tick_ measures the number of cycles between two clock reads.
 
@@ -64,7 +71,7 @@ replicateM 10 tick_
 #+RESULTS:
 | 10260 | 998 | 838 | 794 | 800 | 788 | 790 | 832 | 802 | 818 |
 
-** multiple ticks
+*** multiple ticks
 
 #+begin_src haskell :results output :exports both
 fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
@@ -75,7 +82,7 @@ fmap (fmap fst) . replicateM 10 $ tick (const ()) ()
 
 Here, ~const () ()~ was evaluated and took 6.7k cycles for the first effect, reducing down to 2.2k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
-** tickIO
+*** tickIO
 
 ~tickIO~ measures the evaluation of an IO value.
 
@@ -100,7 +107,7 @@ ticks 100 (const ()) ()
 #+RESULTS:
 | 8226 | 3298 | 3254 | 2686 | 2694 | 2724 | 2868 | 2732 | 2644 | 2678 | 2680 | 2896 | 2734 | 2606 | 2608 | 2598 | 2606 | 2738 | 2742 | 2610 | 2554 | 2532 | 2576 | 2592 | 2600 | 2562 | 2786 | 2592 | 2646 | 2624 | 2666 | 2640 | 2640 | 2602 | 2672 | 2560 | 3478 | 2556 | 2552 | 2572 | 2622 | 2492 | 2572 | 2706 | 2544 | 2604 | 2748 | 2570 | 2596 | 3078 | 2666 | 2592 | 2612 | 2648 | 2594 | 2564 | 2716 | 2564 | 2594 | 2596 | 2554 | 2766 | 2552 | 3026 | 2602 | 2860 | 2632 | 2614 | 2620 | 2586 | 3014 | 2626 | 2626 | 2614 | 2830 | 2624 | 2616 | 2648 | 2610 | 2626 | 2610 | 2590 | 2930 | 2622 | 2732 | 2698 | 3004 | 2664 | 2948 | 2630 | 2588 | 2766 | 2726 | 2600 | 2634 | 2792 | 2704 | 2774 | 2638 | 2634 |
 
-** sum example
+*** sum example
 
 #+begin_src haskell :results output :exports both
 fmap (comma (Just 3) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
@@ -118,7 +125,7 @@ putStrLn $ Text.unpack $ average (fst ts)
 #+RESULTS:
 : 58,800
 
-* PerfT
+** PerfT
 
 ~PerfT~ allows for multiple measurement points and is polymorphic in what is being measured. It returns a Map of results held in State.
 
@@ -208,7 +215,6 @@ length of file is: 1927
 |total|1.02e5|
 :end:
 
-
 ** perf-explore
 
 ~perf-explore~ contains some exploratory routines to help develop =perf=
@@ -273,7 +279,7 @@ perf-explore -r 10000 -l 1000 --sum
 | sum  | 8.80e3 |
 :end:
 
-** noops
+*** noops
 
 #+begin_src sh :results drawer :exports both
 perf-explore --noop
@@ -317,7 +323,7 @@ writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb l
 #+RESULTS:
 [[file:other/noop.svg]]
 
-** measurement context
+*** measurement context
 
 Exploration of how the code surrounding measurement effects performance.
 
@@ -378,7 +384,7 @@ perf-explore -r 100000 -l 1000 --ticks
 | sumTailLazy   |   5.93e3 | 8.49e3 |    5.77e3 |        5.81e3 |   1.91e1 |   5.76e3 | 5.95e3 |
 :end:
 
-*** short list
+**** short list
 #+begin_src sh :results drawer :exports both
 perf-explore -r 10000 -l 10 --best --ticks
 #+end_src
@@ -407,7 +413,7 @@ perf-explore -r 10000 -l 10 --best --ticks
 | sumTailLazy   |   7.59e1 | 7.93e1 |    7.77e1 |        7.64e1 |   1.71e1 |   7.72e1 | 7.60e1 |
 :end:
 
-*** long list
+**** long list
 #+begin_src sh :results drawer :exports both
 perf-explore -r 100 -l 100000 --best --ticks
 #+end_src
@@ -436,7 +442,57 @@ perf-explore -r 100 -l 100000 --best --ticks
 | sumTailLazy   |   1.35e6 | 1.34e6 |    1.34e6 |        1.32e6 |   1.65e1 |   1.35e6 | 1.35e6 |
 :end:
 
-* Gauge
+*** sums
+
+#+begin_src sh :output drawer :exports both
+perf-explore -r 1000 -l 1000 --sums
+#+end_src
+
+#+RESULTS:
+|   | label1        | results |
+|   | ---           |     --- |
+|   | sumAux        | 16800.0 |
+|   | sumCata       | 15600.0 |
+|   | sumCo         | 18800.0 |
+|   | sumCoCase     | 16300.0 |
+|   | sumCoGo       | 15700.0 |
+|   | sumF          | 10400.0 |
+|   | sumFlip       | 10500.0 |
+|   | sumFlipLazy   |  6940.0 |
+|   | sumFoldr      | 18300.0 |
+|   | sumFuse       |  1980.0 |
+|   | sumFuseFoldl' |  1950.0 |
+|   | sumFuseFoldr  | 14400.0 |
+|   | sumFusePoly   |  1370.0 |
+|   | sumLambda     |  9860.0 |
+|   | sumMono       | 11200.0 |
+|   | sumPoly       | 11100.0 |
+|   | sumSum        | 11200.0 |
+|   | sumTail       | 11400.0 |
+|   | sumTailLazy   | 11000.0 |
+
+*** lengths
+
+#+begin_src sh :output drawer :exports both
+perf-explore -r 1000 -l 1000 --lengths
+#+end_src
+
+#+RESULTS:
+|   | label1           | results |
+|   | ---              |     --- |
+|   | lengthAux        | 10700.0 |
+|   | lengthCo         | 10300.0 |
+|   | lengthCoCase     | 10300.0 |
+|   | lengthF          |  9110.0 |
+|   | lengthFMono      |  9180.0 |
+|   | lengthFlip       |  9850.0 |
+|   | lengthFlipLazy   |  5470.0 |
+|   | lengthFoldr      |  9500.0 |
+|   | lengthFoldrConst | 10300.0 |
+|   | lengthTail       | 12600.0 |
+|   | lengthTailLazy   | 10700.0 |
+
+** Gauge
 
 #+begin_src sh :results output :exports both
 perf-explore -r 1000 -l 1000 --average --gauge
@@ -476,32 +532,22 @@ benchmarking function ... function                                 time        
 
 #+end_example
 
-Canned results
-
-| algo      | gauge     |
-|-----------+-----------|
-| sumFuse   | 886.7 ns  |
-| sum       | 3.838 μs  |
-| lengthF   | 1.881 μs  |
-| constFuse | 578.9  ns |
-| mapInc    | 8.961  ns |
-| noop      | 5.076  ns |
-|           |           |
-
 #+begin_src sh :results drawer :exports both
 perf-explore --examples -r 10000 --averagesecs
 #+end_src
 
 #+RESULTS:
-|   | stat      |   result |
-|   | ---       |      --- |
-|   | constFuse | 7.63e-07 |
-|   | lengthF   | 1.64e-06 |
-|   | mapInc    | 9.71e-09 |
-|   | sum       | 3.28e-06 |
-|   | sumFuse   | 8.12e-07 |
+:results:
+| label1    | results |
+|-----------+---------|
+| constFuse | 2.71e-7 |
+| lengthF   | 3.24e-6 |
+| mapInc    | 8.61e-9 |
+| sum       | 3.76e-6 |
+| sumFuse   | 8.18e-7 |
+:end:
 
-* Space
+** Space
 
 Data is collected from GHCStats
 
@@ -548,7 +594,7 @@ perf-explore -r 10 -l 100000 --space +RTS -T -RTS
 |sum|9|0|0|0|0|0|
 #+end_example
 
-** spacetime
+*** spacetime
 
 #+begin_src sh :results output :exports both
 perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
@@ -570,7 +616,7 @@ perf-explore -r 10 -l 100000 --spacetime +RTS -T -RTS
 |sum|9|1.00e6|0|0|0|0|0|
 #+end_example
 
-** slop
+*** slop
 
 #+begin_src haskell :results output :exports both
 import qualified Data.Map.Strict as Map
@@ -580,30 +626,21 @@ import qualified Data.Map.Strict as Map
 #+RESULTS:
 : Cycles {word = 5487960}
 
-* Check
+** Perf.Degrade
 
-#+begin_src sh :results output :exports both
+#+begin_src sh :results drawer :exports both
 perf-explore -r 1000 -l 1000 --examples --check
 #+end_src
 
 #+RESULTS:
-#+begin_example
-|label1|results|
-|---|---|
-|constFuse|6.77e2|
-|lengthF|9.12e3|
-|mapInc|6.59e2|
-|sum|1.14e4|
-|sumFuse|1.56e3|
-Result:
-  ()
+:results:
+| constFuse | 1.31e3 | 6.71e2 | improvement       |
+| lengthF   | 9.37e3 | 9.14e3 |                              |
+| mapInc    | 2.89e1 | 3.06e1 | slightly degraded |
+| sum       | 1.27e4 | 1.11e4 | improvement       |
+| sumFuse   | 2.84e3 | 2.05e3 | improvement       |
+:end:
 
-With the following warnings:
-  * [Warning] degraded by 2,200%|mapInc
-
-#+end_example
-
-* Resources
+** Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
-

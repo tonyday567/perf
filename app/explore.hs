@@ -21,14 +21,18 @@ import qualified Data.List as List
 import Data.Bool
 import Data.Maybe
 -- import Box.Csv hiding (header)
+import NumHask.Space (quantile)
 
-data RunType = RunDefault | RunExamples | RunExampleIO | RunSums | RunGauge | RunNoOp | RunTicks | RunTime | RunSpace | RunSpaceTime deriving (Eq, Show)
+data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
+
+data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation deriving (Eq, Show)
 
 data Options = Options
   { optionRuns :: Int,
     optionLength :: Int,
     optionStatDType :: StatDType,
     optionRunType :: RunType,
+    optionMeasureType :: MeasureType,
     optionsExample :: Example,
     optionsGolden :: Maybe FilePath,
     optionsRecord :: Bool,
@@ -37,17 +41,41 @@ data Options = Options
 
 parseRun :: Parser RunType
 parseRun =
-  flag' RunDefault (long "default" <> help "default measurement (polySum)") <|>
-  flag' RunSums (long "sums" <> help "sums") <|>
-  flag' RunExamples (long "examples" <> help "examples") <|>
-  flag' RunExampleIO (long "exampleIO" <> help "exampleIO") <|>
-  flag' RunNoOp (long "noop" <> help "no-ops") <|>
-  flag' RunTicks (long "ticks" <> help "tick types") <|>
-  flag' RunGauge (long "gauge" <> help "gauge comparison") <|>
-  flag' RunTime (long "time" <> help "time stats") <|>
-  flag' RunSpace (long "space" <> help "space stats") <|>
-  flag' RunSpaceTime (long "spacetime" <> help "space and time stats") <|>
-  pure RunDefault
+  flag' RunSums (long "sums" <> help "run on sum algorithms") <|>
+  flag' RunLengths (long "lengths" <> help "run on length algorithms") <|>
+  flag' RunExamples (long "examples" <> help "run on example algorithms") <|>
+  flag' RunExample (long "example" <> help "run on the example algorithm") <|>
+  flag' RunExampleIO (long "exampleIO" <> help "exampleIO test") <|>
+  flag' RunNoOps (long "noops" <> help "noops test") <|>
+  flag' RunTicks (long "ticks" <> help "tick test") <|>
+  flag' RunGauge (long "gauge" <> help "gauge runs on exmaple for comparison") <|>
+  pure RunExample
+
+parseMeasure :: Parser MeasureType
+parseMeasure =
+  flag' MeasureTime (long "time" <> help "measure time performance") <|>
+  flag' MeasureSpace (long "space" <> help "measure space performance") <|>
+  flag' MeasureSpaceTime (long "spacetime" <> help "measure both space and time performance") <|>
+  flag' MeasureAllocation (long "allocation" <> help "measure bytes allocated") <|>
+  pure MeasureTime
+
+-- | unification of the different measurements to being a list of doubles.
+measureDs :: MeasureType -> Int -> Measure IO [[Double]]
+measureDs mt n =
+  case mt of
+    MeasureTime -> fmap ((:[]) . fromIntegral) <$> times n
+    MeasureSpace -> toMeasureN n (ssToList <$> space False)
+    MeasureSpaceTime -> toMeasureN n ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+    MeasureAllocation -> fmap ((:[]) . fromIntegral) <$> toMeasureN n (allocation False)
+
+-- | unification of the different measurements to being a list of doubles.
+measureLabels :: MeasureType -> [Text]
+measureLabels mt =
+  case mt of
+    MeasureTime -> ["time"]
+    MeasureSpace -> spaceLabels
+    MeasureSpaceTime -> spaceLabels <> ["time"]
+    MeasureAllocation -> ["allocation"]
 
 options :: Parser Options
 options = Options <$>
@@ -55,6 +83,7 @@ options = Options <$>
   option auto (value 1000 <> long "length" <> short 'l' <> help "length of list") <*>
   parseStatD <*>
   parseRun <*>
+  parseMeasure <*>
   parseExample <*>
   optional (option str (long "golden" <> short 'g' <> help "golden file name")) <*>
   switch (long "record" <> short 'g' <> help "record the result to a golden file") <*>
@@ -76,13 +105,13 @@ exampleIO = do
 -- | measure the various versions of a tick.
 statTicks :: (NFData t, NFData b) => Text -> (t -> b) -> t -> Int -> StatDType -> StateT (Map.Map [Text] Double) IO ()
 statTicks l f a n s = do
-  addStat [l,"tick"] . statD s =<< lift (fst <$> multi tick n f a)
-  addStat [l,"tickWHNF"] . statD s =<< lift (fst <$> multi tickWHNF n f a)
-  addStat [l,"tickLazy"] . statD s =<< lift (fst <$> multi tickLazy n f a)
-  addStat [l,"tickForce"] . statD s =<< lift (fst <$> multi tickForce n f a)
-  addStat [l,"tickForceArgs"] . statD s =<< lift (fst <$> multi tickForceArgs n f a)
-  addStat [l,"stepTime"] . statD s =<< lift (snd . head . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
-  addStat [l,"times"] . statD s =<< lift (snd . head . Map.toList <$> execPerfT (times n) (f |$| a))
+  addStat [l,"tick"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tick n f a)
+  addStat [l,"tickWHNF"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickWHNF n f a)
+  addStat [l,"tickLazy"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickLazy n f a)
+  addStat [l,"tickForce"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickForce n f a)
+  addStat [l,"tickForceArgs"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickForceArgs n f a)
+  addStat [l,"stepTime"] . statD s . fmap fromIntegral =<< lift (snd . head . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
+  addStat [l,"times"] . statD s . fmap fromIntegral =<< lift (snd . head . Map.toList <$> execPerfT (times n) (f |$| a))
 
 statTicksSum :: (NFData b, Enum b, Num b) => SumPattern b -> Int -> StatDType -> StateT (Map.Map [Text] Double) IO ()
 statTicksSum (SumFuse label f a) n s = statTicks label f a n s
@@ -94,29 +123,26 @@ statTicksSums :: Int -> Int -> StatDType -> IO (Map.Map [Text] Double)
 statTicksSums n l s = flip execStateT Map.empty $ mapM_ (\x -> statTicksSum x n s) (allSums l)
 
 -- * no-op testing
-statNoOp :: Int -> Maybe FilePath -> IO (Map.Map Text [Cycles])
-statNoOp n fp = do
-    m <- execPerfT (times n) $ do
+perfNoOps :: (Semigroup a) => Measure IO a -> IO (Map.Map Text a)
+perfNoOps meas =
+    execPerfT meas $ do
       liftIO $ warmup 1000
-      fap "fap times" (const ()) ()
-      fam "fam times" (pure ())
-    case fp of
-      Nothing -> pure ()
-      Just fp' -> writeFile fp' (show m)
-    pure m
+      fap "const" (const ()) ()
+      fam "pure" (pure ())
 
-statNoOps :: Maybe FilePath -> Int -> Int -> IO (Map.Map [Text] Text)
-statNoOps fp f n = flip execStateT Map.empty $ do
-  m <- lift (statNoOp n fp)
-  mapM_ (addStat ["first " <> (fixed (Just 0) . fromIntegral) f, "faps"] . Text.intercalate " " . fmap (fixed Nothing . fromIntegral) . take f) (Map.lookup "fap times" m)
-  mapM_ (addStat ["first " <> (fixed (Just 0) . fromIntegral) f, "fams"] . Text.intercalate " " . fmap (fixed Nothing . fromIntegral) . take f) (Map.lookup "fam times" m)
-  mapM_ (addStat ["best","faps"] . expt (Just 3) . tenthD) (Map.lookup "fap times" m)
-  mapM_ (addStat ["best","fams"] . expt (Just 3) . tenthD) (Map.lookup "fam times" m)
-  mapM_ (addStat ["median","faps"] . expt (Just 3) . medianD) (Map.lookup "fap times" m)
-  mapM_ (addStat ["median","fams"] . expt (Just 3) . medianD) (Map.lookup "fam times" m)
-  mapM_ (addStat ["average","faps"] . expt (Just 3) . averageD) (Map.lookup "fap times" m)
-  mapM_ (addStat ["average","fams"] . expt (Just 3) . averageD) (Map.lookup "fam times" m)
+ordy :: Int -> [Text]
+ordy f = zipWith (\x s -> (Text.pack . show) x <> s) [1..f] (["st", "nd", "rd"] <> repeat "th")
 
+allStats :: Int -> Map.Map [Text] [[Double]] -> Map.Map [Text] [Double]
+allStats f m = Map.fromList $ mconcat
+  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> ["initial", l], xs)) (ordy f) xss) <$> mlist)
+  , (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist
+  , (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist
+  , (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
+  ]
+  where
+    mlist = Map.toList m
+    av xs = sum xs / (fromIntegral . length $ xs)
 
 -- * org-mode formatting
 outercalate :: Text -> [Text] -> Text
@@ -178,8 +204,6 @@ printOrgSpaceTime m = do
   printOrgHeader m ("time":spaceLabels)
   void $ Map.traverseWithKey (\k (c,s) -> Text.putStrLn (outercalate "|"  (k <> [expt (Just 3) (fromIntegral c), prettyOrgSpace s]))) m
 
-
-
 -- | * gauge experiment
 testGauge :: (NFData b) =>
   Text -> (a -> b) -> a -> IO ()
@@ -194,6 +218,7 @@ testGaugeExample (PatternSum label f a) = testGauge label f a
 testGaugeExample (PatternLengthF label f a) = testGauge label f a
 testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
+testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
 recordSpaceStats :: FilePath -> (a -> b) -> a -> Int -> IO ()
 recordSpaceStats fp f a n = do
@@ -206,12 +231,23 @@ readSpaceStats fp = do
   let m = read t
   pure m
 
-processResult :: (Integral a) => StatDType -> Map.Map Text [a] -> Maybe FilePath -> Maybe FilePath -> IO ()
-processResult s m fp fpCheck = do
-  let x = statD s <$> Map.mapKeys (:[]) m
-  printOrg (expt (Just 3) <$> x)
-  mapM_ (\fp' -> degradePrint 0.1 0.3 fp' x) fpCheck
-  mapM_ (`writeResult` x) fp
+rioOrg :: Maybe FilePath -> Maybe FilePath -> StatDType -> [Text] -> Map.Map [Text] [[Double]] -> IO ()
+rioOrg check record s labels m = do
+    case check of
+      Nothing -> printOrg (expt (Just 3) <$> m')
+      Just fp -> degradePrint defaultDegradeConfig fp m'
+    mapM_ (`writeResult` m') record
+    where
+      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], statD s x)) xss labels) <$> Map.toList m
+
+rioOrgRaw :: Maybe FilePath -> Maybe FilePath -> [Text] -> Map.Map [Text] [Double] -> IO ()
+rioOrgRaw check record labels m = do
+    case check of
+      Nothing -> printOrg (expt (Just 3) <$> m')
+      Just fp -> degradePrint defaultDegradeConfig fp m'
+    mapM_ (`writeResult` m') record
+    where
+      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
 
 main :: IO ()
 main = do
@@ -221,65 +257,42 @@ main = do
   let s = optionStatDType o
   let a = optionsExample o
   let r = optionRunType o
+  let mt = optionMeasureType o
   let fp = fromMaybe ("other/" <> show r <> ".csv") (optionsGolden o)
   let record = bool Nothing (Just fp) (optionsRecord o)
   let check = bool Nothing (Just fp) (optionsRecordCheck o)
+  let rio = rioOrg check record s
 
   case r of
-    RunDefault-> do
-      m <- execPerfT (times n) $ testExample (examplePattern a l)
-      processResult s m record check
+    RunExample-> do
+      m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
+      rio (measureLabels mt) (Map.mapKeys (:[]) m)
 
-    RunExamples -> do
-      m <- execPerfT (times n) $
-         mapM_ testExample $
-         (`examplePattern` l) <$>
-         allExamples
-      processResult s m record check
+    RunExamples-> do
+      m <- statExamples n l (measureDs mt)
+      rio (measureLabels mt) (Map.mapKeys (:[]) m)
 
     RunExampleIO -> do
-      m1 <- execPerfT time exampleIO
-      printOrg (expt (Just 3) . fromIntegral <$> Map.mapKeys (:[]) m1)
-
-      putStrLn "\nouter version\n"
-      (_, (m', m2)) <- outer "total" time time exampleIO
-      printOrg (expt (Just 3) . fromIntegral <$> Map.mapKeys (:[]) (m2 <> m'))
-
-      putStrLn "\nslop version\n"
-      (_, m3) <- slop "total" time exampleIO
-      printOrg (expt (Just 3) . fromIntegral <$> Map.mapKeys (:[]) m3)
+      m1 <- execPerfT (measureDs mt n) exampleIO
+      (_, (m', m2)) <- outer "outer-total" (measureDs mt n) (measureDs mt n) exampleIO
+      let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
+      rio (measureLabels mt) ms
 
     RunSums-> do
-      m <- statSums n l times
-      printOrg (Map.mapKeys (:[]) $ Map.map (expt (Just 3) . statD s) m)
+      m <- statSums n l (measureDs mt)
+      rio (measureLabels mt) (Map.mapKeys (:[]) m)
 
-    RunNoOp -> do
-      -- noop check
-      noopPerf <- statNoOps (Just "other/noop.map") 10 n
-      -- writeStats "other/noop.csv" id noopPerf
-      printOrg noopPerf
+    RunLengths-> do
+      m <- statLengths n l (measureDs mt)
+      rio (measureLabels mt) (Map.mapKeys (:[]) m)
+
+    RunNoOps -> do
+      m <- perfNoOps (measureDs mt n)
+      rioOrgRaw check record (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
+
     RunTicks -> do
-      -- algo by tick style
-      tickStylePerf <- statTicksSums n l s
-      printOrg2DTranspose (fmap (expt (Just 3)) tickStylePerf)
+      m <- statTicksSums n l s
+      printOrg2DTranspose (fmap (expt (Just 3)) m)
 
     RunGauge -> do
-      -- algo by tick style
       mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)
-      testGauge "noop" (const ()) ()
-
-    RunSpace -> do
-      m <- execPerfT (toMeasureN n (space False)) $ testExample (examplePattern a l)
-      printOrgSpace $ unlistify $ Map.mapKeys (:[]) m
-
-    RunSpaceTime -> do
-      let st = toMeasureN n ((,) <$> stepTime <*> space False)
-      let pat = examplePattern a l
-      m <- execPerfT st $ testExample pat
-      printOrgSpaceTime $ unlistify $ Map.mapKeys (:[]) m
-
-    RunTime -> do
-      let st = toMeasureN n stepTime
-      let pat = examplePattern a l
-      m <- execPerfT st $ testExample pat
-      printOrg (unlistify $ fmap (expt (Just 3) . fromIntegral) <$> Map.mapKeys (:[]) m)

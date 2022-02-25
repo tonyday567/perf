@@ -4,12 +4,13 @@
 -- |
 
 module Perf.Stats
-  ( averageD,
-    medianD,
-    tenthD,
-    averageSecsD,
+  ( average,
+    median,
+    tenth,
+    averageSecs,
     StatDType (..),
     statD,
+    statDs,
     parseStatD,
 
     -- stat reporting
@@ -26,27 +27,33 @@ import qualified Data.Map.Strict as Map
 import Control.Monad.State.Lazy
 import Box.Csv
 import Box
+import qualified Data.List as List
 
--- convert a list (of Integrals) to a double stat
-medianD :: (Integral a) => [a] -> Double
-medianD = quantile 0.5 . fmap Prelude.fromIntegral
+median :: [Double] -> Double
+median = quantile 0.5
 
-averageD :: (Integral a) => [a] -> Double
-averageD xs = (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs)
+average :: [Double] -> Double
+average xs = sum xs / (fromIntegral . length $ xs)
 
-tenthD :: (Integral a) => [a] -> Double
-tenthD = quantile 0.1 . fmap Prelude.fromIntegral
+tenth :: [Double] -> Double
+tenth = quantile 0.1
 
-averageSecsD :: (Integral a) => [a] -> Double
-averageSecsD xs = (fromIntegral . Prelude.toInteger . sum $ xs) / (fromIntegral . length $ xs) / 2.5e9
+averageSecs :: [Double] -> Double
+averageSecs xs = sum xs / (fromIntegral . length $ xs) / 2.5e9
 
 data StatDType = StatAverage | StatMedian | StatBest | StatSecs deriving (Eq, Show)
 
-statD :: StatDType -> (Integral a) => [a] -> Double
-statD StatBest = tenthD
-statD StatMedian = medianD
-statD StatAverage = averageD
-statD StatSecs = averageSecsD
+statD :: StatDType -> [Double] -> Double
+statD StatBest = tenth
+statD StatMedian = median
+statD StatAverage = average
+statD StatSecs = averageSecs
+
+statDs :: StatDType -> [[Double]] -> [Double]
+statDs StatBest = fmap tenth . List.transpose
+statDs StatMedian = fmap median . List.transpose
+statDs StatAverage = fmap average . List.transpose
+statDs StatSecs = fmap averageSecs . List.transpose
 
 parseStatD :: Parser StatDType
 parseStatD =

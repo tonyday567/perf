@@ -9,9 +9,10 @@
 module Perf.Space
   (
     SpaceStats (..),
+    ssToList,
     spaceLabels,
     space,
-    allocated,
+    allocation,
   )
 where
 
@@ -25,6 +26,9 @@ import System.Mem
 import Data.Text (Text)
 
 data SpaceStats = SpaceStats { allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64 } deriving (Read, Show, Eq)
+
+ssToList :: Num a => SpaceStats -> [a]
+ssToList (SpaceStats x1 x2 x3 x4 x5) = [fromIntegral x1,fromIntegral x2,fromIntegral x3,fromIntegral x4,fromIntegral x5]
 
 instance Semigroup SpaceStats
   where
@@ -75,8 +79,8 @@ instance Semigroup Bytes where
 instance Monoid Bytes where
   mempty = 0
 
-allocated :: Bool -> StepMeasure IO Bytes
-allocated p = StepMeasure (start p) stop
+allocation :: Bool -> StepMeasure IO Bytes
+allocation p = StepMeasure (start p) stop
   where
     start p' = do
       when p' performGC
@@ -84,4 +88,4 @@ allocated p = StepMeasure (start p) stop
     stop s = do
       s' <- Bytes . allocated_bytes <$> getRTSStats
       pure $ s' - s
-{-# INLINEABLE allocated #-}
+{-# INLINEABLE allocation #-}

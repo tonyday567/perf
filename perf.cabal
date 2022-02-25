@@ -51,6 +51,7 @@ library
     , containers            ^>=0.6
     , deepseq
     , formatn               ^>=0.2.1
+    , colourista
     , gauge
     , mtl                   ^>=2.2.2
     , numhask-space         ^>=0.10
@@ -83,6 +84,7 @@ executable perf-explore
     , mtl                   ^>=2.2.2
     , optics-core
     , optparse-applicative
+    , numhask-space
     , perf
     , box-csv
     , rdtsc                 ^>=1.3

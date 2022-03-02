@@ -220,17 +220,6 @@ testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
 testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
-recordSpaceStats :: FilePath -> (a -> b) -> a -> Int -> IO ()
-recordSpaceStats fp f a n = do
-  xs <- execPerfT (toMeasureN n (space False)) (f |$| a)
-  writeFile fp (show xs)
-
-readSpaceStats :: FilePath -> IO (Map.Map Text [SpaceStats])
-readSpaceStats fp = do
-  t <- readFile fp
-  let m = read t
-  pure m
-
 rioOrg :: Maybe FilePath -> Maybe FilePath -> StatDType -> [Text] -> Map.Map [Text] [[Double]] -> IO ()
 rioOrg check record s labels m = do
     case check of
@@ -238,7 +227,7 @@ rioOrg check record s labels m = do
       Just fp -> degradePrint defaultDegradeConfig fp m'
     mapM_ (`writeResult` m') record
     where
-      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], statD s x)) xss labels) <$> Map.toList m
+      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], statD s x)) (List.transpose xss) labels) <$> Map.toList m
 
 rioOrgRaw :: Maybe FilePath -> Maybe FilePath -> [Text] -> Map.Map [Text] [Double] -> IO ()
 rioOrgRaw check record labels m = do

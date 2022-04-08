@@ -112,9 +112,8 @@ order o a = Order $ replicate n 0 <> [a] <> replicate (7 - n) 0
 
 -- | Calculate the performance measure
 --
--- FIXME:
--- >>> promote (order NLogN 1000) 1
--- 1000.0
+-- >>> promote (order N2 1) 10
+-- 100.0
 promote :: Order Double -> Double -> Double
 promote (Order fs) n = sum (zipWith (*) fs (($ n) <$> promote_))
 

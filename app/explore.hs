@@ -20,7 +20,6 @@ import Control.Monad.State.Lazy
 import qualified Data.List as List
 import Data.Bool
 import Data.Maybe
--- import Box.Csv hiding (header)
 import NumHask.Space (quantile)
 
 data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
@@ -162,21 +161,8 @@ printOrg m = do
   _ <- Map.traverseWithKey (\k a -> Text.putStrLn (outercalate "|" (k <> [a]))) m
   pure ()
 
-unlistify :: Map.Map [Text] [a] -> Map.Map [Text] a
-unlistify m = Map.fromList $ mconcat $ (\(ks,vs) -> (\(v,i) -> (ks <> [Text.pack (show i)], v)) <$> zip vs [(0::Int)..]) <$> Map.toList m
-
 printOrg2D :: Map.Map [Text] Text -> IO ()
 printOrg2D m = do
-    let rs = List.nub ((List.!! 0) . fst <$> Map.toList m)
-    let cs = List.nub ((List.!! 1) . fst <$> Map.toList m)
-    Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
-    sequence_ $
-      (\c -> Text.putStrLn
-        ("|" <> c <> "|" <>
-          Text.intercalate "|" ((\r -> m Map.! [r,c]) <$> rs) <> "|")) <$> cs
-
-printOrg2DTranspose :: Map.Map [Text] Text -> IO ()
-printOrg2DTranspose m = do
     let rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
     let cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
     Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
@@ -184,25 +170,6 @@ printOrg2DTranspose m = do
       (\c -> Text.putStrLn
         ("|" <> c <> "|" <>
           Text.intercalate "|" ((\r -> m Map.! [c,r]) <$> rs) <> "|")) <$> cs
-
-prettyOrgSpace :: SpaceStats -> Text
-prettyOrgSpace (SpaceStats x1 x2 x3 x4 x5) =
-  Text.intercalate "|"
-  [expt (Just 3) (fromIntegral x1),
-   fixed (Just 0) (fromIntegral x2),
-   expt (Just 3) (fromIntegral x3),
-   expt (Just 3) (fromIntegral x4),
-   expt (Just 3) (fromIntegral x5)]
-
-printOrgSpace :: Map.Map [Text] SpaceStats -> IO ()
-printOrgSpace m = do
-  printOrgHeader m spaceLabels
-  void $ Map.traverseWithKey (\k a -> Text.putStrLn ("|" <> Text.intercalate "|" k <> "|" <> prettyOrgSpace a <> "|")) m
-
-printOrgSpaceTime :: Map.Map [Text] (Cycles, SpaceStats) -> IO ()
-printOrgSpaceTime m = do
-  printOrgHeader m ("time":spaceLabels)
-  void $ Map.traverseWithKey (\k (c,s) -> Text.putStrLn (outercalate "|"  (k <> [expt (Just 3) (fromIntegral c), prettyOrgSpace s]))) m
 
 -- | * gauge experiment
 testGauge :: (NFData b) =>
@@ -281,7 +248,7 @@ main = do
 
     RunTicks -> do
       m <- statTicksSums n l s
-      printOrg2DTranspose (fmap (expt (Just 3)) m)
+      printOrg2D (fmap (expt (Just 3)) m)
 
     RunGauge -> do
       mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)

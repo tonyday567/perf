@@ -8,6 +8,8 @@
 :export_date: 2022-2-22
 :END:
 
+** intro
+
 ~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 
 - provides a monad transformer, ~PerfT~, as a light-weight wrapper for use on existing code. ~PerfT~ modifications can be included in code bases, as opposed to performance being separated code and  process, with any effects able to be erased at compile time with ~evalPerfT~.
@@ -31,8 +33,6 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-: [7 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
-: [8 of 8] Compiling Perf             ( src/Perf.hs, interpreted )
 : Ok, 8 modules loaded.
 : >  >  >  >  > ok
 
@@ -644,3 +644,36 @@ perf-explore -r 1000 -l 1000 --examples --check
 ** Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
+
+** BigO
+
+We could do a regression and minimise the error tern, but we know that the largest run contains the most information; we would need to weight the simulations according to some heuristic.
+
+Instead, we:
+
+- estimate the order factor for each possible Order, from N3 to N0, setting the highest n run constant factor to zero,
+- pick the order based on lowest absolute error result summed across all the runs,
+
+#+begin_src haskell :results output :exports both
+sims = 100
+ns = [1,10,100,1000,10000]
+ms <- tcurve StatBest sims (\x -> sum [1..x]) ns
+ms
+(o',res) = estO ns ms
+o'
+res
+#+end_src
+
+#+RESULTS:
+:
+: >  > [2723.1340382522158,3193.0,8273.0,92495.53333333334,931010.0]
+: > Order {factors = [0.0,0.0,0.0,0.0,93.101,0.0,0.0,0.0]}
+: [2630.0330382522156,2261.99,-1037.1000000000004,-605.4666666666599,0.0]
+
+
+#+begin_src haskell
+estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
+#+end_src
+
+#+RESULTS:
+: Order {factors = [0.0,0.0,0.0,0.0,1.0852114021956238e-2,0.0,0.0,0.0]}

@@ -2,7 +2,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 -- | basic measurement and callibration
 module Main where
@@ -18,16 +17,8 @@ import qualified Data.Map.Strict as Map
 import Data.FormatN
 import qualified Data.Text as Text
 import Control.Monad.State.Lazy
-import qualified Data.List as List
-import Data.Maybe
-import NumHask.Space (quantile)
-import GHC.Generics
 
 data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
-
-data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation deriving (Eq, Show)
-
-data Golden = Golden { fp :: FilePath, check :: Bool, record :: Bool } deriving (Generic, Eq, Show)
 
 data Options = Options
   { optionN :: Int,
@@ -36,9 +27,7 @@ data Options = Options
     optionRunType :: RunType,
     optionMeasureType :: MeasureType,
     optionsExample :: Example,
-    optionsGolden :: Maybe FilePath,
-    optionsRecord :: Bool,
-    optionsRecordCheck :: Bool
+    optionsGolden :: Golden
   } deriving (Eq, Show)
 
 parseRun :: Parser RunType
@@ -53,32 +42,6 @@ parseRun =
   flag' RunGauge (long "gauge" <> help "gauge runs on exmaple for comparison") <|>
   pure RunExample
 
-parseMeasure :: Parser MeasureType
-parseMeasure =
-  flag' MeasureTime (long "time" <> help "measure time performance") <|>
-  flag' MeasureSpace (long "space" <> help "measure space performance") <|>
-  flag' MeasureSpaceTime (long "spacetime" <> help "measure both space and time performance") <|>
-  flag' MeasureAllocation (long "allocation" <> help "measure bytes allocated") <|>
-  pure MeasureTime
-
--- | unification of the different measurements to being a list of doubles.
-measureDs :: MeasureType -> Int -> Measure IO [[Double]]
-measureDs mt n =
-  case mt of
-    MeasureTime -> fmap ((:[]) . fromIntegral) <$> times n
-    MeasureSpace -> toMeasureN n (ssToList <$> space False)
-    MeasureSpaceTime -> toMeasureN n ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-    MeasureAllocation -> fmap ((:[]) . fromIntegral) <$> toMeasureN n (allocation False)
-
--- | unification of the different measurements to being a list of doubles.
-measureLabels :: MeasureType -> [Text]
-measureLabels mt =
-  case mt of
-    MeasureTime -> ["time"]
-    MeasureSpace -> spaceLabels
-    MeasureSpaceTime -> spaceLabels <> ["time"]
-    MeasureAllocation -> ["allocation"]
-
 options :: Parser Options
 options = Options <$>
   option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform") <*>
@@ -87,9 +50,7 @@ options = Options <$>
   parseRun <*>
   parseMeasure <*>
   parseExample <*>
-  optional (option str (long "golden" <> short 'g' <> help "golden file name")) <*>
-  switch (long "record" <> short 'r' <> help "record the result to a golden file") <*>
-  switch (long "check" <> short 'c' <> help "check versus a golden file")
+  parseGolden "golden"
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
@@ -132,48 +93,6 @@ perfNoOps meas =
       fap "const" (const ()) ()
       fam "pure" (pure ())
 
-ordy :: Int -> [Text]
-ordy f = zipWith (\x s -> (Text.pack . show) x <> s) [1..f] (["st", "nd", "rd"] <> repeat "th")
-
-allStats :: Int -> Map.Map [Text] [[Double]] -> Map.Map [Text] [Double]
-allStats f m = Map.fromList $ mconcat
-  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> [l], xs)) (ordy f) xss) <$> mlist)
-  , (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist
-  , (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist
-  , (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
-  ]
-  where
-    mlist = Map.toList m
-    av xs = sum xs / (fromIntegral . length $ xs)
-
--- * org-mode formatting
-outercalate :: Text -> [Text] -> Text
-outercalate c ts = c <> Text.intercalate c ts <> c
-
-printOrgHeader :: Map.Map [Text] a -> [Text] -> IO ()
-printOrgHeader m ts = do
-  Text.putStrLn $ outercalate "|" ((("label" <>) . Text.pack . show <$> [1..labelCols]) <> ts)
-  Text.putStrLn $ outercalate "|" (replicate (labelCols+1) "---")
-  pure ()
-    where
-      labelCols = maximum $ length <$> Map.keys m
-
-printOrg :: Map.Map [Text] Text -> IO ()
-printOrg m = do
-  printOrgHeader m ["results"]
-  _ <- Map.traverseWithKey (\k a -> Text.putStrLn (outercalate "|" (k <> [a]))) m
-  pure ()
-
-printOrg2D :: Map.Map [Text] Text -> IO ()
-printOrg2D m = do
-    let rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
-    let cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
-    Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
-    sequence_ $
-      (\c -> Text.putStrLn
-        ("|" <> c <> "|" <>
-          Text.intercalate "|" ((\r -> m Map.! [c,r]) <$> rs) <> "|")) <$> cs
-
 -- | * gauge experiment
 testGauge :: (NFData b) =>
   Text -> (a -> b) -> a -> IO ()
@@ -190,16 +109,6 @@ testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
 testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
-rioOrg :: Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
-rioOrg g labels m = do
-    if check g then degradePrint defaultDegradeConfig (fp g) m' else printOrg (expt (Just 3) <$> m')
-    if record g then writeResult (fp g) m' else pure ()
-    where
-      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
-
-statify :: (Functor f, Ord a) => StatDType -> Map.Map a (f [Double]) -> Map.Map [a] (f Double)
-statify s m = fmap (statD s) <$> Map.mapKeys (:[]) m
-
 main :: IO ()
 main = do
   o <- execParser opts
@@ -209,11 +118,7 @@ main = do
   let a = optionsExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let gold =
-        Golden
-        (fromMaybe ("other/" <> show r <> ".csv") (optionsGolden o))
-        (optionsRecord o)
-        (optionsRecordCheck o)
+  let gold = optionsGolden o
 
   case r of
     RunExample-> do
@@ -225,7 +130,7 @@ main = do
       rioOrg gold (measureLabels mt) (statify s m)
 
     RunExampleIO -> do
-      m1 <- execPerfT (measureDs mt 1) (exampleIO)
+      m1 <- execPerfT (measureDs mt 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""

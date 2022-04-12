@@ -30,9 +30,10 @@ module Perf
     module Perf.Time,
     module Perf.BigO,
     module Perf.Space,
-    module Perf.Degrade,
+    module Perf.Report,
     module Perf.Stats,
     module Perf.Types,
+    module Perf.Measure,
   )
 where
 
@@ -41,6 +42,7 @@ import Perf.Algos
 import Perf.Time
 import Perf.BigO
 import Perf.Space
-import Perf.Degrade
+import Perf.Report
 import Perf.Stats
 import Perf.Types
+import Perf.Measure

@@ -18,10 +18,13 @@ module Perf.Stats
     addStat,
     readStats,
     writeStats,
+    ordy,
+    allStats,
+    statify,
 
   ) where
 
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import NumHask.Space (quantile)
 import Options.Applicative
 import qualified Data.Map.Strict as Map
@@ -84,3 +87,19 @@ readStats fp = do
   r <- runCsv (csvFile { file = fp  }) fields
   pure $ Map.fromList [(init x, last x) | (Right x) <- r]
 
+ordy :: Int -> [Text]
+ordy f = zipWith (\x s -> (pack . show) x <> s) [1..f] (["st", "nd", "rd"] <> repeat "th")
+
+allStats :: Int -> Map.Map [Text] [[Double]] -> Map.Map [Text] [Double]
+allStats f m = Map.fromList $ mconcat
+  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> [l], xs)) (ordy f) xss) <$> mlist)
+  , (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist
+  , (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist
+  , (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
+  ]
+  where
+    mlist = Map.toList m
+    av xs = sum xs / (fromIntegral . length $ xs)
+
+statify :: (Functor f, Ord a) => StatDType -> Map.Map a (f [Double]) -> Map.Map [a] (f Double)
+statify s m = fmap (statD s) <$> Map.mapKeys (:[]) m

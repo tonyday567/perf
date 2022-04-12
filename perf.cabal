@@ -35,7 +35,8 @@ library
     Perf
     Perf.Algos
     Perf.BigO
-    Perf.Degrade
+    Perf.Report
+    Perf.Measure
     Perf.Space
     Perf.Stats
     Perf.Time

@@ -53,7 +53,7 @@ compareNote cfg x y =
   where
     note' x' y'
          | y' / x' > 1 + errorLevel cfg = formatWith [red] "degraded"
-         | y' / x' > 1 + warningLevel cfg = formatWith [yellow] "slightly degraded"
+         | y' / x' > 1 + warningLevel cfg = formatWith [yellow] "slightly-degraded"
          | y' / x' < (1 - improvedLevel cfg) = formatWith [green] "improvement"
          | otherwise = ""
 

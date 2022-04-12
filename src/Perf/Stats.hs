@@ -7,6 +7,7 @@ module Perf.Stats
   ( average,
     median,
     tenth,
+    averageI,
     averageSecs,
     StatDType (..),
     statD,
@@ -37,6 +38,9 @@ average xs = sum xs / (fromIntegral . length $ xs)
 
 tenth :: [Double] -> Double
 tenth = quantile 0.1
+
+averageI :: (Integral a) => [a] -> Double
+averageI xs = sum (fromIntegral <$> xs) / (fromIntegral . length $ xs)
 
 averageSecs :: [Double] -> Double
 averageSecs xs = sum xs / (fromIntegral . length $ xs) / 2.5e9

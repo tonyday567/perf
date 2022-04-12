@@ -161,6 +161,7 @@ fap label f a =
     (t, fa) <- lift $ measure m f a
     modify $ second (Map.insertWith (<>) label t)
     return fa
+{-# INLINEABLE fap #-}
 
 -- | Lift a monadic value to a PerfT m, providing a label and a 'Measure'.
 --
@@ -172,30 +173,36 @@ fam label a =
     (t, ma) <- lift $ measureM m a
     modify $ second (Map.insertWith (<>) label t)
     return ma
+{-# INLINEABLE fam #-}
 
 -- | lift a pure, unnamed function application to PerfT
 (|$|) :: (Semigroup t) => (a -> b) -> a -> PerfT IO t b
 (|$|) f a = fap "" f a
+{-# INLINEABLE (|$|) #-}
 
 -- | lift a monadic, unnamed function application to PerfT
 ($|) :: (Semigroup t) => IO a -> PerfT IO t a
 ($|) a = fam "" a
+{-# INLINEABLE ($|) #-}
 
 -- | Run the performance measure, returning (computational result, measurement).
 --
 runPerfT :: (Functor m) => Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
 runPerfT m p = fmap (second snd) <$> flip runStateT (m, Map.empty) $ measurePerf p
+{-# INLINEABLE runPerfT #-}
 
 -- | Consume the PerfT layer and return the original monadic result.
 -- Fingers crossed, PerfT structure should be completely compiled away.
 --
 evalPerfT :: Monad m => Measure m t -> PerfT m t a -> m a
 evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
+{-# INLINEABLE evalPerfT #-}
 
 -- | Consume a PerfT layer and return the measurement.
 --
 execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
+{-# INLINEABLE execPerfT #-}
 
 -- | run a PerfT and also calculate performance over the entire computation
 outer :: (MonadIO m, Semigroup s) => Text -> Measure m s -> Measure m t -> PerfT m t a -> m (a, (Map.Map Text s, Map.Map Text t))

@@ -1,5 +1,6 @@
-constFuse,1.31e3
-lengthF,9.37e3
-mapInc,2.89e1
-sum,1.27e4
-sumFuse,2.84e3
+constFuse,time,1.00e3
+lengthF,time,2.40e4
+mapInc,time,3.56e2
+noop,time,7.00e1
+sum,time,2.72e4
+sumFuse,time,1.62e3

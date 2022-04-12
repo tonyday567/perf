@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- | basic measurement and callibration
 module Main where
@@ -18,16 +19,18 @@ import Data.FormatN
 import qualified Data.Text as Text
 import Control.Monad.State.Lazy
 import qualified Data.List as List
-import Data.Bool
 import Data.Maybe
 import NumHask.Space (quantile)
+import GHC.Generics
 
 data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
 data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation deriving (Eq, Show)
 
+data Golden = Golden { fp :: FilePath, check :: Bool, record :: Bool } deriving (Generic, Eq, Show)
+
 data Options = Options
-  { optionRuns :: Int,
+  { optionN :: Int,
     optionLength :: Int,
     optionStatDType :: StatDType,
     optionRunType :: RunType,
@@ -78,14 +81,14 @@ measureLabels mt =
 
 options :: Parser Options
 options = Options <$>
-  option auto (value 1000 <> long "runs" <> short 'r' <> help "number of runs to perform") <*>
+  option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform") <*>
   option auto (value 1000 <> long "length" <> short 'l' <> help "length of list") <*>
   parseStatD <*>
   parseRun <*>
   parseMeasure <*>
   parseExample <*>
   optional (option str (long "golden" <> short 'g' <> help "golden file name")) <*>
-  switch (long "record" <> short 'g' <> help "record the result to a golden file") <*>
+  switch (long "record" <> short 'r' <> help "record the result to a golden file") <*>
   switch (long "check" <> short 'c' <> help "check versus a golden file")
 
 opts :: ParserInfo Options
@@ -96,9 +99,9 @@ opts = info (options <**> helper)
 
 exampleIO :: (Semigroup t) => PerfT IO t ()
 exampleIO = do
-  txt <- fam "file read" (Text.readFile "src/Perf.hs")
+  txt <- fam "file-read" (Text.readFile "src/Perf.hs")
   n <- fap "length" Text.length txt
-  fam "print result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n))
+  fam "print-result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n))
 
 -- | * sums
 -- | measure the various versions of a tick.
@@ -134,7 +137,7 @@ ordy f = zipWith (\x s -> (Text.pack . show) x <> s) [1..f] (["st", "nd", "rd"] 
 
 allStats :: Int -> Map.Map [Text] [[Double]] -> Map.Map [Text] [Double]
 allStats f m = Map.fromList $ mconcat
-  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> ["initial", l], xs)) (ordy f) xss) <$> mlist)
+  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> [l], xs)) (ordy f) xss) <$> mlist)
   , (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist
   , (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist
   , (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
@@ -187,64 +190,58 @@ testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
 testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
-rioOrg :: Maybe FilePath -> Maybe FilePath -> StatDType -> [Text] -> Map.Map [Text] [[Double]] -> IO ()
-rioOrg check record s labels m = do
-    case check of
-      Nothing -> printOrg (expt (Just 3) <$> m')
-      Just fp -> degradePrint defaultDegradeConfig fp m'
-    mapM_ (`writeResult` m') record
-    where
-      m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], statD s x)) (List.transpose xss) labels) <$> Map.toList m
-
-rioOrgRaw :: Maybe FilePath -> Maybe FilePath -> [Text] -> Map.Map [Text] [Double] -> IO ()
-rioOrgRaw check record labels m = do
-    case check of
-      Nothing -> printOrg (expt (Just 3) <$> m')
-      Just fp -> degradePrint defaultDegradeConfig fp m'
-    mapM_ (`writeResult` m') record
+rioOrg :: Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
+rioOrg g labels m = do
+    if check g then degradePrint defaultDegradeConfig (fp g) m' else printOrg (expt (Just 3) <$> m')
+    if record g then writeResult (fp g) m' else pure ()
     where
       m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
+
+statify :: (Functor f, Ord a) => StatDType -> Map.Map a (f [Double]) -> Map.Map [a] (f Double)
+statify s m = fmap (statD s) <$> Map.mapKeys (:[]) m
 
 main :: IO ()
 main = do
   o <- execParser opts
-  let !n = optionRuns o
+  let !n = optionN o
   let !l = optionLength o
   let s = optionStatDType o
   let a = optionsExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let fp = fromMaybe ("other/" <> show r <> ".csv") (optionsGolden o)
-  let record = bool Nothing (Just fp) (optionsRecord o)
-  let check = bool Nothing (Just fp) (optionsRecordCheck o)
-  let rio = rioOrg check record s
+  let gold =
+        Golden
+        (fromMaybe ("other/" <> show r <> ".csv") (optionsGolden o))
+        (optionsRecord o)
+        (optionsRecordCheck o)
 
   case r of
     RunExample-> do
       m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
-      rio (measureLabels mt) (Map.mapKeys (:[]) m)
+      rioOrg gold (measureLabels mt) (statify s m)
 
     RunExamples-> do
       m <- statExamples n l (measureDs mt)
-      rio (measureLabels mt) (Map.mapKeys (:[]) m)
+      rioOrg gold (measureLabels mt) (statify s m)
 
     RunExampleIO -> do
-      m1 <- execPerfT (measureDs mt n) exampleIO
-      (_, (m', m2)) <- outer "outer-total" (measureDs mt n) (measureDs mt n) exampleIO
+      m1 <- execPerfT (measureDs mt 1) (exampleIO)
+      (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
-      rio (measureLabels mt) ms
+      putStrLn ""
+      rioOrg gold (measureLabels mt) (fmap (statD s) <$> ms)
 
     RunSums-> do
       m <- statSums n l (measureDs mt)
-      rio (measureLabels mt) (Map.mapKeys (:[]) m)
+      rioOrg gold (measureLabels mt) (statify s m)
 
     RunLengths-> do
       m <- statLengths n l (measureDs mt)
-      rio (measureLabels mt) (Map.mapKeys (:[]) m)
+      rioOrg gold (measureLabels mt) (statify s m)
 
     RunNoOps -> do
       m <- perfNoOps (measureDs mt n)
-      rioOrgRaw check record (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
+      rioOrg gold (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
 
     RunTicks -> do
       m <- statTicksSums n l s

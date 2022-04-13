@@ -17,6 +17,7 @@ import qualified Data.Map.Strict as Map
 import Data.FormatN
 import qualified Data.Text as Text
 import Control.Monad.State.Lazy
+import Data.List (intercalate)
 
 data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
@@ -118,8 +119,15 @@ main = do
   let a = optionsExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let gold = optionsGolden o
-
+  let gold' = optionsGolden o
+  let gold =
+        case golden gold' of
+          "other/golden.csv" ->
+            gold'
+            { golden = "other/" <>
+              intercalate "-" [show r, show n, show l, show mt] <>
+              ".csv" }
+          _ -> gold'
   case r of
     RunExample-> do
       m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)

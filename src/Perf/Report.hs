@@ -106,18 +106,18 @@ printOrg2D m = do
         ("|" <> c <> "|" <>
           Text.intercalate "|" ((\r -> m Map.! [c,r]) <$> rs) <> "|")) <$> cs
 
-data Golden = Golden { fp :: FilePath, check :: Bool, record :: Bool } deriving (Generic, Eq, Show)
+data Golden = Golden { golden :: FilePath, check :: Bool, record :: Bool } deriving (Generic, Eq, Show)
 
 parseGolden :: String -> Parser Golden
 parseGolden def =
   Golden <$>
   option str (Options.Applicative.value ("other/" <> def <> ".csv") <> long "golden" <> short 'g' <> help "golden file name") <*>
-  switch (long "record" <> short 'r' <> help "record the result to a golden file") <*>
-  switch (long "check" <> short 'c' <> help "check versus a golden file")
+  switch (long "check" <> short 'c' <> help "check versus a golden file") <*>
+  switch (long "record" <> short 'r' <> help "record the result to a golden file")
 
 rioOrg :: Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
 rioOrg g labels m = do
-    if check g then degradePrint defaultDegradeConfig (fp g) m' else printOrg (expt (Just 3) <$> m')
-    if record g then writeResult (fp g) m' else pure ()
+    if check g then degradePrint defaultDegradeConfig (golden g) m' else printOrg (expt (Just 3) <$> m')
+    if record g then writeResult (golden g) m' else pure ()
     where
       m' = Map.fromList $ mconcat $ (\(ks,xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m

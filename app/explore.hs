@@ -28,7 +28,8 @@ data Options = Options
     optionRunType :: RunType,
     optionMeasureType :: MeasureType,
     optionsExample :: Example,
-    optionsGolden :: Golden
+    optionsGolden :: Golden,
+    optionsReportConfig :: ReportConfig
   } deriving (Eq, Show)
 
 parseRun :: Parser RunType
@@ -51,7 +52,8 @@ options = Options <$>
   parseRun <*>
   parseMeasure <*>
   parseExample <*>
-  parseGolden "golden"
+  parseGolden "golden" <*>
+  parseReportConfig defaultReportConfig
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
@@ -128,37 +130,39 @@ main = do
               intercalate "-" [show r, show n, show l, show mt] <>
               ".csv" }
           _ -> gold'
+  let cfg = optionsReportConfig o
+
   case r of
     RunExample-> do
       m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
-      rioOrg gold (measureLabels mt) (statify s m)
+      report cfg gold (measureLabels mt) (statify s m)
 
     RunExamples-> do
       m <- statExamples n l (measureDs mt)
-      rioOrg gold (measureLabels mt) (statify s m)
+      report cfg gold (measureLabels mt) (statify s m)
 
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""
-      rioOrg gold (measureLabels mt) (fmap (statD s) <$> ms)
+      report cfg gold (measureLabels mt) (fmap (statD s) <$> ms)
 
     RunSums-> do
       m <- statSums n l (measureDs mt)
-      rioOrg gold (measureLabels mt) (statify s m)
+      report cfg gold (measureLabels mt) (statify s m)
 
     RunLengths-> do
       m <- statLengths n l (measureDs mt)
-      rioOrg gold (measureLabels mt) (statify s m)
+      report cfg gold (measureLabels mt) (statify s m)
 
     RunNoOps -> do
       m <- perfNoOps (measureDs mt n)
-      rioOrg gold (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
+      report cfg gold (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
 
     RunTicks -> do
       m <- statTicksSums n l s
-      printOrg2D (fmap (expt (Just 3)) m)
+      reportOrg2D (fmap (expt (Just 3)) m)
 
     RunGauge -> do
       mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)

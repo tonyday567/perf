@@ -36,12 +36,27 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-: [5 of 8] Compiling Perf.Degrade     ( src/Perf/Degrade.hs, interpreted )
-: [6 of 8] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
-: [7 of 8] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted ) [Perf.Stats changed]
-: [8 of 8] Compiling Perf             ( src/Perf.hs, interpreted ) [Perf.Stats changed]
-: Ok, 8 modules loaded.
-: >  >  >  >  >  >  >  > ok
+#+begin_example
+Resolving dependencies...
+Build profile: -w ghc-8.10.7 -O1
+In order, the following will be built (use -v for more details):
+ - perf-0.10.0 (lib) (file src/Perf/Report.hs changed)
+Preprocessing library for perf-0.10.0..
+GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
+Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
+[1 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[2 of 9] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
+[3 of 9] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
+[4 of 9] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
+[5 of 9] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted )
+[6 of 9] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
+[7 of 9] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
+[8 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
+[9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
+Ok, 9 modules loaded.
+> Ok, 9 modules loaded.
+>  >  >  >  >  >  >  > ok
+#+end_example
 
 ** Time
 *** What is a tick?
@@ -635,3 +650,16 @@ estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
 
 #+RESULTS:
 : Order {factors = [0.0,0.0,0.0,0.0,1.0852114021956238e-2,0.0,0.0,0.0]}
+
+
+* spacetime debug
+
+#+begin_src haskell :results output
+:t toMeasureN 2 ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+:t ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+
+#+end_src
+
+#+RESULTS:
+: ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+:   :: Num a => StepMeasure IO [a]

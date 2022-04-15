@@ -144,7 +144,7 @@ formatCompare f h m =
       Map.elems (Map.mapWithKey (\k a -> outercalate "|" (k <> compareReport a)) m)
     ConsoleMode ->
       bool [] (formatConsoleHeader m ["old result", "new result", "status"]) (h == Header) <>
-      Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-10s" <$> (k <> compareReport a)) m)
+      Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> compareReport a)) m)
   where
     compareReport (CompareResult x y n) =
       [ maybe mempty (expt (Just 3)) x,
@@ -159,7 +159,7 @@ formatOrg h m =
 formatConsole :: Header -> Map.Map [Text] Text -> [Text]
 formatConsole h m =
   bool [] (formatConsoleHeader m ["results"]) (h == Header) <>
-  Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-10s" <$> (k <> [a])) m)
+  Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> [a])) m)
 
 reportOrg2D :: Map.Map [Text] Text -> IO ()
 reportOrg2D m = do

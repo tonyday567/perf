@@ -101,5 +101,5 @@ allStats f m = Map.fromList $ mconcat
     mlist = Map.toList m
     av xs = sum xs / (fromIntegral . length $ xs)
 
-statify :: (Functor f, Ord a) => StatDType -> Map.Map a (f [Double]) -> Map.Map [a] (f Double)
-statify s m = fmap (statD s) <$> Map.mapKeys (:[]) m
+statify :: (Ord a) => StatDType -> Map.Map a [[Double]] -> Map.Map [a] [Double]
+statify s m = fmap (statD s) . List.transpose <$> Map.mapKeys (:[]) m

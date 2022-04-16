@@ -27,9 +27,10 @@ data Options = Options
     optionStatDType :: StatDType,
     optionRunType :: RunType,
     optionMeasureType :: MeasureType,
-    optionsExample :: Example,
-    optionsGolden :: Golden,
-    optionsReportConfig :: ReportConfig
+    optionExample :: Example,
+    optionGolden :: Golden,
+    optionReportConfig :: ReportConfig,
+    optionRawStats :: Bool
   } deriving (Eq, Show)
 
 parseRun :: Parser RunType
@@ -53,7 +54,8 @@ options = Options <$>
   parseMeasure <*>
   parseExample <*>
   parseGolden "golden" <*>
-  parseReportConfig defaultReportConfig
+  parseReportConfig defaultReportConfig <*>
+  switch (long "raw" <> short 'w' <> help "write raw statistics to file")
 
 opts :: ParserInfo Options
 opts = info (options <**> helper)
@@ -118,10 +120,10 @@ main = do
   let !n = optionN o
   let !l = optionLength o
   let s = optionStatDType o
-  let a = optionsExample o
+  let a = optionExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let gold' = optionsGolden o
+  let gold' = optionGolden o
   let gold =
         case golden gold' of
           "other/golden.csv" ->
@@ -130,15 +132,21 @@ main = do
               intercalate "-" [show r, show n, show l, show mt] <>
               ".csv" }
           _ -> gold'
-  let cfg = optionsReportConfig o
+  let w = optionRawStats o
+  let raw = "other/" <>
+              intercalate "-" [show r, show n, show l, show mt] <>
+              ".map"
+  let cfg = optionReportConfig o
 
   case r of
     RunExample-> do
       m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
+      when w (writeFile raw (show m))
       report cfg gold (measureLabels mt) (statify s m)
 
     RunExamples-> do
       m <- statExamples n l (measureDs mt)
+      when w (writeFile raw (show m))
       report cfg gold (measureLabels mt) (statify s m)
 
     RunExampleIO -> do
@@ -146,22 +154,27 @@ main = do
       (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""
+      when w (writeFile raw (show ms))
       report cfg gold (measureLabels mt) (fmap (statD s) <$> ms)
 
     RunSums-> do
       m <- statSums n l (measureDs mt)
+      when w (writeFile raw (show m))
       report cfg gold (measureLabels mt) (statify s m)
 
     RunLengths-> do
       m <- statLengths n l (measureDs mt)
+      when w (writeFile raw (show m))
       report cfg gold (measureLabels mt) (statify s m)
 
     RunNoOps -> do
       m <- perfNoOps (measureDs mt n)
+      when w (writeFile raw (show m))
       report cfg gold (measureLabels mt) (allStats 4 (Map.mapKeys (:[]) m))
 
     RunTicks -> do
       m <- statTicksSums n l s
+      when w (writeFile raw (show m))
       reportOrg2D (fmap (expt (Just 3)) m)
 
     RunGauge -> do

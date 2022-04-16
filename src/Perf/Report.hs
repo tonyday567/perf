@@ -132,7 +132,7 @@ formatOrgHeader m ts =
 
 formatConsoleHeader :: Map.Map [Text] a -> [Text] -> [Text]
 formatConsoleHeader m ts =
-  [mconcat $ Text.pack . printf "%-10s" <$> ((("label" <>) . Text.pack . show <$> [1..labelCols]) <> ts), mempty]
+  [mconcat $ Text.pack . printf "%-20s" <$> ((("label" <>) . Text.pack . show <$> [1..labelCols]) <> ts), mempty]
     where
       labelCols = maximum $ length <$> Map.keys m
 
@@ -140,10 +140,10 @@ formatCompare :: Format -> Header -> Map.Map [Text] CompareResult -> [Text]
 formatCompare f h m =
   case f of
     OrgMode ->
-      bool [] (formatOrgHeader m ["old result", "new result", "status"]) (h == Header) <>
+      bool [] (formatOrgHeader m ["old_result", "new_result", "status"]) (h == Header) <>
       Map.elems (Map.mapWithKey (\k a -> outercalate "|" (k <> compareReport a)) m)
     ConsoleMode ->
-      bool [] (formatConsoleHeader m ["old result", "new result", "status"]) (h == Header) <>
+      bool [] (formatConsoleHeader m ["old_result", "new_result", "status"]) (h == Header) <>
       Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> compareReport a)) m)
   where
     compareReport (CompareResult x y n) =

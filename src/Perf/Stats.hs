@@ -16,8 +16,6 @@ module Perf.Stats
 
     -- stat reporting
     addStat,
-    readStats,
-    writeStats,
     ordy,
     allStats,
     statify,
@@ -29,8 +27,6 @@ import NumHask.Space (quantile)
 import Options.Applicative
 import qualified Data.Map.Strict as Map
 import Control.Monad.State.Lazy
-import Box.Csv
-import Box
 import qualified Data.List as List
 
 median :: [Double] -> Double
@@ -74,18 +70,6 @@ parseStatD =
 addStat :: (Ord k, Monad m) => k -> s -> StateT (Map.Map k s) m ()
 addStat label s = do
   modify (Map.insert label s)
-
-csvFile :: CsvConfig
-csvFile = CsvConfig "./other/default.csv" ',' NoHeader
-
-writeStats :: FilePath -> (a -> Text) -> Map.Map [Text] a -> IO ()
-writeStats fp f m =
-  glue <$> rowCommitter (csvFile { file = fp }) (\(l,v) -> l <> [f v]) <*|> qList (Map.toList m)
-
-readStats :: FilePath -> IO (Map.Map [Text] Text)
-readStats fp = do
-  r <- runCsv (csvFile { file = fp  }) fields
-  pure $ Map.fromList [(init x, last x) | (Right x) <- r]
 
 ordy :: Int -> [Text]
 ordy f = zipWith (\x s -> (pack . show) x <> s) [1..f] (["st", "nd", "rd"] <> repeat "th")

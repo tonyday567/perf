@@ -655,11 +655,18 @@ estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
 * spacetime debug
 
 #+begin_src haskell :results output
-:t toMeasureN 2 ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+t2 = toMeasureN 2 ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
 :t ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-
+r1 <- snd <$> runPerfT t2 (const () |$| ())
+:t r1
+statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
+:t statD StatAverage
 #+end_src
 
 #+RESULTS:
+:
 : ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
 :   :: Num a => StepMeasure IO [a]
+: > r1 :: Map.Map Text.Text [[Integer]]
+: fromList [([""],[3373.3333333333335,1957.0])]
+: statD StatAverage :: [Double] -> Double

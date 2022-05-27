@@ -15,7 +15,7 @@ jobs:
             ghc: '8.10.7'
             experimental: true
           - os: ubuntu-latest
-            ghc: '9.2.1'
+            ghc: '9.2.2'
             experimental: true
     continue-on-error: ${{ matrix.experimental }}
     name: ghc ${{ matrix.ghc }} ${{ matrix.os }}
@@ -61,7 +61,7 @@ jobs:
         with:
           path: C:\SR
           key: windows-store-meta
-      - if: ${{ matrix.ghc == '9.2.1'}}
+      - if: ${{ matrix.ghc == '9.2.2'}}
         name: install cabal-docspec
         run: |
           mkdir -p $HOME/.cabal/bin
@@ -78,7 +78,7 @@ jobs:
       - name: test
         run: |
           cabal test all --enable-tests --write-ghc-environment-files=always
-      - if: ${{ matrix.ghc == '9.2.1'}}
+      - if: ${{ matrix.ghc == '9.2.2'}}
         name: docspec
         run: |
           $HOME/.cabal/bin/cabal-docspec --verbose

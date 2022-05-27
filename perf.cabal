@@ -50,7 +50,7 @@ library
     , box-csv               ^>=0.2
     , colourista            ^>=0.1
     , containers            ^>=0.6
-    , deepseq               >=1.4.6  && <1.4.8
+    , deepseq               >=1.4.4  && <1.4.8
     , formatn               ^>=0.2.1
     , mtl                   ^>=2.2.2
     , numhask-space         ^>=0.10
@@ -72,7 +72,7 @@ executable perf-explore
   build-depends:
     , base                  >=4.7   && <5
     , containers            ^>=0.6
-    , deepseq               >=1.4.6 && <1.4.8
+    , deepseq               >=1.4.4 && <1.4.8
     , formatn               ^>=0.2
     , gauge                 ^>=0.2.5
     , mtl                   ^>=2.2.2

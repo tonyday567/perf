@@ -656,3 +656,92 @@ statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
 : > r1 :: Map.Map Text.Text [[Integer]]
 : fromList [([""],[0.0,0.0,0.0,0.0,0.0,15500.0])]
 : statD StatAverage :: [Double] -> Double
+
+* perf R&D
+
+** docperf
+
+- https://github.com/haskell/cabal/pull/7688
+- integrate bigo here
+- [[https://github.com/tonyday567/doctest-discover/settings]]
+
+** perf R&D
+- core
+  [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
+- profiling
+- detecting space leaks
+- laziness, WHNF and all that.
+  [[http://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
+  [[https://stackoverflow.com/questions/6872898/what-is-weak-head-normal-form/6889335#6889335][haskell - What is Weak Head Normal Form? - Stack Overflow]]
+
+** core
+*** godbolt
+https://godbolt.org/
+
+*** ghc performance example
+https://gitlab.haskell.org/ghc/ghc/-/issues/15185
+
+*** ghc incantations
+
+#+begin_src sh
+--nonmoving-gc -A128m -N<cores/2> -qn<cores/2> -Fd4
+#+end_src
+
+from: [[https://gitlab.haskell.org/ghc/ghc/-/issues/15185][Enum instance for IntX / WordX are inefficient (#15185) · Issues · Glasgow Ha...]]
+
+#+begin_src sh
+ghc --make Fact.hs -ddump-simpl -ddump-to-file -O
+#+end_src
+
+** Profiling
+
+https://www.tweag.io/blog/2020-01-30-haskell-profiling/
+
+hp2pretty
+
+threadscope
+
+https://stackoverflow.com/questions/32123475/profiling-builds-with-stack
+
+
+https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/profiling.html
+
+```
+mkdir -p .stack-bin
+stack clean
+stack install --work-dir .stack-work-profile --profile --local-bin-path .stack-bin --ghc-options=-fno-prof-auto
+stack exec --profile -- example +RTS -p -hc -s
+stack exec -- hp2ps -c example.hp && ps2pdf example.ps
+stack exec ghc-prof-flamegraph -- example.prof
+```
+
+memory checks
+
+```
+hp2ps -e8in -c examples.hp
+hp2ps -e8in -c examples.hy # types
+hp2ps -e8in -c examples.hp # constructors
+stack exec example -- +RTS -s - additional memory
+stack exec example -- +RTS -xt -hy
+```
+** reference
+
+[[https://github.com/haskell-perf][Haskell performance · GitHub]]
+[[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
+[[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
+https://github.com/ndmitchell/spaceleak
+[[https://jyp.github.io/posts/controlled-fusion.html][The Spume of Years - Controlling Fusion In Haskell]]
+
+*** Cache speed references
+
+The average cycles per + operation can get down to about 0.7 cycles, and there are about 4 cache registers per cycle, so a sum pipeline uses 2.8 register instructions per +.
+
+| Cache             | Cycles         |
+|-------------------|----------------|
+| register          | 4 per cycle    |
+| L1 Cache access   | 3-4 cycles     |
+| L2 Cache access   | 11-12 cycles   |
+| L3 unified access | 30 - 40        |
+| DRAM hit          | 195 cycles     |
+| L1 miss           | 40 cycles      |
+| L2 miss           | >600 cycles     |

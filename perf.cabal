@@ -48,11 +48,13 @@ library
     , base                  >=4.7    && <5
     , box                   ^>=0.8.1
     , box-csv               ^>=0.2
+    , chart-svg             ^>=0.3
     , containers            ^>=0.6
     , deepseq               >=1.4.4  && <1.4.8
     , formatn               ^>=0.2.1
     , mtl                   ^>=2.2.2
     , numhask-space         ^>=0.10
+    , optics-core           ^>=0.4
     , optparse-applicative  ^>=0.17
     , rdtsc                 ^>=1.3
     , recursion-schemes     ^>=5.2.2

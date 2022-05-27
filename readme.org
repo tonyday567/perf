@@ -26,13 +26,19 @@ Note that running this readme.org is very slow compared with an external process
 :r
 :set prompt " > "
 :set -Wno-type-defaults
+:set -Wno-unused-do-bind
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
+:set -XOverloadedLabels
 import Perf
-import Chart
 import Data.FormatN
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import qualified Data.Map.Strict as Map
+import Control.Monad
+import Data.Bifunctor
+import Chart
+import Optics.Core
 putStrLn "ok"
 #+end_src
 
@@ -55,16 +61,9 @@ Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
 [9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
 Ok, 9 modules loaded.
 > Ok, 9 modules loaded.
->  >  >  >  >  >  >  >  > ok
+>  >  >  >  >  >  >  >  >  >  >  >  >  >  > ok
 #+end_example
 
-#+begin_src haskell
-:t ChartSvg
-#+end_src
-
-#+RESULTS:
-: ChartSvg
-:   :: SvgOptions -> HudOptions -> [Hud] -> ChartTree -> ChartSvg
 
 ** Time
 *** What is a tick?
@@ -98,7 +97,7 @@ fmap word <$> replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-: [3738,1000,830,850,796,824,806,818,772,802]
+: [1722,788,630,606,608,620,596,638,596,598]
 
 *** multiple ticks
 
@@ -107,9 +106,9 @@ fmap (fmap (word . fst)) . replicateM 10 $ tick (const ()) ()
 #+end_src
 
 #+RESULTS:
-: [7740,3688,2716,2632,2642,2916,2852,2646,2630,2624]
+: [6180,3282,2736,2712,2676,2670,2660,2634,2926,2656]
 
-Here, ~const () ()~ was evaluated and took 7.7k cycles for the first effect, reducing down to 2.6k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
+Here, ~const () ()~ was evaluated and took 6.1k cycles for the first effect, reducing down to 2.6k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
 *** tickIO
 
@@ -127,7 +126,7 @@ fmap (fmap (word . fst)) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
-: [6090,2462,1854,1778,1766,1684,1696,1716,1690,1706]
+: [5508,1632,1378,1210,1576,1214,1160,1174,1176,1176]
 
 *** sum example
 
@@ -136,7 +135,7 @@ fmap (expt (Just 2) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Doubl
 #+end_src
 
 #+RESULTS:
-| 1.8e6 | 1.3e6 | 1.3e6 | 9.3e6 | 6.8e5 | 6.4e5 | 2.8e6 | 6.6e5 | 6.3e5 | 1.6e6 |
+| 2.0e6 | 1.3e6 | 1.2e6 | 6.1e6 | 1.5e6 | 1.7e6 | 3.0e6 | 6.4e5 | 6.2e5 | 1.7e6 |
 
 
 #+begin_src haskell :results output :exports both
@@ -146,7 +145,7 @@ print $ average (fmap fromIntegral $ fst ts)
 
 #+RESULTS:
 :
-: 55690.3084
+: 54619.4812
 
 ** PerfT
 
@@ -155,13 +154,11 @@ print $ average (fmap fromIntegral $ fst ts)
 Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
 
 #+begin_src haskell :results output :exports both
-import Data.Bifunctor
 first (average . fmap fromIntegral) <$> ticks 1000 sum [1..1000]
 #+end_src
 
 #+RESULTS:
-:
-: (67196.398,500500)
+: (73752.368,500500)
 
 ... with PerfT usage
 
@@ -170,7 +167,7 @@ second (fmap (average . fmap fromIntegral)) <$> runPerfT (times 1000) (sum |$| [
 #+end_src
 
 #+RESULTS:
-: (500500,fromList [("",67159.27)])
+: (500500,fromList [("",62706.844)])
 
 Comparing performance of sum versus a list fusion approach:
 
@@ -179,7 +176,7 @@ fmap (average . fmap fromIntegral) <$> (execPerfT (times 1000) $ do; (fap "sum" 
 #+end_src
 
 #+RESULTS:
-: fromList [("fusion",107226.43),("sum",59301.402)]
+: fromList [("fusion",114013.79),("sum",63906.848)]
 
 An IO example
 
@@ -198,25 +195,25 @@ exampleIO = execPerfT time (do
   fam "print_result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
 #+end_src
 
-#+RESULTS:
-: <interactive>:14:31: error:
-:     parse error (possibly incorrect indentation or mismatched brackets)
-: <interactive>:15:27: error: Not in scope: ‘Text.readFile’
-: <interactive>:16:33: error: Variable not in scope: txt :: Text.Text
-: <interactive>:17:83: error: parse error on input ‘)’
-
-#+begin_src sh :exports both
-perf-explore --exampleIO --check --record
+#+begin_src sh :results output :exports both
+perf-explore --exampleIO --record --check
 #+end_src
 
 #+RESULTS:
-| normal | file-read    | time | 384000.0 | 454000.0 | slightly | degraded |
-| normal | length       | time |   5330.0 |   5120.0 |          |          |
-| normal | print-result | time |  39500.0 |  40000.0 |          |          |
-| outer  | file-read    | time |  80600.0 |  84500.0 |          |          |
-| outer  | length       | time |   5090.0 |   5010.0 |          |          |
-| outer  | outer-total  | time |  98200.0 | 102000.0 |          |          |
-| outer  | print-result | time |   4900.0 |   4960.0 |          |          |
+#+begin_example
+length of file is: 1751
+length of file is: 1751
+
+label1              label2              label3              old_result          new_result          status
+
+normal              file-read           time                4.28e5              4.19e5
+normal              length              time                5.61e3              5.64e3
+normal              print-result        time                5.47e4              5.38e4
+outer               file-read           time                9.37e4              9.46e4
+outer               length              time                5.38e3              5.40e3
+outer               outer-total         time                1.11e5              1.12e5
+outer               print-result        time                5.46e3              5.55e3
+#+end_example
 
 ** perf-explore
 
@@ -236,7 +233,9 @@ Usage: perf-explore [-n|--runs ARG] [-l|--length ARG]
                       --noops | --ticks | --gauge]
                     [--time | --space | --spacetime | --allocation]
                     [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
-                      --noOp] [-g|--golden ARG] [-r|--record] [-c|--check]
+                      --noOp] [-g|--golden ARG] [-c|--check] [-r|--record]
+                    [--orgmode | --console] [--header | --noheader]
+                    [--error ARG] [--warning ARG] [--improved ARG] [-w|--raw]
 
   perf benchmarking
 
@@ -266,8 +265,16 @@ Available options:
   --mapInc                 fmap (+1)
   --noOp                   const ()
   -g,--golden ARG          golden file name
-  -r,--record              record the result to a golden file
   -c,--check               check versus a golden file
+  -r,--record              record the result to a golden file
+  --orgmode                report using orgmode table format
+  --console                report using plain table format
+  --header                 include headers
+  --noheader               dont include headers
+  --error ARG              error level
+  --warning ARG            warning level
+  --improved ARG           improved level
+  -w,--raw                 write raw statistics to file
   -h,--help                Show this help text
 #+end_example
 
@@ -276,7 +283,7 @@ fmap averageI <$> execPerfT (times 10000) (sum |$| [1..1000])
 #+end_src
 
 #+RESULTS:
-: fromList [("",57471.7402)]
+: fromList [("",54874.5718)]
 
 The equivalent to the above code is:
 
@@ -286,9 +293,9 @@ perf-explore -n 10000 -l 1000 --sum
 
 #+RESULTS:
 :results:
-| label1 | label2 | results |
-|--------+--------+---------|
-| sum    | time   |  3.10e4 |
+label1              label2              results
+
+sum                 time                8.59e3
 :end:
 
 *** noops
@@ -299,44 +306,46 @@ perf-explore --noops
 
 #+RESULTS:
 :results:
-| label1 | label2  | label3 | results |
-|--------+---------+--------+---------|
-| const  | 1st     | time   |  4.94e3 |
-| const  | 2nd     | time   |  3.20e1 |
-| const  | 3rd     | time   |  1.60e1 |
-| const  | 4th     | time   |  1.80e1 |
-| const  | average | time   |  2.39e1 |
-| const  | best    | time   |  1.57e1 |
-| const  | median  | time   |  1.78e1 |
-| pure   | 1st     | time   |  4.25e3 |
-| pure   | 2nd     | time   |  3.80e1 |
-| pure   | 3rd     | time   |  3.80e1 |
-| pure   | 4th     | time   |  2.20e1 |
-| pure   | average | time   |  2.53e1 |
-| pure   | best    | time   |  1.77e1 |
-| pure   | median  | time   |  2.00e1 |
+label1              label2              label3              results
+
+const               1st                 time                2.94e3
+const               2nd                 time                7.80e1
+const               3rd                 time                3.00e1
+const               4th                 time                1.80e1
+const               average             time                2.28e1
+const               best                time                1.72e1
+const               median              time                1.85e1
+pure                1st                 time                8.00e1
+pure                2nd                 time                1.80e1
+pure                3rd                 time                2.00e1
+pure                4th                 time                1.60e1
+pure                average             time                2.00e1
+pure                best                time                1.72e1
+pure                median              time                1.85e1
 :end:
 
 #+begin_src haskell :results output :exports both
-:r
+:set -package chart-svg
+:set -package optics-core
+:m +Chart
+:m +Optics.Core
+#+end_src
+
+#+RESULTS:
+
+#+begin_src haskell :results output
 :set -XOverloadedLabels
-import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
-import Chart
+import Perf
 import Prelude
-import Optics.Core
 m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Cycles])
-let (Just d) = Map.lookup "fap times" m
+d = m Map.! "fap times"
 filter (> 100) d
 #+end_src
 
 #+RESULTS:
-: Ok, 8 modules loaded.
-: >  >  >  >  >  >  >
-: <interactive>:202:5: warning: [-Wincomplete-uni-patterns]
-:     Pattern match(es) are non-exhaustive
-:     In a pattern binding: Patterns not matched: Nothing
-: [Cycles {word = 484},Cycles {word = 128},Cycles {word = 136},Cycles {word = 128},Cycles {word = 314}]
+:
+: >  >  >  >  > [Cycles {word = 484},Cycles {word = 128},Cycles {word = 136},Cycles {word = 128},Cycles {word = 314}]
 
 #+begin_src haskell :file other/noop.svg :results output graphics file :exports both
 writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
@@ -356,25 +365,25 @@ perf-explore -n 1000 -l 1000 --ticks
 #+RESULTS:
 :results:
 |               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
-| sumAux        |   2.33e4 | 1.78e4 |    3.00e4 |        2.33e4 |   1.68e1 |   1.64e4 | 2.32e4 |
-| sumCata       |   1.57e4 | 1.63e4 |    1.59e4 |        1.53e4 |   1.64e1 |   1.55e4 | 1.54e4 |
-| sumCo         |   1.77e4 | 2.46e4 |    1.80e4 |        1.76e4 |   1.73e1 |   1.89e4 | 1.77e4 |
-| sumCoCase     |   1.69e4 | 1.79e4 |    1.69e4 |        1.62e4 |   1.68e1 |   1.63e4 | 1.65e4 |
-| sumCoGo       |   1.90e4 | 1.92e4 |    1.91e4 |        1.87e4 |   1.69e1 |   1.87e4 | 1.87e4 |
-| sumF          |   1.22e4 | 1.05e4 |    1.22e4 |        1.22e4 |   1.74e1 |   1.04e4 | 1.23e4 |
-| sumFlip       |   1.23e4 | 1.06e4 |    1.22e4 |        1.24e4 |   1.69e1 |   1.52e4 | 1.21e4 |
-| sumFlipLazy   |   1.29e4 | 1.20e4 |    1.07e4 |        1.06e4 |   1.77e1 |   1.11e4 | 1.46e4 |
-| sumFoldr      |   1.91e4 | 1.93e4 |    1.92e4 |        1.87e4 |   1.72e1 |   1.87e4 | 1.87e4 |
-| sumFuse       |   1.35e3 | 1.35e3 |    1.35e3 |        1.35e3 |   1.92e1 |   3.15e3 | 1.35e3 |
-| sumFuseFoldl' |   1.35e3 | 1.35e3 |    1.35e3 |        1.35e3 |   1.92e1 |   1.37e3 | 1.35e3 |
-| sumFuseFoldr  |   8.64e3 | 9.59e3 |    9.04e3 |        8.84e3 |   1.92e1 |   8.68e3 | 8.73e3 |
-| sumFusePoly   |   2.04e3 | 1.97e3 |    1.97e3 |        1.98e3 |   1.92e1 |   1.97e3 | 1.97e3 |
-| sumLambda     |   1.11e4 | 1.12e4 |    1.13e4 |        1.13e4 |   1.77e1 |   1.12e4 | 1.14e4 |
-| sumMono       |   1.12e4 | 1.12e4 |    1.11e4 |        1.10e4 |   1.70e1 |   1.17e4 | 1.12e4 |
-| sumPoly       |   1.10e4 | 1.13e4 |    1.12e4 |        1.11e4 |   1.84e1 |   1.10e4 | 1.85e4 |
-| sumSum        |   1.26e4 | 1.12e4 |    1.28e4 |        1.24e4 |   1.75e1 |   1.13e4 | 1.25e4 |
-| sumTail       |   1.07e4 | 1.15e4 |    1.12e4 |        1.08e4 |   1.74e1 |   1.12e4 | 1.08e4 |
-| sumTailLazy   |   1.16e4 | 1.11e4 |    1.17e4 |        1.19e4 |   1.72e1 |   1.10e4 | 1.18e4 |
+| sumAux        |   2.77e4 | 1.71e4 |    2.91e4 |        2.78e4 |   1.81e1 |   1.56e4 | 2.75e4 |
+| sumCata       |   1.84e4 | 1.86e4 |    1.87e4 |        1.85e4 |   1.81e1 |   1.84e4 | 1.84e4 |
+| sumCo         |   1.78e4 | 2.39e4 |    1.74e4 |        1.74e4 |   2.05e1 |   1.77e4 | 1.81e4 |
+| sumCoCase     |   1.56e4 | 1.77e4 |    1.62e4 |        1.57e4 |   1.84e1 |   1.61e4 | 1.55e4 |
+| sumCoGo       |   1.60e4 | 1.74e4 |    1.71e4 |        1.58e4 |   1.88e1 |   1.76e4 | 1.64e4 |
+| sumF          |   1.10e4 | 1.04e4 |    1.10e4 |        1.09e4 |   1.82e1 |   1.05e4 | 1.10e4 |
+| sumFlip       |   1.19e4 | 1.09e4 |    1.40e4 |        1.22e4 |   1.66e1 |   1.19e4 | 1.20e4 |
+| sumFlipLazy   |   1.27e4 | 1.19e4 |    1.05e4 |        1.05e4 |   1.90e1 |   1.05e4 | 1.50e4 |
+| sumFoldr      |   1.84e4 | 1.87e4 |    1.86e4 |        1.84e4 |   1.71e1 |   1.83e4 | 1.84e4 |
+| sumFuse       |   1.96e3 | 1.96e3 |    1.96e3 |        1.95e3 |   1.68e1 |   3.25e3 | 1.95e3 |
+| sumFuseFoldl' |   1.96e3 | 1.96e3 |    1.96e3 |        1.95e3 |   1.73e1 |   1.95e3 | 1.96e3 |
+| sumFuseFoldr  |   9.61e3 | 1.06e4 |    9.88e3 |        9.60e3 |   1.63e1 |   9.67e3 | 9.63e3 |
+| sumFusePoly   |   1.41e3 | 1.40e3 |    1.39e3 |        1.41e3 |   1.69e1 |   1.40e3 | 1.40e3 |
+| sumLambda     |   1.13e4 | 1.11e4 |    1.11e4 |        1.12e4 |   1.80e1 |   1.11e4 | 1.12e4 |
+| sumMono       |   1.18e4 | 1.11e4 |    1.18e4 |        1.18e4 |   1.82e1 |   1.13e4 | 1.18e4 |
+| sumPoly       |   1.10e4 | 1.11e4 |    1.10e4 |        1.11e4 |   1.87e1 |   1.09e4 | 1.68e4 |
+| sumSum        |   1.22e4 | 1.11e4 |    1.26e4 |        1.22e4 |   1.85e1 |   1.11e4 | 1.29e4 |
+| sumTail       |   1.10e4 | 1.14e4 |    1.15e4 |        1.10e4 |   1.72e1 |   1.15e4 | 1.11e4 |
+| sumTailLazy   |   5.95e3 | 1.17e4 |    5.75e3 |        5.75e3 |   1.93e1 |   1.12e4 | 5.99e3 |
 :end:
 
 
@@ -385,25 +394,25 @@ perf-explore -n 100000 -l 1000 --ticks
 #+RESULTS:
 :results:
 |               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
-| sumAux        |   2.00e4 | 1.93e4 |    2.08e4 |        1.94e4 |   1.70e1 |   1.93e4 | 1.94e4 |
-| sumCata       |   2.08e4 | 2.05e4 |    2.07e4 |        2.11e4 |   1.70e1 |   2.27e4 | 2.12e4 |
-| sumCo         |   1.93e4 | 1.89e4 |    1.88e4 |        1.89e4 |   1.69e1 |   1.88e4 | 1.88e4 |
-| sumCoCase     |   1.68e4 | 1.84e4 |    1.62e4 |        1.65e4 |   1.69e1 |   1.84e4 | 1.62e4 |
-| sumCoGo       |   2.15e4 | 2.09e4 |    2.09e4 |        2.09e4 |   1.70e1 |   2.21e4 | 2.09e4 |
-| sumF          |   9.48e3 | 8.98e3 |    8.71e3 |        9.14e3 |   1.69e1 |   8.69e3 | 9.00e3 |
-| sumFlip       |   8.61e3 | 8.69e3 |    8.62e3 |        8.60e3 |   1.74e1 |   9.83e3 | 8.61e3 |
-| sumFlipLazy   |   5.67e3 | 8.94e3 |    9.18e3 |        5.95e3 |   1.69e1 |   8.61e3 | 5.55e3 |
-| sumFoldr      |   2.15e4 | 2.14e4 |    2.09e4 |        2.10e4 |   1.71e1 |   2.13e4 | 2.10e4 |
-| sumFuse       |   1.36e3 | 1.61e3 |    1.50e3 |        1.38e3 |   1.95e1 |   1.43e3 | 1.37e3 |
-| sumFuseFoldl' |   1.36e3 | 1.60e3 |    1.37e3 |        1.56e3 |   1.95e1 |   1.41e3 | 1.38e3 |
-| sumFuseFoldr  |   1.15e4 | 1.12e4 |    1.13e4 |        1.13e4 |   1.93e1 |   1.16e4 | 1.34e4 |
-| sumFusePoly   |   2.19e3 | 2.25e3 |    2.22e3 |        2.00e3 |   1.93e1 |   2.04e3 | 2.24e3 |
-| sumLambda     |   8.82e3 | 9.05e3 |    8.58e3 |        8.74e3 |   1.71e1 |   8.58e3 | 8.82e3 |
-| sumMono       |   5.68e3 | 6.06e3 |    5.69e3 |        5.90e3 |   1.79e1 |   5.96e3 | 5.72e3 |
-| sumPoly       |   1.15e4 | 8.97e3 |    9.40e3 |        8.98e3 |   1.70e1 |   9.14e3 | 9.02e3 |
-| sumSum        |   8.04e3 | 8.92e3 |    8.24e3 |        8.03e3 |   1.69e1 |   8.38e3 | 8.09e3 |
-| sumTail       |   5.84e3 | 6.10e3 |    5.83e3 |        5.84e3 |   1.69e1 |   8.09e3 | 5.96e3 |
-| sumTailLazy   |   1.20e4 | 1.04e4 |    1.27e4 |        1.21e4 |   1.69e1 |   1.21e4 | 1.21e4 |
+| sumAux        |   1.83e4 | 1.83e4 |    1.81e4 |        1.81e4 |   1.75e1 |   1.81e4 | 1.86e4 |
+| sumCata       |   2.16e4 | 2.16e4 |    2.08e4 |        2.09e4 |   1.75e1 |   2.11e4 | 2.09e4 |
+| sumCo         |   1.83e4 | 1.82e4 |    1.82e4 |        1.88e4 |   1.74e1 |   1.81e4 | 1.81e4 |
+| sumCoCase     |   1.59e4 | 1.87e4 |    1.54e4 |        1.57e4 |   1.76e1 |   1.83e4 | 1.54e4 |
+| sumCoGo       |   2.06e4 | 2.07e4 |    2.07e4 |        2.11e4 |   1.74e1 |   2.07e4 | 2.12e4 |
+| sumF          |   8.87e3 | 9.05e3 |    8.61e3 |        8.73e3 |   1.73e1 |   8.66e3 | 8.84e3 |
+| sumFlip       |   8.57e3 | 8.66e3 |    8.49e3 |        8.65e3 |   1.74e1 |   8.70e3 | 8.80e3 |
+| sumFlipLazy   |   5.60e3 | 8.68e3 |    8.74e3 |        5.91e3 |   1.75e1 |   8.91e3 | 5.53e3 |
+| sumFoldr      |   2.14e4 | 2.10e4 |    2.08e4 |        2.08e4 |   1.75e1 |   2.09e4 | 2.12e4 |
+| sumFuse       |   2.23e3 | 2.13e3 |    2.11e3 |        2.02e3 |   1.69e1 |   1.98e3 | 2.15e3 |
+| sumFuseFoldl' |   2.14e3 | 2.03e3 |    2.20e3 |        1.97e3 |   1.76e1 |   2.22e3 | 2.14e3 |
+| sumFuseFoldr  |   1.22e4 | 1.28e4 |    1.23e4 |        1.28e4 |   1.69e1 |   1.26e4 | 1.23e4 |
+| sumFusePoly   |   1.67e3 | 1.47e3 |    1.46e3 |        1.47e3 |   1.71e1 |   1.42e3 | 1.65e3 |
+| sumLambda     |   9.04e3 | 8.75e3 |    8.70e3 |        8.80e3 |   1.77e1 |   8.70e3 | 9.09e3 |
+| sumMono       |   5.97e3 | 5.96e3 |    5.82e3 |        6.26e3 |   1.85e1 |   5.69e3 | 5.91e3 |
+| sumPoly       |   8.74e3 | 8.85e3 |    8.70e3 |        8.73e3 |   1.76e1 |   8.64e3 | 8.76e3 |
+| sumSum        |   5.90e3 | 6.36e3 |    5.78e3 |        5.78e3 |   1.81e1 |   6.05e3 | 5.88e3 |
+| sumTail       |   1.21e4 | 6.48e3 |    5.85e3 |        1.19e4 |   1.76e1 |   5.86e3 | 1.22e4 |
+| sumTailLazy   |   6.05e3 | 8.40e3 |    6.02e3 |        5.74e3 |   1.75e1 |   5.91e3 | 5.94e3 |
 :end:
 
 **** short list
@@ -414,25 +423,25 @@ perf-explore -n 10000 -l 10 --best --ticks
 #+RESULTS:
 :results:
 |               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
-| sumAux        |   9.30e1 | 9.41e1 |    9.40e1 |        9.34e1 |   1.50e1 |   9.55e1 | 9.29e1 |
-| sumCata       |   9.13e1 | 8.82e1 |    9.13e1 |        9.13e1 |   1.50e1 |   9.13e1 | 8.96e1 |
-| sumCo         |   9.52e1 | 9.44e1 |    9.50e1 |        9.54e1 |   1.51e1 |   9.53e1 | 9.20e1 |
-| sumCoCase     |   9.56e1 | 9.34e1 |    9.46e1 |        9.54e1 |   1.51e1 |   9.51e1 | 9.19e1 |
-| sumCoGo       |   9.13e1 | 8.81e1 |    9.15e1 |        9.13e1 |   1.50e1 |   9.14e1 | 8.95e1 |
-| sumF          |   6.36e1 | 6.54e1 |    6.71e1 |        6.59e1 |   1.50e1 |   6.54e1 | 6.37e1 |
-| sumFlip       |   6.53e1 | 6.59e1 |    6.71e1 |        6.56e1 |   1.51e1 |   6.57e1 | 6.48e1 |
-| sumFlipLazy   |   6.59e1 | 6.60e1 |    6.67e1 |        6.74e1 |   1.50e1 |   6.54e1 | 6.43e1 |
-| sumFoldr      |   9.13e1 | 8.81e1 |    9.13e1 |        9.11e1 |   1.47e1 |   9.13e1 | 8.93e1 |
-| sumFuse       |   2.36e1 | 2.36e1 |    2.48e1 |        2.54e1 |   1.71e1 |   2.63e1 | 2.57e1 |
-| sumFuseFoldl' |   2.37e1 | 2.36e1 |    2.52e1 |        2.56e1 |   1.71e1 |   2.62e1 | 2.54e1 |
-| sumFuseFoldr  |   4.35e1 | 4.44e1 |    4.37e1 |        4.92e1 |   1.71e1 |   4.79e1 | 4.92e1 |
-| sumFusePoly   |   4.78e1 | 4.95e1 |    4.78e1 |        5.11e1 |   1.71e1 |   5.02e1 | 5.10e1 |
-| sumLambda     |   8.58e1 | 8.73e1 |    8.57e1 |        8.69e1 |   1.50e1 |   8.58e1 | 8.36e1 |
-| sumMono       |   7.31e1 | 7.15e1 |    7.32e1 |        7.32e1 |   1.50e1 |   7.26e1 | 7.10e1 |
-| sumPoly       |   8.74e1 | 8.71e1 |    8.57e1 |        8.58e1 |   1.49e1 |   8.54e1 | 8.35e1 |
-| sumSum        |   8.55e1 | 8.68e1 |    8.58e1 |        8.66e1 |   1.50e1 |   8.63e1 | 8.33e1 |
-| sumTail       |   7.55e1 | 7.53e1 |    7.60e1 |        7.72e1 |   1.50e1 |   7.64e1 | 7.52e1 |
-| sumTailLazy   |   7.94e1 | 7.76e1 |    7.92e1 |        7.85e1 |   1.50e1 |   7.85e1 | 7.57e1 |
+| sumAux        |   8.94e1 | 9.30e1 |    9.15e1 |        8.97e1 |   1.54e1 |   9.14e1 | 8.96e1 |
+| sumCata       |   9.74e1 | 9.79e1 |    9.78e1 |        9.81e1 |   1.55e1 |   9.77e1 | 9.62e1 |
+| sumCo         |   9.11e1 | 1.16e2 |    9.15e1 |        9.13e1 |   1.51e1 |   9.11e1 | 8.92e1 |
+| sumCoCase     |   9.05e1 | 9.21e1 |    9.18e1 |        9.18e1 |   1.53e1 |   8.99e1 | 8.90e1 |
+| sumCoGo       |   9.76e1 | 9.90e1 |    9.76e1 |        9.84e1 |   1.54e1 |   9.76e1 | 9.70e1 |
+| sumF          |   7.54e1 | 7.94e1 |    7.75e1 |        7.78e1 |   1.53e1 |   7.73e1 | 7.56e1 |
+| sumFlip       |   7.72e1 | 8.07e1 |    7.75e1 |        7.75e1 |   1.51e1 |   7.78e1 | 7.55e1 |
+| sumFlipLazy   |   7.74e1 | 7.93e1 |    7.72e1 |        7.78e1 |   1.55e1 |   7.62e1 | 7.55e1 |
+| sumFoldr      |   9.75e1 | 9.88e1 |    9.70e1 |        9.77e1 |   1.52e1 |   9.78e1 | 9.71e1 |
+| sumFuse       |   3.59e1 | 3.53e1 |    3.52e1 |        3.22e1 |   1.49e1 |   3.33e1 | 3.22e1 |
+| sumFuseFoldl' |   3.52e1 | 3.50e1 |    3.52e1 |        3.30e1 |   1.50e1 |   3.33e1 | 3.27e1 |
+| sumFuseFoldr  |   5.00e1 | 4.99e1 |    5.06e1 |        4.91e1 |   1.50e1 |   4.91e1 | 4.94e1 |
+| sumFusePoly   |   4.42e1 | 4.39e1 |    4.36e1 |        4.19e1 |   1.51e1 |   4.15e1 | 4.31e1 |
+| sumLambda     |   7.93e1 | 8.10e1 |    7.94e1 |        7.93e1 |   1.54e1 |   7.92e1 | 7.73e1 |
+| sumMono       |   6.33e1 | 6.56e1 |    6.36e1 |        6.36e1 |   1.53e1 |   6.35e1 | 6.31e1 |
+| sumPoly       |   7.93e1 | 8.01e1 |    7.92e1 |        7.93e1 |   1.53e1 |   7.93e1 | 7.73e1 |
+| sumSum        |   7.93e1 | 7.98e1 |    7.95e1 |        7.95e1 |   1.52e1 |   7.93e1 | 7.73e1 |
+| sumTail       |   6.75e1 | 6.99e1 |    6.80e1 |        6.78e1 |   1.56e1 |   6.70e1 | 6.72e1 |
+| sumTailLazy   |   6.80e1 | 7.18e1 |    6.80e1 |        6.89e1 |   1.52e1 |   6.85e1 | 6.72e1 |
 :end:
 
 **** long list
@@ -443,25 +452,25 @@ perf-explore -n 100 -l 100000 --best --ticks
 #+RESULTS:
 :results:
 |               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
-| sumAux        |   2.31e6 | 2.34e6 |    2.70e6 |        2.30e6 |   1.52e1 |   3.15e6 | 4.29e6 |
-| sumCata       |   2.80e6 | 2.76e6 |    5.39e6 |        3.64e6 |   1.50e1 |   2.76e6 | 2.75e6 |
-| sumCo         |   2.95e6 | 2.30e6 |    4.36e6 |        4.84e6 |   1.49e1 |   2.40e6 | 2.97e6 |
-| sumCoCase     |   2.31e6 | 2.30e6 |    2.32e6 |        2.33e6 |   1.51e1 |   2.29e6 | 2.28e6 |
-| sumCoGo       |   3.55e6 | 2.76e6 |    2.75e6 |        2.77e6 |   1.47e1 |   3.12e6 | 2.79e6 |
-| sumF          |   7.76e5 | 7.79e5 |    7.82e5 |        7.80e5 |   1.51e1 |   7.77e5 | 6.76e5 |
-| sumFlip       |   7.47e5 | 7.46e5 |    7.44e5 |        7.48e5 |   1.51e1 |   7.44e5 | 7.46e5 |
-| sumFlipLazy   |   1.26e6 | 1.27e6 |    1.26e6 |        1.27e6 |   1.48e1 |   1.26e6 | 1.26e6 |
-| sumFoldr      |   2.77e6 | 2.92e6 |    3.58e6 |        3.16e6 |   1.50e1 |   2.79e6 | 2.76e6 |
-| sumFuse       |   1.32e5 | 1.32e5 |    1.32e5 |        1.32e5 |   1.59e1 |   1.32e5 | 1.32e5 |
-| sumFuseFoldl' |   1.32e5 | 1.32e5 |    1.32e5 |        1.32e5 |   1.68e1 |   1.32e5 | 1.32e5 |
-| sumFuseFoldr  |   1.55e6 | 1.55e6 |    1.59e6 |        1.54e6 |   1.70e1 |   1.54e6 | 1.54e6 |
-| sumFusePoly   |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.71e1 |   1.92e5 | 1.92e5 |
-| sumLambda     |   8.21e5 | 8.26e5 |    8.23e5 |        8.28e5 |   1.52e1 |   8.31e5 | 8.09e5 |
-| sumMono       |   7.78e5 | 7.80e5 |    7.82e5 |        7.79e5 |   1.50e1 |   7.83e5 | 7.79e5 |
-| sumPoly       |   8.46e5 | 8.41e5 |    8.48e5 |        8.37e5 |   1.45e1 |   8.41e5 | 8.48e5 |
-| sumSum        |   7.80e5 | 7.81e5 |    7.77e5 |        7.74e5 |   1.47e1 |   7.79e5 | 7.76e5 |
-| sumTail       |   7.24e5 | 7.61e5 |    7.64e5 |        7.29e5 |   1.50e1 |   7.57e5 | 7.23e5 |
-| sumTailLazy   |   1.36e6 | 1.37e6 |    1.37e6 |        1.36e6 |   1.53e1 |   1.37e6 | 1.37e6 |
+| sumAux        |   2.26e6 | 2.28e6 |    2.28e6 |        2.25e6 |   1.68e1 |   2.31e6 | 2.26e6 |
+| sumCata       |   2.84e6 | 2.82e6 |    2.81e6 |        3.21e6 |   1.56e1 |   2.82e6 | 2.81e6 |
+| sumCo         |   2.26e6 | 2.27e6 |    5.02e6 |        2.27e6 |   1.66e1 |   2.28e6 | 2.28e6 |
+| sumCoCase     |   2.28e6 | 2.30e6 |    2.32e6 |        2.28e6 |   1.48e1 |   2.97e6 | 2.30e6 |
+| sumCoGo       |   2.84e6 | 2.80e6 |    2.84e6 |        2.85e6 |   1.51e1 |   2.81e6 | 2.81e6 |
+| sumF          |   7.76e5 | 7.78e5 |    7.80e5 |        7.81e5 |   1.51e1 |   9.76e5 | 7.05e5 |
+| sumFlip       |   7.48e5 | 9.04e5 |    7.46e5 |        7.43e5 |   1.68e1 |   7.48e5 | 7.44e5 |
+| sumFlipLazy   |   1.21e6 | 1.22e6 |    1.19e6 |        1.19e6 |   1.61e1 |   1.20e6 | 1.20e6 |
+| sumFoldr      |   3.63e6 | 2.87e6 |    3.25e6 |        2.81e6 |   1.45e1 |   5.89e6 | 2.81e6 |
+| sumFuse       |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.47e1 |   1.92e5 | 1.92e5 |
+| sumFuseFoldl' |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.52e1 |   1.92e5 | 1.92e5 |
+| sumFuseFoldr  |   1.68e6 | 1.64e6 |    1.65e6 |        1.65e6 |   1.50e1 |   1.65e6 | 1.65e6 |
+| sumFusePoly   |   1.32e5 | 1.28e5 |    1.28e5 |        1.28e5 |   1.48e1 |   1.32e5 | 1.28e5 |
+| sumLambda     |   7.90e5 | 8.01e5 |    7.93e5 |        7.92e5 |   1.57e1 |   7.93e5 | 7.92e5 |
+| sumMono       |   7.86e5 | 8.04e5 |    7.87e5 |        7.83e5 |   1.48e1 |   7.99e5 | 7.88e5 |
+| sumPoly       |   7.99e5 | 8.18e5 |    8.06e5 |        8.00e5 |   1.64e1 |   8.10e5 | 8.00e5 |
+| sumSum        |   7.82e5 | 7.92e5 |    7.85e5 |        7.82e5 |   1.66e1 |   7.88e5 | 7.87e5 |
+| sumTail       |   7.43e5 | 7.84e5 |    8.23e5 |        8.18e5 |   1.61e1 |   7.89e5 | 7.38e5 |
+| sumTailLazy   |   1.35e6 | 1.37e6 |    1.34e6 |        1.33e6 |   1.58e1 |   1.35e6 | 1.34e6 |
 :end:
 
 *** sums
@@ -471,27 +480,27 @@ perf-explore -n 1000 -l 1000 --sums
 #+end_src
 
 #+RESULTS:
-|   | label1        | label2 | results |
-|   | ---           | ---    |     --- |
-|   | sumAux        | time   | 17700.0 |
-|   | sumCata       | time   | 17900.0 |
-|   | sumCo         | time   | 22100.0 |
-|   | sumCoCase     | time   | 16800.0 |
-|   | sumCoGo       | time   | 33600.0 |
-|   | sumF          | time   | 17500.0 |
-|   | sumFlip       | time   | 27800.0 |
-|   | sumFlipLazy   | time   | 27000.0 |
-|   | sumFoldr      | time   | 22300.0 |
-|   | sumFuse       | time   |  1660.0 |
-|   | sumFuseFoldl' | time   |  1390.0 |
-|   | sumFuseFoldr  | time   |  3940.0 |
-|   | sumFusePoly   | time   |  2140.0 |
-|   | sumLambda     | time   | 26000.0 |
-|   | sumMono       | time   | 14300.0 |
-|   | sumPoly       | time   | 22000.0 |
-|   | sumSum        | time   | 14200.0 |
-|   | sumTail       | time   | 35600.0 |
-|   | sumTailLazy   | time   | 27300.0 |
+| label1        | label2 | results |
+|               |        |         |
+| sumAux        | time   | 16200.0 |
+| sumCata       | time   | 15600.0 |
+| sumCo         | time   | 19100.0 |
+| sumCoCase     | time   | 16300.0 |
+| sumCoGo       | time   | 15700.0 |
+| sumF          | time   | 10500.0 |
+| sumFlip       | time   | 10500.0 |
+| sumFlipLazy   | time   |  6130.0 |
+| sumFoldr      | time   | 16900.0 |
+| sumFuse       | time   |  1950.0 |
+| sumFuseFoldl' | time   |  1950.0 |
+| sumFuseFoldr  | time   | 14600.0 |
+| sumFusePoly   | time   |  1400.0 |
+| sumLambda     | time   |  9780.0 |
+| sumMono       | time   | 11200.0 |
+| sumPoly       | time   | 11500.0 |
+| sumSum        | time   | 11100.0 |
+| sumTail       | time   | 11000.0 |
+| sumTailLazy   | time   | 11100.0 |
 
 *** lengths
 
@@ -500,19 +509,19 @@ perf-explore -n 1000 -l 1000 --lengths
 #+end_src
 
 #+RESULTS:
-|   | label1           | label2 | results |
-|   | ---              | ---    |     --- |
-|   | lengthAux        | time   | 20300.0 |
-|   | lengthCo         | time   | 19100.0 |
-|   | lengthCoCase     | time   | 19700.0 |
-|   | lengthF          | time   | 17400.0 |
-|   | lengthFMono      | time   | 17000.0 |
-|   | lengthFlip       | time   | 23500.0 |
-|   | lengthFlipLazy   | time   | 23600.0 |
-|   | lengthFoldr      | time   | 18100.0 |
-|   | lengthFoldrConst | time   | 18000.0 |
-|   | lengthTail       | time   | 29500.0 |
-|   | lengthTailLazy   | time   | 24000.0 |
+| label1           | label2 | results |
+|                  |        |         |
+| lengthAux        | time   | 11000.0 |
+| lengthCo         | time   | 11100.0 |
+| lengthCoCase     | time   | 10500.0 |
+| lengthF          | time   |  9540.0 |
+| lengthFMono      | time   |  9190.0 |
+| lengthFlip       | time   |  9770.0 |
+| lengthFlipLazy   | time   |  4830.0 |
+| lengthFoldr      | time   | 10100.0 |
+| lengthFoldrConst | time   | 11100.0 |
+| lengthTail       | time   |  9830.0 |
+| lengthTailLazy   | time   |  9540.0 |
 
 ** Gauge
 
@@ -523,34 +532,34 @@ perf-explore -n 1000 -l 1000 --average --gauge
 #+RESULTS:
 #+begin_example
 sumFuse
-benchmarking function ... function                                 time                 583.5 ns
+benchmarking function ... function                                 time                 849.4 ns
 
-benchmarking function ... function                                 time                 583.5 ns
+benchmarking function ... function                                 time                 848.6 ns
 
 sum
-benchmarking function ... function                                 time                 3.691 μs
+benchmarking function ... function                                 time                 3.786 μs
 
-benchmarking function ... function                                 time                 3.645 μs
+benchmarking function ... function                                 time                 3.791 μs
 
 lengthF
-benchmarking function ... function                                 time                 1.871 μs
+benchmarking function ... function                                 time                 1.863 μs
 
-benchmarking function ... function                                 time                 1.874 μs
+benchmarking function ... function                                 time                 1.872 μs
 
 constFuse
-benchmarking function ... function                                 time                 293.0 ns
+benchmarking function ... function                                 time                 571.0 ns
 
-benchmarking function ... function                                 time                 299.8 ns
+benchmarking function ... function                                 time                 1.080 μs
 
 mapInc
-benchmarking function ... function                                 time                 9.618 ns
+benchmarking function ... function                                 time                 9.203 ns
 
-benchmarking function ... function                                 time                 10.65 μs
+benchmarking function ... function                                 time                 15.99 μs
 
 noop
-benchmarking function ... function                                 time                 5.254 ns
+benchmarking function ... function                                 time                 5.770 ns
 
-benchmarking function ... function                                 time                 5.249 ns
+benchmarking function ... function                                 time                 4.740 ns
 
 #+end_example
 
@@ -560,14 +569,14 @@ perf-explore --examples -n 10000 --averagesecs
 
 #+RESULTS:
 :results:
-| label1    | label2 | results |
-|-----------+--------+---------|
-| constFuse | time   | 4.30e-7 |
-| lengthF   | time   | 7.24e-6 |
-| mapInc    | time   | 8.80e-8 |
-| noop      | time   | 3.12e-8 |
-| sum       | time   | 5.95e-6 |
-| sumFuse   | time   | 1.95e-6 |
+label1              label2              results
+
+constFuse           time                5.25e-7
+lengthF             time                2.01e-6
+mapInc              time                8.65e-9
+noop                time                7.19e-9
+sum                 time                2.52e-6
+sumFuse             time                7.91e-7
 :end:
 
 ** Space
@@ -586,54 +595,22 @@ perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 
 #+RESULTS:
 :results:
-| label1 | label2       | results |
-|--------+--------------+---------|
-| sum    | MaxMem       |       0 |
-| sum    | allocated    |  5.12e6 |
-| sum    | gcLiveBytes  |       0 |
-| sum    | gcollects    |       0 |
-| sum    | maxLiveBytes |       0 |
-:end:
+label1              label2              results
 
-*** spacetime
-
-#+begin_src sh :results drawer :exports both
-perf-explore -n 10 -l 100000 --spacetime +RTS -T -RTS
-#+end_src
-
-#+RESULTS:
-:results:
-| label1 | label2       | results |
-|--------+--------------+---------|
-| sum    | MaxMem       |  1.57e5 |
-| sum    | allocated    |  7.21e6 |
-| sum    | gcLiveBytes  |  1.50e5 |
-| sum    | gcollects    |  1.52e5 |
-| sum    | maxLiveBytes |  1.56e5 |
-| sum    | time         |  1.47e5 |
-:end:
-
-** Perf.Degrade
-
-#+begin_src sh :results drawer :exports both
-perf-explore -n 1000 -l 1000 --examples --check --record
-#+end_src
-
-#+RESULTS:
-:results:
-| constFuse | time | 1.72e3 | 1.00e3 | improvement |
-| lengthF   | time | 2.42e4 | 2.40e4 |                        |
-| mapInc    | time | 4.88e2 | 3.56e2 | improvement |
-| noop      | time | 4.80e1 | 7.00e1 | degraded    |
-| sum       | time | 3.15e4 | 2.72e4 | improvement |
-| sumFuse   | time | 1.63e3 | 1.62e3 |                        |
+sum                 MaxMem              1.05e6
+sum                 allocated           7.25e5
+sum                 gcLiveBytes         3.93e5
+sum                 gcollects           7.00e-1
+sum                 maxLiveBytes        3.93e5
 :end:
 
 ** Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
 
-** BigO
+** Perf.BigO
+
+Perf.BigO represents functionality to determine the complexity order for a computation.
 
 We could do a regression and minimise the error term, but we know that the largest run contains the most information; we would need to weight the simulations according to some heuristic.
 
@@ -654,9 +631,9 @@ res
 
 #+RESULTS:
 :
-: >  > [2723.1340382522158,3193.0,8273.0,92495.53333333334,931010.0]
-: > Order {factors = [0.0,0.0,0.0,0.0,93.101,0.0,0.0,0.0]}
-: [2630.0330382522156,2261.99,-1037.1000000000004,-605.4666666666599,0.0]
+: >  > [2713.0,2971.0,7283.0,78161.09090909091,970799.0]
+: > Order {factors = [0.0,0.0,0.0,10.540316218429874,0.0,0.0,0.0,0.0]}
+: [2702.45968378157,2728.30025,2429.005,5351.165909090923,0.0]
 
 
 #+begin_src haskell
@@ -664,7 +641,7 @@ estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
 #+end_src
 
 #+RESULTS:
-: Order {factors = [0.0,0.0,0.0,0.0,1.0852114021956238e-2,0.0,0.0,0.0]}
+: BigOrder {bigOrder = N1, bigFactor = 100.6291, bigConstant = 0.0}
 
 
 * spacetime debug
@@ -683,5 +660,5 @@ statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
 : ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
 :   :: Num a => StepMeasure IO [a]
 : > r1 :: Map.Map Text.Text [[Integer]]
-: fromList [([""],[3373.3333333333335,1957.0])]
+: fromList [([""],[0.0,0.0,0.0,0.0,0.0,15500.0])]
 : statD StatAverage :: [Double] -> Double

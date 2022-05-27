@@ -12,9 +12,7 @@
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 module Perf.Time
-  ( -- * Usage
-    -- $usage
-    rdtsc,
+  (
     tick_,
     warmup,
     tick,
@@ -44,14 +42,7 @@ import System.CPUTime
 import System.CPUTime.Rdtsc
 import Prelude
 
--- $usage
--- > import Perf.Time
--- > import Data.Foldable (foldl')
--- > let r = 10000
--- > let l = 1000
--- > let f x = foldl' (+) 0 [1 .. x]
--- > first median <$> ticks r f a
-
+-- | Clock count.
 newtype Cycles = Cycles {word :: Word64}
   deriving (Show, Read, Eq, Ord, Num, Real, Enum, Integral)
 
@@ -72,7 +63,7 @@ tick_ = do
 warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
 
--- | `tick f a`
+-- | /tick f a/
 --
 -- - strictly evaluates f and a to WHNF
 -- - starts the cycle counter
@@ -87,7 +78,7 @@ tick !f !a = do
   pure (Cycles (t' - t), a')
 {-# INLINEABLE tick #-}
 
--- | `tickWHNF f a`
+-- | /tickWHNF f a/
 --
 -- - starts the cycle counter
 -- - strictly evaluates f a to WHNF (this may also kick off thunk evaluation in f or a which will also be captured in the cycle count)
@@ -101,7 +92,7 @@ tickWHNF f a = do
   pure (Cycles (t' - t), a')
 {-# INLINEABLE tickWHNF #-}
 
--- | `tickLazy f a`
+-- | /tickLazy f a/
 --
 -- - starts the cycle counter
 -- - lazily evaluates f a
@@ -115,7 +106,7 @@ tickLazy f a = do
   pure (Cycles (t' - t), a')
 {-# INLINEABLE tickLazy #-}
 
--- | `tickForce f a`
+-- | /tickForce f a/
 --
 -- - deeply evaluates f and a,
 -- - starts the cycle counter
@@ -130,7 +121,7 @@ tickForce (force -> !f) (force -> !a) = do
   pure (Cycles (t' - t), a')
 {-# INLINEABLE tickForce #-}
 
--- | `tickForceArgs f a`
+-- | /tickForceArgs f a/
 --
 -- - deeply evaluates f and a,
 -- - starts the cycle counter
@@ -145,7 +136,7 @@ tickForceArgs (force -> !f) (force -> !a) = do
   pure (Cycles (t' - t), a')
 {-# INLINEABLE tickForceArgs #-}
 
--- | measures an `IO a`
+-- | measures an /IO a/
 tickIO :: IO a -> IO (Cycles, a)
 tickIO a = do
   !t <- rdtsc
@@ -168,6 +159,8 @@ ticksIO :: Int -> IO a -> IO ([Cycles], a)
 ticksIO = multiM tickIO
 {-# INLINEABLE ticksIO #-}
 
+-- | tick as a 'StepMeasure'
+--
 stepTime :: StepMeasure IO Cycles
 stepTime = StepMeasure start stop
   where
@@ -198,10 +191,12 @@ fromNominalDiffTime t = fromInteger i * 1e-12
   where
     (MkFixed i) = nominalDiffTimeToSeconds t
 
+-- | tick as a 'Measure'
 time :: Measure IO Cycles
 time = Measure tick tickIO
 {-# INLINEABLE time #-}
 
+-- | tick as a multi-Measure
 times :: Int -> Measure IO [Cycles]
 times n = Measure (ticks n) (ticksIO n)
 {-# INLINEABLE times #-}

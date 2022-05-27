@@ -5,14 +5,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | BigO numbers
+-- | Order of complexity calculations.
 --
--- https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N))%20etc.
+-- <https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N))%20etc What is Order of Complexity> .
 --
--- https://donsbot.wordpress.com/2008/06/04/haskell-as-fast-as-c-working-at-a-high-altitude-for-low-level-performance/
+-- <https://donsbot.wordpress.com/2008/06/04/haskell-as-fast-as-c-working-at-a-high-altitude-for-low-level-performance/ donsbot blog>
 --
--- https://www.fpcomplete.com/haskell/tutorial/profiling/
--- https://www.reddit.com/r/haskell/comments/nl0rkl/looking_for_good_rules_of_thumbs_on_what_haskell/
+-- <https://www.fpcomplete.com/haskell/tutorial/profiling/ profiling>
+--
+-- <https://www.reddit.com/r/haskell/comments/nl0rkl/looking_for_good_rules_of_thumbs_on_what_haskell/ rules of thumb>
 module Perf.BigO
   ( O (..),
     olist,
@@ -263,7 +264,7 @@ estOs ns ms = go [] ns ms
 
 -- | performance curve for a Measure.
 mcurve :: (Semigroup a) => Measure IO a -> (Int -> b) -> [Int] -> IO [a]
-mcurve m f ns = sequence $ (\n -> (Map.! "") <$> execPerfT m (f |$| n)) <$> ns
+mcurve m f ns = mapM (\n -> (Map.! "") <$> execPerfT m (f |$| n)) ns
 
 -- | repetitive Double Meaure performance curve.
 dcurve :: (Int -> Measure IO [Double]) -> StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]

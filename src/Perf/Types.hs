@@ -9,21 +9,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | == Introduction
---
--- 'perf' provides high-resolution measurements of the runtime of Haskell functions. It does so by reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture.
---
--- With 'perf' the user may measure both pure and effectful functions, as shown in the Example below. Every piece of code the user may want to profile is passed as an argument to the 'perf' function, along with a text label (that will be displayed in the final summary) and the measurement function (e.g. 'cycles', 'cputime' or 'realtime').
---
--- 'PerfT' is a monad transformer designed to collect performance information.
--- The transformer can be used to add performance measurent to existing code using 'Measure's.
---
---
--- Running the code produces a tuple of the original computation results, and a Map of performance measurements that were specified.  Indicative results:
---
--- == Note on RDTSC
---
--- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and fluctuations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
+-- | Abstract types of performance measurement.
 module Perf.Types
   ( Measure (..),
     repeated,
@@ -35,7 +21,7 @@ module Perf.Types
     multi,
     multiM,
 
-    -- * applicants
+    -- * function application
     fap,
     afap,
     ffap,
@@ -66,6 +52,41 @@ import Data.String
 import Data.Text (Text)
 import Prelude
 
+
+-- | Abstraction of a performance measurement within a monadic context.
+--
+-- - measure applies a function to a value, returning a tuple of the performance measure, and the computation result.
+-- - measureM evaluates a monadic value and returns a performance-result tuple.
+--
+data Measure m t = Measure
+  { measure :: forall a b. (a -> b) -> a -> m (t, b),
+    measureM :: forall a. m a -> m (t, a)
+  }
+
+instance (Functor m) => Functor (Measure m) where
+  fmap f (Measure m n) =
+    Measure
+      (\f' a' -> fmap (first f) (m f' a'))
+      (fmap (first f) . n)
+
+-- | An inefficient application that runs the inner action twice.
+instance (Applicative m) => Applicative (Measure m) where
+  pure t = Measure (\f a -> pure (t, f a)) (\a -> (t,) <$> a)
+  (Measure mf nf) <*> (Measure mt nt) =
+    Measure
+      (\f a -> (\(nf', fa') (t', _) -> (nf' t', fa')) <$> mf f a <*> mt f a)
+      (\a -> (\(nf', a') (t', _) -> (nf' t', a')) <$> nf a <*> nt a)
+
+-- | Convert a Measure into a multi measure.
+repeated :: (Applicative m) => Int -> Measure m t -> Measure m [t]
+repeated n (Measure p m) =
+  Measure
+    (\f a -> fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (p f a)))
+    (fmap (\xs -> (fmap fst xs, snd (head xs))) . replicateM n . m)
+{-# INLINEABLE repeated #-}
+
+-- | Abstraction of a performance measurement with a pre and a post step wrapping the computation.
+--
 data StepMeasure m t = forall i. StepMeasure {pre :: m i, post :: i -> m t}
 
 instance (Functor m) => Functor (StepMeasure m) where
@@ -76,10 +97,12 @@ instance (Applicative m) => Applicative (StepMeasure m) where
   (<*>) (StepMeasure fstart fstop) (StepMeasure start stop) =
     StepMeasure ((,) <$> fstart <*> start) (\(fi, i) -> fstop fi <*> stop i)
 
+-- | Convert a StepMeasure into a Measure
 toMeasure :: (Monad m) => StepMeasure m t -> Measure m t
 toMeasure (StepMeasure pre' post') = Measure (step pre' post') (stepM pre' post')
 {-# INLINEABLE toMeasure #-}
 
+-- | Convert a StepMeasure into a Measure running the computation multiple times.
 toMeasureN :: (Monad m) => Int -> StepMeasure m t -> Measure m [t]
 toMeasureN n (StepMeasure pre' post') = Measure (multi (step pre' post') n) (multiM (stepM pre' post') n)
 {-# INLINEABLE toMeasureN #-}
@@ -102,6 +125,7 @@ stepM pre' post' a = do
   pure (t, ma)
 {-# INLINEABLE stepM #-}
 
+-- | Multiple measurement
 multi :: Monad m => ((a -> b) -> a -> m (t, b)) -> Int -> (a -> b) -> a -> m ([t], b)
 multi action n !f !a =
   fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action f a))
@@ -113,39 +137,14 @@ multiM action n a =
   fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action a))
 {-# INLINEABLE multiM #-}
 
-data Measure m t = Measure
-  { measure :: forall a b. (a -> b) -> a -> m (t, b),
-    measureM :: forall a. m a -> m (t, a)
-  }
-
-instance (Functor m) => Functor (Measure m) where
-  fmap f (Measure m n) =
-    Measure
-      (\f' a' -> fmap (first f) (m f' a'))
-      (fmap (first f) . n)
-
--- | An inefficient application that runs the inner action twice.
-instance (Applicative m) => Applicative (Measure m) where
-  pure t = Measure (\f a -> pure (t, f a)) (\a -> (t,) <$> a)
-  (Measure mf nf) <*> (Measure mt nt) =
-    Measure
-      (\f a -> (\(nf', fa') (t', _) -> (nf' t', fa')) <$> mf f a <*> mt f a)
-      (\a -> (\(nf', a') (t', _) -> (nf' t', a')) <$> nf a <*> nt a)
-
-repeated :: (Applicative m) => Int -> Measure m t -> Measure m [t]
-repeated n (Measure p m) =
-  Measure
-    (\f a -> fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (p f a)))
-    (fmap (\xs -> (fmap fst xs, snd (head xs))) . replicateM n . m)
-{-# INLINEABLE repeated #-}
-
--- | Performance measurement transformer
+-- | Performance measurement transformer storing a 'Measure' and a map of named results.
+--
 newtype PerfT m t a = PerfT
   { measurePerf :: StateT (Measure m t, Map.Map Text t) m a
   }
   deriving (Functor, Applicative, Monad)
 
--- | The obligatory transformer over Identity
+-- | The transformer over Identity
 type Perf t a = PerfT Identity t a
 
 instance (MonadIO m) => MonadIO (PerfT m t) where
@@ -153,7 +152,7 @@ instance (MonadIO m) => MonadIO (PerfT m t) where
 
 -- | Lift an application to a PerfT m, providing a label and a 'Measure'.
 --
--- Measurements with the same label will be added
+-- Measurements with the same label will be mappended
 fap :: (MonadIO m, Semigroup t) => Text -> (a -> b) -> a -> PerfT m t b
 fap label f a =
   PerfT $ do

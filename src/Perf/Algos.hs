@@ -12,7 +12,7 @@
 
 -- | Algorithms and functions for testing purposes
 module Perf.Algos
-  ( -- * function application unifications
+  ( -- * command-line options
     Example (..),
     allExamples,
     parseExample,
@@ -95,6 +95,7 @@ import Perf.Types
 -- | Algorithm examples for testing
 data Example = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc | ExampleNoOp deriving (Eq, Show)
 
+-- | All the example algorithms.
 allExamples :: [Example]
 allExamples =
   [ ExampleSumFuse,
@@ -105,6 +106,7 @@ allExamples =
     ExampleNoOp
   ]
 
+-- | Parse command-line options for algorithm examples.
 parseExample :: Parser Example
 parseExample =
   flag' ExampleSumFuse (long "sumFuse" <> help "fused sum pipeline")
@@ -124,6 +126,7 @@ data ExamplePattern a
   | PatternMapInc Text ([Int] -> [Int]) [Int]
   | PatternNoOp Text (() -> ()) ()
 
+-- | Labels
 exampleLabel :: ExamplePattern a -> Text
 exampleLabel (PatternSumFuse l _ _) = l
 exampleLabel (PatternSum l _ _) = l
@@ -132,6 +135,7 @@ exampleLabel (PatternConstFuse l _ _) = l
 exampleLabel (PatternMapInc l _ _) = l
 exampleLabel (PatternNoOp l _ _) = l
 
+-- | Convert an 'Example' to an 'ExamplePattern'.
 examplePattern :: Example -> Int -> ExamplePattern Int
 examplePattern ExampleSumFuse l = PatternSumFuse "sumFuse" sumFuse l
 examplePattern ExampleSum l = PatternSum "sum" sum [1 .. l]
@@ -140,6 +144,7 @@ examplePattern ExampleConstFuse l = PatternConstFuse "constFuse" constFuse l
 examplePattern ExampleMapInc l = PatternMapInc "mapInc" mapInc [1 .. l]
 examplePattern ExampleNoOp _ = PatternNoOp "noop" (const ()) ()
 
+-- | Convert an 'ExamplePattern' to a 'PerfT'.
 testExample :: (Semigroup a, MonadIO m) => ExamplePattern Int -> PerfT m a ()
 testExample (PatternSumFuse label f a) = void $ fap label f a
 testExample (PatternSum label f a) = void $ fap label f a
@@ -148,6 +153,7 @@ testExample (PatternConstFuse label f a) = void $ fap label f a
 testExample (PatternMapInc label f a) = void $ fap label f a
 testExample (PatternNoOp label f a) = void $ fap label f a
 
+-- | run an example measurement.
 statExamples :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
 statExamples n l m = execPerfT (m n) $ mapM_ testExample ((`examplePattern` l) <$> allExamples)
 
@@ -158,6 +164,7 @@ data SumPattern a
   | SumPoly Text ((Num a) => [a] -> a) [a]
   | SumMono Text ([Int] -> Int) [Int]
 
+-- | All the sum algorithms.
 allSums :: Int -> [SumPattern Int]
 allSums l =
   [ SumPoly "sumTail" sumTail [1 .. l],
@@ -181,55 +188,64 @@ allSums l =
     SumFuse "sumFuseFoldr" sumFuseFoldr l
   ]
 
+-- | Convert an 'SumPattern' to a 'PerfT'.
 testSum :: (Semigroup a, MonadIO m) => SumPattern Int -> PerfT m a Int
 testSum (SumFuse label f a) = fap label f a
 testSum (SumFusePoly label f a) = fap label f a
 testSum (SumMono label f a) = fap label f a
 testSum (SumPoly label f a) = fap label f a
 
+-- | Run a sum algorithm measurement.
 statSums :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
 statSums n l m = execPerfT (m n) $ mapM_ testSum (allSums l)
 
--- various sums
+-- | tail resursive
 sumTail :: (Num a) => [a] -> a
 sumTail = go 0
   where
     go acc [] = acc
     go acc (x : xs) = go (x + acc) $! xs
 
+-- | lazy recursion.
 sumTailLazy :: (Num a) => [a] -> a
 sumTailLazy = go 0
   where
     go acc [] = acc
     go acc (x : xs) = go (x + acc) $! xs
 
+-- | With argument order flipped
 sumFlip :: (Num a) => [a] -> a
 sumFlip xs0 = go xs0 0
   where
     go [] s = s
     go (x : xs) s = go xs $! x + s
 
+-- | Lazy with argument order flipped.
 sumFlipLazy :: (Num a) => [a] -> a
 sumFlipLazy xs0 = go xs0 0
   where
     go [] s = s
     go (x : xs) s = go xs $ x + s
 
+-- | Co-routine style
 sumCo :: (Num a) => [a] -> a
 sumCo [] = 0
 sumCo (x : xs) = x + sumCo xs
 
+-- | Co-routine, go style
 sumCoGo :: (Num a) => [a] -> a
 sumCoGo = go
   where
     go [] = 0
     go (x : xs) = x + go xs
 
+-- | Co-routine, case-style
 sumCoCase :: (Num a) => [a] -> a
 sumCoCase = \case
   [] -> 0
   (x : xs) -> x + sumCoCase xs
 
+-- | Auxillary style.
 sumAux :: (Num a) => [a] -> a
 sumAux = \case
   [] -> b
@@ -238,41 +254,53 @@ sumAux = \case
     b = 0
     f x xs = x + xs
 
+-- | foldr style
 sumFoldr :: (Num a) => [a] -> a
 sumFoldr xs = foldr (+) 0 xs
 
+-- | cata style
 sumCata :: (Num a) => [a] -> a
 sumCata = cata $ \case
   Nil -> 0
   Cons x acc -> x + acc
 
+-- | sum
 sumSum :: (Num a) => [a] -> a
 sumSum xs = sum xs
 
+-- | Monomorphic sum
 sumMono :: [Int] -> Int
 sumMono xs = foldl' (+) 0 xs
 
+-- | Polymorphic sum
 sumPoly :: (Num a) => [a] -> a
 sumPoly xs = foldl' (+) 0 xs
 
+-- | Lambda-style sum
 sumLambda :: (Num a) => [a] -> a
 sumLambda = \xs -> foldl' (+) 0 xs
 
 sumF' :: (Num a) => a -> (a -> a) -> a -> a
 sumF' x r = \ !a -> r (x + a)
 
+-- | GHC-style foldr method.
 sumF :: (Num a) => [a] -> a
 sumF xs = foldr sumF' id xs 0
 
+-- | Fusion check
 sumFuse :: Int -> Int
 sumFuse x = sum [1 .. x]
 
+
+-- | Fusion under polymorph
 sumFusePoly :: (Enum a, Num a) => a -> a
 sumFusePoly x = sum [1 .. x]
 
+-- | foldl' fusion
 sumFuseFoldl' :: Int -> Int
 sumFuseFoldl' x = foldl' (+) 0 [1 .. x]
 
+-- | foldr fusion
 sumFuseFoldr :: Int -> Int
 sumFuseFoldr x = foldr (+) 0 [1 .. x]
 
@@ -281,6 +309,7 @@ data LengthPattern a
   = LengthPoly Text ([a] -> Int) [a]
   | LengthMono Text ([Int] -> Int) [Int]
 
+-- | All the length algorithms.
 allLengths :: Int -> [LengthPattern Int]
 allLengths l =
   [ LengthPoly "lengthTail" lengthTail [1 .. l],
@@ -296,46 +325,55 @@ allLengths l =
     LengthMono "lengthFMono" lengthFMono [1 .. l]
   ]
 
+-- | Convert an 'LengthPattern' to a 'PerfT'.
 testLength :: (Semigroup a, MonadIO m) => LengthPattern Int -> PerfT m a Int
 testLength (LengthMono label f a) = fap label f a
 testLength (LengthPoly label f a) = fap label f a
 
+-- | Run a lengths algorithm
 statLengths :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
 statLengths n l m = execPerfT (m n) $ mapM_ testLength (allLengths l)
 
+-- | tail resursive
 lengthTail :: [a] -> Int
 lengthTail xs0 = go 0 xs0
   where
     go s [] = s
     go s (_ : xs) = go (s + 1) $! xs
 
+-- | lazy recursion.
 lengthTailLazy :: [a] -> Int
 lengthTailLazy xs0 = go 0 xs0
   where
     go s [] = s
     go s (_ : xs) = go (s + 1) xs
 
+-- | With argument order flipped
 lengthFlip :: [a] -> Int
 lengthFlip xs0 = go xs0 0
   where
     go [] s = s
     go (_ : xs) s = go xs $! s + 1
 
+-- | Lazy with argument order flipped.
 lengthFlipLazy :: [a] -> Int
 lengthFlipLazy xs0 = go xs0 0
   where
     go [] s = s
     go (_ : xs) s = go xs $ s + 1
 
+-- | Co-routine style
 lengthCo :: [a] -> Int
 lengthCo [] = 0
 lengthCo (_ : xs) = 1 + lengthCo xs
 
+-- | Co-routine style as a Case statement.
 lengthCoCase :: [a] -> Int
 lengthCoCase = \case
   [] -> 0
   (_ : xs) -> 1 + lengthCoCase xs
 
+-- | Auxillary version.
 lengthAux :: [a] -> Int
 lengthAux = \case
   [] -> b
@@ -344,12 +382,13 @@ lengthAux = \case
     b = 0
     f _ xs = 1 + xs
 
+-- | foldr style
 lengthFoldr :: [a] -> Int
 lengthFoldr = foldr f b
   where
     b = 0
     f _ xs = 1 + xs
-
+-- | foldr style with explicit const usage.
 lengthFoldrConst :: [a] -> Int
 lengthFoldrConst = foldr (const (1 +)) 0
 
@@ -366,50 +405,59 @@ lengthFB _ r !a = r (a + 1)
 lengthF' :: (Num a) => x -> (a -> a) -> a -> a
 lengthF' _ r = \ !a -> r (a + 1)
 
+-- | GHC style
 lengthF :: [a] -> Int
 lengthF xs0 = foldr lengthF' id xs0 0
 
+-- | Monomorphic, GHC style
 lengthFMono :: [Int] -> Int
 lengthFMono xs0 = foldr lengthF' id xs0 0
 
 -- * recursion patterns
 
+-- | Tail recursion
 recurseTail :: (a -> b -> b) -> b -> [a] -> b
 recurseTail f = go
   where
     go s [] = s
     go s (x : xs) = go (f x s) $! xs
 
+-- | Lazy tail recursion
 recurseTailLazy :: (a -> b -> b) -> b -> [a] -> b
 recurseTailLazy f = go
   where
     go s [] = s
     go s (x : xs) = go (f x s) xs
 
+-- | Tail resursion with flipped argument order.
 recurseFlip :: (a -> b -> b) -> b -> [a] -> b
 recurseFlip f s0 xs0 = go xs0 s0
   where
     go [] s = s
     go (x : xs) s = go xs $! f x s
 
+-- | Lazy tail resursion with flipped argument order.
 recurseFlipLazy :: (a -> b -> b) -> b -> [a] -> b
 recurseFlipLazy f s0 xs0 = go xs0 s0
   where
     go [] s = s
     go (x : xs) s = go xs $ f x s
 
+-- | Coroutine
 recurseCo :: (a -> b -> b) -> b -> [a] -> b
 recurseCo f s0 = go
   where
     go [] = s0
     go (x : xs) = f x $! go xs
 
+-- | Lazy, coroutine
 recurseCoLazy :: (a -> b -> b) -> b -> [a] -> b
 recurseCoLazy f s0 = go
   where
     go [] = s0
     go (x : xs) = f x $ go xs
 
+-- | Cata style
 recurseCata :: (a -> b -> b) -> b -> [a] -> b
 recurseCata f s0 = cata $ \case
   Nil -> s0
@@ -417,12 +465,15 @@ recurseCata f s0 = cata $ \case
 
 -- * miscellaneous
 
+-- | Test of const fusion
 constFuse :: Int -> ()
 constFuse x = foldl' const () [1 .. x]
 
+-- | Increment a list.
 mapInc :: [Int] -> [Int]
 mapInc xs = fmap (+ 1) xs
 
+-- | Split a list.
 splitHalf :: [a] -> ([a], [a])
 splitHalf xs = go xs xs
   where

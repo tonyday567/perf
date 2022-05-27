@@ -6,6 +6,7 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
+-- | Space performance measurement.
 module Perf.Space
   ( SpaceStats (..),
     ssToList,
@@ -24,8 +25,10 @@ import Perf.Types
 import System.Mem
 import Prelude hiding (cycle)
 
+-- | GHC allocation statistics.
 data SpaceStats = SpaceStats {allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64} deriving (Read, Show, Eq)
 
+-- | Convert 'SpaceStats' to a list of numbers.
 ssToList :: Num a => SpaceStats -> [a]
 ssToList (SpaceStats x1 x2 x3 x4 x5) = [fromIntegral x1, fromIntegral x2, fromIntegral x3, fromIntegral x4, fromIntegral x5]
 
@@ -52,9 +55,11 @@ addSpace (SpaceStats x1 x2 x3 x4 x5) (SpaceStats x1' x2' x3' x4' x5') = SpaceSta
 getSpace :: RTSStats -> SpaceStats
 getSpace s = SpaceStats (allocated_bytes s) (gcs s) (max_live_bytes s) (gcdetails_live_bytes (gc s)) (max_mem_in_use_bytes s)
 
+-- | Labels for 'SpaceStats'.
 spaceLabels :: [Text]
 spaceLabels = ["allocated", "gcollects", "maxLiveBytes", "gcLiveBytes", "MaxMem"]
 
+-- | A allocation 'StepMeasure' with a flag to determine if 'performGC' should run prior to the measurement.
 space :: Bool -> StepMeasure IO SpaceStats
 space p = StepMeasure (start p) stop
   where
@@ -75,6 +80,7 @@ instance Semigroup Bytes where
 instance Monoid Bytes where
   mempty = 0
 
+-- | Measure memory allocation, with a flag to run 'performGC' prior to the measurement.
 allocation :: Bool -> StepMeasure IO Bytes
 allocation p = StepMeasure (start p) stop
   where

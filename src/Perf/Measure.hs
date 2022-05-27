@@ -16,8 +16,10 @@ import Perf.Time
 import Perf.Types
 import Prelude hiding (cycle)
 
+-- | Command-line measurement options.
 data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation deriving (Eq, Show)
 
+-- | Parse command-line 'MeasureType' options.
 parseMeasure :: Parser MeasureType
 parseMeasure =
   flag' MeasureTime (long "time" <> help "measure time performance")

@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Check versus a canned file for performance degradation
+-- | Reporting on performance, potentially checking versus a canned results.
 module Perf.Report
   ( Format (..),
     parseFormat,
@@ -44,27 +44,37 @@ import GHC.Generics
 import Options.Applicative
 import Text.Printf hiding (parseFormat)
 
+-- | Type of format for report
 data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)
 
+-- | Command-line parser for 'Format'
 parseFormat :: Format -> Parser Format
 parseFormat f =
   flag' OrgMode (long "orgmode" <> help "report using orgmode table format")
     <|> flag' ConsoleMode (long "console" <> help "report using plain table format")
     <|> pure f
 
+-- | Whether to include header information.
 data Header = Header | NoHeader deriving (Eq, Show, Generic)
 
+-- | Command-line parser for 'Header'
 parseHeader :: Header -> Parser Header
 parseHeader h =
   flag' Header (long "header" <> help "include headers")
     <|> flag' NoHeader (long "noheader" <> help "dont include headers")
     <|> pure h
 
+-- | Levels of geometric difference in compared performance that triggers reporting.
+--
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
 
+-- |
+-- >>> defaultCompareLevels
+-- CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}
 defaultCompareLevels :: CompareLevels
 defaultCompareLevels = CompareLevels 0.2 0.05 0.05
 
+-- | Command-line parser for 'CompareLevels'
 parseCompareLevels :: CompareLevels -> Parser CompareLevels
 parseCompareLevels c =
   CompareLevels
@@ -72,6 +82,7 @@ parseCompareLevels c =
     <*> option auto (value (warningLevel c) <> long "warning" <> help "warning level")
     <*> option auto (value (improvedLevel c) <> long "improved" <> help "improved level")
 
+-- | Report configuration options
 data ReportConfig = ReportConfig
   { format :: Format,
     includeHeader :: Header,
@@ -79,9 +90,13 @@ data ReportConfig = ReportConfig
   }
   deriving (Eq, Show, Generic)
 
+-- |
+-- >>> defaultReportConfig
+-- ReportConfig {format = ConsoleMode, includeHeader = Header, levels = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
 defaultReportConfig :: ReportConfig
 defaultReportConfig = ReportConfig ConsoleMode Header defaultCompareLevels
 
+-- | Parse 'ReportConfig' command line options.
 parseReportConfig :: ReportConfig -> Parser ReportConfig
 parseReportConfig c =
   ReportConfig
@@ -89,9 +104,11 @@ parseReportConfig c =
     <*> parseHeader (includeHeader c)
     <*> parseCompareLevels (levels c)
 
+-- | Write results to file, in CSV format.
 writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
 writeResult f m = glue <$> Csv.rowCommitter (Csv.CsvConfig f ',' Csv.NoHeader) (\(ls, v) -> ls <> [expt (Just 3) v]) <*|> qList (Map.toList m)
 
+-- | Read results from file that are in CSV format.
 readResult :: FilePath -> IO (Map.Map [Text] Double)
 readResult f = do
   r <- Csv.runCsv (Csv.CsvConfig f ',' Csv.NoHeader) Csv.fields
@@ -99,8 +116,10 @@ readResult f = do
   let l = (\x -> (List.init x, fromRight 0 (A.parseOnly Csv.double (List.last x)))) <$> r'
   pure $ Map.fromList l
 
+-- | Comparison data between two results.
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
 
+-- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
 compareNote cfg x y =
   merge
@@ -120,15 +139,18 @@ compareNote cfg x y =
       | y' / x' < (1 - improvedLevel cfg) = formatWith [green] "improvement"
       | otherwise = ""
 
+-- | Like intercalate, but on the outside as well.
 outercalate :: Text -> [Text] -> Text
 outercalate c ts = c <> Text.intercalate c ts <> c
 
+-- | Report to a console, comparing the measurement versus a canned file.
 reportGolden :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO ()
 reportGolden cfg f m = do
   mOrig <- readResult f
   let n = compareNote (levels cfg) mOrig m
   reportToConsole $ formatCompare (format cfg) (includeHeader cfg) n
 
+-- | Org-mode style header.
 formatOrgHeader :: Map.Map [Text] a -> [Text] -> [Text]
 formatOrgHeader m ts =
   [ outercalate "|" ((("label" <>) . Text.pack . show <$> [1 .. labelCols]) <> ts),
@@ -137,12 +159,14 @@ formatOrgHeader m ts =
   where
     labelCols = maximum $ length <$> Map.keys m
 
+-- | Console-style header information.
 formatConsoleHeader :: Map.Map [Text] a -> [Text] -> [Text]
 formatConsoleHeader m ts =
   [mconcat $ Text.pack . printf "%-20s" <$> ((("label" <>) . Text.pack . show <$> [1 .. labelCols]) <> ts), mempty]
   where
     labelCols = maximum $ length <$> Map.keys m
 
+-- | Format a comparison.
 formatCompare :: Format -> Header -> Map.Map [Text] CompareResult -> [Text]
 formatCompare f h m =
   case f of
@@ -159,22 +183,25 @@ formatCompare f h m =
         n
       ]
 
+-- | Format a result in org-mode style
 formatOrg :: Header -> Map.Map [Text] Text -> [Text]
 formatOrg h m =
   bool [] (formatOrgHeader m ["results"]) (h == Header)
     <> Map.elems (Map.mapWithKey (\k a -> outercalate "|" (k <> [a])) m)
 
+-- | Format a result in console-style
 formatConsole :: Header -> Map.Map [Text] Text -> [Text]
 formatConsole h m =
   bool [] (formatConsoleHeader m ["results"]) (h == Header)
     <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> [a])) m)
 
+-- | Format a result as a table.
 reportOrg2D :: Map.Map [Text] Text -> IO ()
 reportOrg2D m = do
   let rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
   let cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
   Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
-  sequence_ $
+  mapM_
     ( \c ->
         Text.putStrLn
           ( "|"
@@ -184,13 +211,15 @@ reportOrg2D m = do
               <> "|"
           )
     )
-      <$> cs
+    cs
 
 reportToConsole :: [Text] -> IO ()
 reportToConsole xs = traverse_ Text.putStrLn xs
 
+-- | Golden file options.
 data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
 
+-- | Parse command-line golden file options.
 parseGolden :: String -> Parser Golden
 parseGolden def =
   Golden
@@ -198,6 +227,7 @@ parseGolden def =
     <*> switch (long "check" <> short 'c' <> help "check versus a golden file")
     <*> switch (long "record" <> short 'r' <> help "record the result to a golden file")
 
+-- | Report results
 report :: ReportConfig -> Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
 report cfg g labels m = do
   bool
@@ -210,6 +240,7 @@ report cfg g labels m = do
   where
     m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
 
+-- | Format a result given 'Format' and 'Header' preferences.
 formatIn :: Format -> Header -> Map.Map [Text] Text -> [Text]
 formatIn f h = case f of
   OrgMode -> formatOrg h

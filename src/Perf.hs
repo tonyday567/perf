@@ -1,13 +1,13 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RebindableSyntax #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wall #-}
 
 -- | == Introduction
 --
@@ -37,12 +37,12 @@ module Perf
   )
 where
 
-import Prelude hiding (cycle)
 import Perf.Algos
-import Perf.Time
 import Perf.BigO
-import Perf.Space
-import Perf.Report
-import Perf.Stats
-import Perf.Types
 import Perf.Measure
+import Perf.Report
+import Perf.Space
+import Perf.Stats
+import Perf.Time
+import Perf.Types
+import Prelude hiding (cycle)

@@ -29,6 +29,7 @@ Note that running this readme.org is very slow compared with an external process
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
 import Perf
+import Chart
 import Data.FormatN
 import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
@@ -37,26 +38,33 @@ putStrLn "ok"
 
 #+RESULTS:
 #+begin_example
-Resolving dependencies...
 Build profile: -w ghc-8.10.7 -O1
 In order, the following will be built (use -v for more details):
- - perf-0.10.0 (lib) (file src/Perf/Report.hs changed)
+ - perf-0.10.0 (lib) (ephemeral targets)
 Preprocessing library for perf-0.10.0..
 GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
 Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
-[1 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
-[2 of 9] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
-[3 of 9] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
-[4 of 9] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
-[5 of 9] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted )
-[6 of 9] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
-[7 of 9] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
-[8 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
+[1 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
+[2 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[3 of 9] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
+[4 of 9] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
+[5 of 9] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
+[6 of 9] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted )
+[7 of 9] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
+[8 of 9] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
 [9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
 Ok, 9 modules loaded.
 > Ok, 9 modules loaded.
->  >  >  >  >  >  >  > ok
+>  >  >  >  >  >  >  >  > ok
 #+end_example
+
+#+begin_src haskell
+:t ChartSvg
+#+end_src
+
+#+RESULTS:
+: ChartSvg
+:   :: SvgOptions -> HudOptions -> [Hud] -> ChartTree -> ChartSvg
 
 ** Time
 *** What is a tick?
@@ -189,6 +197,13 @@ exampleIO = execPerfT time (do
   n <- fap "length" Text.length txt
   fam "print_result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
 #+end_src
+
+#+RESULTS:
+: <interactive>:14:31: error:
+:     parse error (possibly incorrect indentation or mismatched brackets)
+: <interactive>:15:27: error: Not in scope: ‘Text.readFile’
+: <interactive>:16:33: error: Variable not in scope: txt :: Text.Text
+: <interactive>:17:83: error: parse error on input ‘)’
 
 #+begin_src sh :exports both
 perf-explore --exampleIO --check --record

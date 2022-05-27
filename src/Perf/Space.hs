@@ -1,14 +1,13 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RebindableSyntax #-}
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Perf.Space
-  (
-    SpaceStats (..),
+  ( SpaceStats (..),
     ssToList,
     spaceLabels,
     space,
@@ -16,36 +15,33 @@ module Perf.Space
   )
 where
 
-import Perf.Types
 import Control.Monad.State.Lazy
-import Prelude hiding (cycle)
 import Data.String
-import GHC.Stats
-import Data.Word
-import System.Mem
 import Data.Text (Text)
+import Data.Word
+import GHC.Stats
+import Perf.Types
+import System.Mem
+import Prelude hiding (cycle)
 
-data SpaceStats = SpaceStats { allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64 } deriving (Read, Show, Eq)
+data SpaceStats = SpaceStats {allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64} deriving (Read, Show, Eq)
 
 ssToList :: Num a => SpaceStats -> [a]
-ssToList (SpaceStats x1 x2 x3 x4 x5) = [fromIntegral x1,fromIntegral x2,fromIntegral x3,fromIntegral x4,fromIntegral x5]
+ssToList (SpaceStats x1 x2 x3 x4 x5) = [fromIntegral x1, fromIntegral x2, fromIntegral x3, fromIntegral x4, fromIntegral x5]
 
-instance Semigroup SpaceStats
-  where
-    (<>) = addSpace
+instance Semigroup SpaceStats where
+  (<>) = addSpace
 
-instance Monoid SpaceStats
-  where
-    mempty = SpaceStats 0 0 0 0 0
+instance Monoid SpaceStats where
+  mempty = SpaceStats 0 0 0 0 0
 
-instance Num SpaceStats
-  where
-    (+) = addSpace
-    (-) = diffSpace
-    (*) = error "SpaceStats times"
-    abs = error "SpaceStats abs"
-    signum = error "SpaceStats signum"
-    fromInteger n = SpaceStats (fromIntegral n) (fromIntegral n) (fromIntegral n) (fromIntegral n) (fromIntegral n)
+instance Num SpaceStats where
+  (+) = addSpace
+  (-) = diffSpace
+  (*) = error "SpaceStats times"
+  abs = error "SpaceStats abs"
+  signum = error "SpaceStats signum"
+  fromInteger n = SpaceStats (fromIntegral n) (fromIntegral n) (fromIntegral n) (fromIntegral n) (fromIntegral n)
 
 diffSpace :: SpaceStats -> SpaceStats -> SpaceStats
 diffSpace (SpaceStats x1 x2 x3 x4 x5) (SpaceStats x1' x2' x3' x4' x5') = SpaceStats (x1' - x1) (x2' - x2) (x3' - x3) (x4' - x4) (x5' - x5)
@@ -57,7 +53,7 @@ getSpace :: RTSStats -> SpaceStats
 getSpace s = SpaceStats (allocated_bytes s) (gcs s) (max_live_bytes s) (gcdetails_live_bytes (gc s)) (max_mem_in_use_bytes s)
 
 spaceLabels :: [Text]
-spaceLabels = ["allocated","gcollects","maxLiveBytes","gcLiveBytes","MaxMem"]
+spaceLabels = ["allocated", "gcollects", "maxLiveBytes", "gcLiveBytes", "MaxMem"]
 
 space :: Bool -> StepMeasure IO SpaceStats
 space p = StepMeasure (start p) stop
@@ -70,7 +66,7 @@ space p = StepMeasure (start p) stop
       pure $ diffSpace s s'
 {-# INLINEABLE space #-}
 
-newtype Bytes = Bytes { unbytes :: Word64 }
+newtype Bytes = Bytes {unbytes :: Word64}
   deriving (Show, Read, Eq, Ord, Num, Real, Enum, Integral)
 
 instance Semigroup Bytes where

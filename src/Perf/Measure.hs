@@ -1,8 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Unification of the various different performance measure types, mostly to unify reporting and data management.
-
-
 module Perf.Measure
   ( MeasureType (..),
     parseMeasure,
@@ -11,30 +9,31 @@ module Perf.Measure
   )
 where
 
-import Prelude hiding (cycle)
+import Data.Text (Text)
+import Options.Applicative
+import Perf.Space
 import Perf.Time
 import Perf.Types
-import Perf.Space
-import Options.Applicative
-import Data.Text (Text)
+import Prelude hiding (cycle)
 
 data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation deriving (Eq, Show)
+
 parseMeasure :: Parser MeasureType
 parseMeasure =
-  flag' MeasureTime (long "time" <> help "measure time performance") <|>
-  flag' MeasureSpace (long "space" <> help "measure space performance") <|>
-  flag' MeasureSpaceTime (long "spacetime" <> help "measure both space and time performance") <|>
-  flag' MeasureAllocation (long "allocation" <> help "measure bytes allocated") <|>
-  pure MeasureTime
+  flag' MeasureTime (long "time" <> help "measure time performance")
+    <|> flag' MeasureSpace (long "space" <> help "measure space performance")
+    <|> flag' MeasureSpaceTime (long "spacetime" <> help "measure both space and time performance")
+    <|> flag' MeasureAllocation (long "allocation" <> help "measure bytes allocated")
+    <|> pure MeasureTime
 
 -- | unification of the different measurements to being a list of doubles.
 measureDs :: MeasureType -> Int -> Measure IO [[Double]]
 measureDs mt n =
   case mt of
-    MeasureTime -> fmap ((:[]) . fromIntegral) <$> times n
+    MeasureTime -> fmap ((: []) . fromIntegral) <$> times n
     MeasureSpace -> toMeasureN n (ssToList <$> space False)
     MeasureSpaceTime -> toMeasureN n ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-    MeasureAllocation -> fmap ((:[]) . fromIntegral) <$> toMeasureN n (allocation False)
+    MeasureAllocation -> fmap ((: []) . fromIntegral) <$> toMeasureN n (allocation False)
 
 -- | unification of the different measurements to being a list of doubles.
 measureLabels :: MeasureType -> [Text]

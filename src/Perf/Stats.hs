@@ -1,7 +1,6 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
--- |
+{-# OPTIONS_GHC -Wall #-}
 
 module Perf.Stats
   ( average,
@@ -13,21 +12,20 @@ module Perf.Stats
     statD,
     statDs,
     parseStatD,
-
     -- stat reporting
     addStat,
     ordy,
     allStats,
     statify,
+  )
+where
 
-  ) where
-
+import Control.Monad.State.Lazy
+import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import Data.Text (Text, pack)
 import NumHask.Space (quantile)
 import Options.Applicative
-import qualified Data.Map.Strict as Map
-import Control.Monad.State.Lazy
-import qualified Data.List as List
 
 median :: [Double] -> Double
 median = quantile 0.5
@@ -60,11 +58,11 @@ statDs StatSecs = fmap averageSecs . List.transpose
 
 parseStatD :: Parser StatDType
 parseStatD =
-  flag' StatBest (long "best" <> help "report upper decile") <|>
-  flag' StatMedian (long "median" <> help "report median") <|>
-  flag' StatAverage (long "average" <> help "report average") <|>
-  flag' StatSecs (long "averagesecs" <> help "report average in seconds") <|>
-  pure StatAverage
+  flag' StatBest (long "best" <> help "report upper decile")
+    <|> flag' StatMedian (long "median" <> help "report median")
+    <|> flag' StatAverage (long "average" <> help "report average")
+    <|> flag' StatSecs (long "averagesecs" <> help "report average in seconds")
+    <|> pure StatAverage
 
 -- stat reporting
 addStat :: (Ord k, Monad m) => k -> s -> StateT (Map.Map k s) m ()
@@ -72,18 +70,20 @@ addStat label s = do
   modify (Map.insert label s)
 
 ordy :: Int -> [Text]
-ordy f = zipWith (\x s -> (pack . show) x <> s) [1..f] (["st", "nd", "rd"] <> repeat "th")
+ordy f = zipWith (\x s -> (pack . show) x <> s) [1 .. f] (["st", "nd", "rd"] <> repeat "th")
 
 allStats :: Int -> Map.Map [Text] [[Double]] -> Map.Map [Text] [Double]
-allStats f m = Map.fromList $ mconcat
-  [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> [l], xs)) (ordy f) xss) <$> mlist)
-  , (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist
-  , (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist
-  , (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
-  ]
+allStats f m =
+  Map.fromList $
+    mconcat
+      [ mconcat ((\(ks, xss) -> zipWith (\l xs -> (ks <> [l], xs)) (ordy f) xss) <$> mlist),
+        (\(ks, xss) -> (ks <> ["best"], quantile 0.1 <$> List.transpose xss)) <$> mlist,
+        (\(ks, xss) -> (ks <> ["median"], quantile 0.5 <$> List.transpose xss)) <$> mlist,
+        (\(ks, xss) -> (ks <> ["average"], av <$> List.transpose xss)) <$> mlist
+      ]
   where
     mlist = Map.toList m
     av xs = sum xs / (fromIntegral . length $ xs)
 
 statify :: (Ord a) => StatDType -> Map.Map a [[Double]] -> Map.Map [a] [Double]
-statify s m = fmap (statD s) . List.transpose <$> Map.mapKeys (:[]) m
+statify s m = fmap (statD s) . List.transpose <$> Map.mapKeys (: []) m

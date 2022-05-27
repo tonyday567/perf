@@ -40,17 +40,17 @@ module Perf.BigO
   )
 where
 
-import qualified Data.List as List
-import qualified Data.Vector as V
-import Perf.Time
-import Prelude
-import GHC.Generics
 import Data.Bool
-import Data.Maybe
-import Perf.Stats
-import Perf.Types
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import Data.Maybe
 import Data.Monoid
+import qualified Data.Vector as V
+import GHC.Generics
+import Perf.Stats
+import Perf.Time
+import Perf.Types
+import Prelude
 
 -- $setup
 -- >>> import qualified Data.List as List
@@ -60,22 +60,22 @@ import Data.Monoid
 
 -- | order type
 data O
-  -- | cubic
-  = N3
-  -- | quadratic
-  | N2
-  -- | ^3/2
-  | N32
-  -- | N * log N
-  | NLogN
-  -- | linear
-  | N1
-  -- | sqrt N
-  | N12
-  -- | log N
-  | LogN
-  -- | constant
-  | N0
+  = -- | cubic
+    N3
+  | -- | quadratic
+    N2
+  | -- | ^3/2
+    N32
+  | -- | N * log N
+    NLogN
+  | -- | linear
+    N1
+  | -- | sqrt N
+    N12
+  | -- | log N
+    LogN
+  | -- | constant
+    N0
   deriving (Eq, Ord, Show, Generic, Enum)
 
 -- | enumeration of O types
@@ -105,8 +105,8 @@ olist = [N3 .. N0]
 promote_ :: [Double -> Double]
 promote_ =
   [ -- \n -> min maxBound (bool (2**n) zero (n<=zero)),
-    (^ (3::Integer)),
-    (^ (2::Integer)),
+    (^ (3 :: Integer)),
+    (^ (2 :: Integer)),
     (** 1.5),
     \n -> bool (bool (n * log n) 1 (n <= 1)) 0 (n <= 0),
     id,
@@ -165,7 +165,6 @@ demote1 o m = demote o 1 m
 --
 -- >>> bigO o
 -- (N2,1.0)
---
 bigO :: (Ord a, Num a) => Order a -> (O, a)
 bigO (Order os) = (toEnum b, os List.!! b)
   where
@@ -194,7 +193,7 @@ instance (Num a) => Num (Order a) where
   fromInteger x = Order $ replicate 9 (fromInteger x)
 
 -- | A set of factors consisting of the dominant order, the dominant order factor and a constant factor
-data BigOrder a = BigOrder { bigOrder :: O, bigFactor :: a, bigConstant :: a } deriving (Eq, Ord, Show, Generic, Functor)
+data BigOrder a = BigOrder {bigOrder :: O, bigFactor :: a, bigConstant :: a} deriving (Eq, Ord, Show, Generic, Functor)
 
 -- | compute the BigOrder
 --
@@ -220,10 +219,9 @@ toOrder (BigOrder o f r) = order o f + order N0 r
 -- >>> spectrum 100 10000
 -- Order {factors = [1.0e-2,1.0,10.0,21.71472409516259,100.0,1000.0,2171.4724095162587,10000.0]}
 spectrum :: Double -> Double -> Order Double
-spectrum n m = Order ((m/) . ($ n) <$> promote_)
+spectrum n m = Order ((m /) . ($ n) <$> promote_)
 
 -- | The errors for a list of n's and measurements, based on the spectrum of the last measurement.
---
 diffs :: [Double] -> [Double] -> [[Double]]
 diffs ns ms = List.transpose $ zipWith (\n m -> zipWith (\o' f -> m - promote (order o' f) n) olist fs) ns ms
   where
@@ -235,10 +233,10 @@ diffs ns ms = List.transpose $ zipWith (\n m -> zipWith (\o' f -> m - promote (o
 -- N1
 bestO :: [Double] -> [Double] -> O
 bestO ns ms =
-      toEnum $
-        V.minIndex $
-          V.fromList
-            (sum <$> fmap (fmap abs) (diffs ns ms))
+  toEnum $
+    V.minIndex $
+      V.fromList
+        (sum <$> fmap (fmap abs) (diffs ns ms))
 
 -- | fit the best order for the last measurement and return it, and the error terms for the measurements
 --

@@ -8,7 +8,7 @@
 :export_date: 2022-4-12
 :END:
 
-** intro
+** Introduction
 
 ~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 
@@ -620,7 +620,7 @@ Instead, we:
 - pick the order based on lowest absolute error result summed across all the runs,
 
 #+begin_src haskell :results output :exports both
-sims = 100
+sims = 1000
 ns = [1,10,100,1000,10000]
 ms <- tcurve StatBest sims (\x -> sum [1..x]) ns
 ms
@@ -631,17 +631,17 @@ res
 
 #+RESULTS:
 :
-: >  > [2713.0,2971.0,7283.0,78161.09090909091,970799.0]
-: > Order {factors = [0.0,0.0,0.0,10.540316218429874,0.0,0.0,0.0,0.0]}
-: [2702.45968378157,2728.30025,2429.005,5351.165909090923,0.0]
+: >  > [2711.805579584775,2699.1705232100257,6758.985419269684,72156.72363105198,759825.979088117]
+: > Order {factors = [0.0,0.0,0.0,0.0,75.9825979088117,0.0,0.0,0.0]}
+: [2635.822981675963,1939.3445441219087,-839.2743716114855,-3825.8742777597217,0.0]
 
 
-#+begin_src haskell
-estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
+#+begin_src haskell :results output :exports both
+estOrder (\x -> sum [1..x]) 1000 [1,10,100,1000,10000]
 #+end_src
 
 #+RESULTS:
-: BigOrder {bigOrder = N1, bigFactor = 100.6291, bigConstant = 0.0}
+: BigOrder {bigOrder = N1, bigFactor = 75.94306356108662, bigConstant = 0.0}
 
 
 * spacetime debug

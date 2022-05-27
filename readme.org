@@ -4,13 +4,7 @@
 
 [[https://hackage.haskell.org/package/perf][file:https://img.shields.io/hackage/v/perf.svg]] [[https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci][file:https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg]]
 
-* perf
-:PROPERTIES:
-:EXPORT_FILE_NAME: perf
-:export_date: 2022-4-12
-:END:
-
-** Introduction
+* Introduction
 
 ~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 
@@ -20,7 +14,7 @@
 
 - abstracts the concept of what is being measured, so that concepts such as counters, debug checks, time and space performance can be treated equivalently.
 
-** Setup
+* Setup
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
@@ -66,9 +60,8 @@ Ok, 9 modules loaded.
 >  >  >  >  >  >  >  >  >  >  >  >  >  >  > ok
 #+end_example
 
-
-** Time
-*** What is a tick?
+* Time
+** What is a tick?
 
 The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
 
@@ -83,7 +76,7 @@ tick returns in the IO monad, because reading a cycle counter is an IO effect. T
 
 Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
 
-*** tick_
+** tick_
 
 tick_ measures the number of cycles between two clock reads.
 
@@ -101,7 +94,7 @@ fmap word <$> replicateM 10 tick_
 #+RESULTS:
 : [1722,788,630,606,608,620,596,638,596,598]
 
-*** multiple ticks
+** multiple ticks
 
 #+begin_src haskell :results output :exports both
 fmap (fmap (word . fst)) . replicateM 10 $ tick (const ()) ()
@@ -112,7 +105,7 @@ fmap (fmap (word . fst)) . replicateM 10 $ tick (const ()) ()
 
 Here, ~const () ()~ was evaluated and took 6.1k cycles for the first effect, reducing down to 2.6k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
 
-*** tickIO
+** tickIO
 
 ~tickIO~ measures the evaluation of an IO value.
 
@@ -130,7 +123,7 @@ fmap (fmap (word . fst)) . replicateM 10 $ tickIO (pure ())
 #+RESULTS:
 : [5508,1632,1378,1210,1576,1214,1160,1174,1176,1176]
 
-*** sum example
+** sum example
 
 #+begin_src haskell :exports both
 fmap (expt (Just 2) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
@@ -149,7 +142,7 @@ print $ average (fmap fromIntegral $ fst ts)
 :
 : 54619.4812
 
-** PerfT
+* PerfT
 
 ~PerfT~ allows for multiple measurement points and is polymorphic in what is being measured. It returns a Map of results held in State.
 
@@ -217,7 +210,7 @@ outer               outer-total         time                1.11e5              
 outer               print-result        time                5.46e3              5.55e3
 #+end_example
 
-** perf-explore
+* perf-explore
 
 ~perf-explore~ contains some exploratory routines to help develop =perf=
 
@@ -300,7 +293,7 @@ label1              label2              results
 sum                 time                8.59e3
 :end:
 
-*** noops
+** noops
 
 #+begin_src sh :results drawer :exports both
 perf-explore --noops
@@ -356,7 +349,7 @@ writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb l
 #+RESULTS:
 [[file:other/noop.svg]]
 
-*** measurement context
+** measurement context
 
 Exploration of how the code surrounding measurement effects performance.
 
@@ -417,7 +410,7 @@ perf-explore -n 100000 -l 1000 --ticks
 | sumTailLazy   |   6.05e3 | 8.40e3 |    6.02e3 |        5.74e3 |   1.75e1 |   5.91e3 | 5.94e3 |
 :end:
 
-**** short list
+*** short list
 #+begin_src sh :results drawer :exports both
 perf-explore -n 10000 -l 10 --best --ticks
 #+end_src
@@ -446,7 +439,7 @@ perf-explore -n 10000 -l 10 --best --ticks
 | sumTailLazy   |   6.80e1 | 7.18e1 |    6.80e1 |        6.89e1 |   1.52e1 |   6.85e1 | 6.72e1 |
 :end:
 
-**** long list
+*** long list
 #+begin_src sh :results drawer :exports both
 perf-explore -n 100 -l 100000 --best --ticks
 #+end_src
@@ -475,7 +468,7 @@ perf-explore -n 100 -l 100000 --best --ticks
 | sumTailLazy   |   1.35e6 | 1.37e6 |    1.34e6 |        1.33e6 |   1.58e1 |   1.35e6 | 1.34e6 |
 :end:
 
-*** sums
+** sums
 
 #+begin_src sh :output drawer :exports both
 perf-explore -n 1000 -l 1000 --sums
@@ -504,7 +497,7 @@ perf-explore -n 1000 -l 1000 --sums
 | sumTail       | time   | 11000.0 |
 | sumTailLazy   | time   | 11100.0 |
 
-*** lengths
+** lengths
 
 #+begin_src sh :exports both
 perf-explore -n 1000 -l 1000 --lengths
@@ -525,7 +518,7 @@ perf-explore -n 1000 -l 1000 --lengths
 | lengthTail       | time   |  9830.0 |
 | lengthTailLazy   | time   |  9540.0 |
 
-** Gauge
+* Gauge
 
 #+begin_src sh :results output :exports both
 perf-explore -n 1000 -l 1000 --average --gauge
@@ -581,7 +574,7 @@ sum                 time                2.52e-6
 sumFuse             time                7.91e-7
 :end:
 
-** Space
+* Space
 
 Data is collected from GHCStats
 
@@ -606,11 +599,11 @@ sum                 gcollects           7.00e-1
 sum                 maxLiveBytes        3.93e5
 :end:
 
-** Resources
+* Resources
 
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
 
-** Perf.BigO
+* Perf.BigO
 
 Perf.BigO represents functionality to determine the complexity order for a computation.
 
@@ -644,7 +637,6 @@ estOrder (\x -> sum [1..x]) 1000 [1,10,100,1000,10000]
 
 #+RESULTS:
 : BigOrder {bigOrder = N1, bigFactor = 75.94306356108662, bigConstant = 0.0}
-
 
 * spacetime debug
 

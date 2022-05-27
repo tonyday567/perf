@@ -122,8 +122,8 @@ data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Mayb
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
 compareNote cfg x y =
   merge
-    (mapMissing (\_ x' -> CompareResult Nothing (Just x') ("new result")))
-    (mapMissing (\_ x' -> CompareResult (Just x') Nothing ("old result not found")))
+    (mapMissing (\_ x' -> CompareResult Nothing (Just x') "new result"))
+    (mapMissing (\_ x' -> CompareResult (Just x') Nothing "old result not found"))
     ( zipWithMatched
         ( \_ x' y' ->
             CompareResult (Just x') (Just y') (note' x' y')

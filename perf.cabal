@@ -48,7 +48,6 @@ library
     , base                  >=4.7    && <5
     , box                   ^>=0.8.1
     , box-csv               ^>=0.2
-    , colourista            ^>=0.1
     , containers            ^>=0.6
     , deepseq               >=1.4.4  && <1.4.8
     , formatn               ^>=0.2.1

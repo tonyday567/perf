@@ -4,4 +4,3 @@ packages:
 
 write-ghc-environment-files: always
 
-allow-newer: colourista:base, colourista:ghc-prim, colourista:bytestring

@@ -27,7 +27,6 @@ where
 
 import Box hiding (value)
 import qualified Box.Csv as Csv
-import Colourista.Pure
 import Control.Monad
 import qualified Data.Attoparsec.Text as A
 import Data.Bool
@@ -123,8 +122,8 @@ data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Mayb
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
 compareNote cfg x y =
   merge
-    (mapMissing (\_ x' -> CompareResult Nothing (Just x') (formatWith [yellow] "new result")))
-    (mapMissing (\_ x' -> CompareResult (Just x') Nothing (formatWith [yellow] "old result not found")))
+    (mapMissing (\_ x' -> CompareResult Nothing (Just x') ("new result")))
+    (mapMissing (\_ x' -> CompareResult (Just x') Nothing ("old result not found")))
     ( zipWithMatched
         ( \_ x' y' ->
             CompareResult (Just x') (Just y') (note' x' y')
@@ -134,9 +133,9 @@ compareNote cfg x y =
     y
   where
     note' x' y'
-      | y' / x' > 1 + errorLevel cfg = formatWith [red] "degraded"
-      | y' / x' > 1 + warningLevel cfg = formatWith [yellow] "slightly-degraded"
-      | y' / x' < (1 - improvedLevel cfg) = formatWith [green] "improvement"
+      | y' / x' > 1 + errorLevel cfg = "degraded"
+      | y' / x' > 1 + warningLevel cfg = "slightly-degraded"
+      | y' / x' < (1 - improvedLevel cfg) = "improvement"
       | otherwise = ""
 
 -- | Like intercalate, but on the outside as well.

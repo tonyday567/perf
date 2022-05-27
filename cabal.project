@@ -1,13 +1,5 @@
 packages:
   perf.cabal
 
--- https://github.com/haskell/cabal/issues/6087
 write-ghc-environment-files: always
 
--- Might be helpful when hackage doesn't build properly...
-keep-going: True
-
-source-repository-package
-    type: git
-    location: https://github.com/tonyday567/formatn
-    tag: ab9565eb5d470b8104044c41fae650de38fa800c

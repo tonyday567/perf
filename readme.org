@@ -1,318 +1,658 @@
 #+TITLE: perf
+#+PROPERTY: header-args :exports both
+#+PROPERTY: header-args :eval no-export
 
-`perf` provides some ideas, code and a library for low-level performance measurement for Haskell hacking.
+[[https://hackage.haskell.org/package/perf][file:https://img.shields.io/hackage/v/perf.svg]] [[https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci][file:https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg]]
 
-- Uses the rdtsc instruction set that comes with the x86 chip.
-- Has a fundamental unit being the number of cycles taken to perform a computation, whether that computation comtains strict or lazy elements under the hood.
-- Strictly evaluates performance of the top level function application.
+* Introduction
 
+~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
 
-* setup
+- provides a monad transformer, ~PerfT~, as a light-weight wrapper for use on existing code. ~PerfT~ modifications can be included in code bases, as opposed to performance being separated code and  process, with any effects able to be erased at compile time with ~evalPerfT~.
 
-Running this internal to the perf repo results in interpretation of the modules, which slows everything down compared with an external process which accesses the compiled version of the library.
+- focuses on using the rdtsc instruction set that comes with the x86 chip to measure accurate time performance as number of clock cycles.
 
-#+begin_src haskell
+- abstracts the concept of what is being measured, so that concepts such as counters, debug checks, time and space performance can be treated equivalently.
+
+* Setup
+
+Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
+
+#+begin_src haskell :results output :exports both
+:r
 :set prompt " > "
 :set -Wno-type-defaults
+:set -Wno-unused-do-bind
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
-#+end_src
-
-#+begin_src haskell
+:set -XOverloadedLabels
 import Perf
-import NumHask.Space (quantile)
 import Data.FormatN
-import Perf.Cycle
-import Prelude as P
-import Data.Foldable
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import qualified Data.Map.Strict as Map
+import Control.Monad
+import Data.Bifunctor
+import Chart
+import Optics.Core
+putStrLn "ok"
 #+end_src
 
-* tick
+#+RESULTS:
+#+begin_example
+Build profile: -w ghc-8.10.7 -O1
+In order, the following will be built (use -v for more details):
+ - perf-0.10.0 (lib) (ephemeral targets)
+Preprocessing library for perf-0.10.0..
+GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
+Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
+[1 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
+[2 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
+[3 of 9] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
+[4 of 9] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
+[5 of 9] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
+[6 of 9] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted )
+[7 of 9] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
+[8 of 9] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
+[9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
+Ok, 9 modules loaded.
+> Ok, 9 modules loaded.
+>  >  >  >  >  >  >  >  >  >  >  >  >  >  > ok
+#+end_example
 
-A fundamental operation is tick, which sandwiches a function application between two readings of the rdstc chip.
+* Time
+** What is a tick?
 
-#+begin_src haskell
+The fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of the rdstc chip.
+
+#+begin_src haskell :results output :exports both
 :t tick
 #+end_src
 
 #+RESULTS:
-: tick :: (a -> b) -> a -> IO (Cycle, b)
+: tick :: (a -> b) -> a -> IO (Cycles, b)
 
 tick returns in the IO monad, because reading a cycle counter is an IO effect. The trivial but fundamental point is that performance measurement effects the computation being measured.
 
 Unlike benchmarking-style libraries, such as criterion, the result of the computation is passed through along with the cycle count. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and perhaps unrepresentative process.
 
-* tick_
+** tick_
 
-#+begin_src haskell
-replicateM 10 tick_
+tick_ measures the number of cycles between two clock reads.
+
+#+begin_src haskell :results output :exports both
+:t tick_
 #+end_src
 
 #+RESULTS:
-| 3590 | 1134 | 798 | 784 | 786 | 784 | 790 | 802 | 790 | 804 |
+: tick_ :: IO Cycles
 
-* function application
-
-#+begin_src haskell
-tick (const ()) ()
+#+begin_src haskell :results output :exports both
+fmap word <$> replicateM 10 tick_
 #+end_src
 
 #+RESULTS:
-| 5902 | nil |
+: [1722,788,630,606,608,620,596,638,596,598]
 
-Here, ~const () ()~ was evaluated and took 350 cycles. What it did in taht time we will never know, really, at least from usage of ~perf~. It sounds slow but 350 is, on my 2.5GHz machine equal to 350 / 2.5e9 = 1.4e-7 of a second, 0.14 milliseconds, or 140 nanoseconds.
+** multiple ticks
 
-Alternatively, ~tickIO~ measures the evaluation of an IO value.
+#+begin_src haskell :results output :exports both
+fmap (fmap (word . fst)) . replicateM 10 $ tick (const ()) ()
+#+end_src
 
-#+begin_src haskell
+#+RESULTS:
+: [6180,3282,2736,2712,2676,2670,2660,2634,2926,2656]
+
+Here, ~const () ()~ was evaluated and took 6.1k cycles for the first effect, reducing down to 2.6k after 10 effects. What it did in that time we will never know, really, at least from usage of ~perf~. 2.2k cycles is, on my 2.5GHz machine equal to 2200 / 2.5e9 = 8.8e-7 of a second or 880 nanoseconds.
+
+** tickIO
+
+~tickIO~ measures the evaluation of an IO value.
+
+#+begin_src haskell :results output :exports both
 :t tickIO
 #+end_src
 
 #+RESULTS:
-: tickIO :: IO a -> IO (Cycle, a)
+: tickIO :: IO a -> IO (Cycles, a)
 
-#+begin_src haskell
-tickIO (pure ())
+#+begin_src haskell :results output :exports both
+fmap (fmap (word . fst)) . replicateM 10 $ tickIO (pure ())
 #+end_src
 
 #+RESULTS:
-| 6120 | nil |
+: [5508,1632,1378,1210,1576,1214,1160,1174,1176,1176]
 
-#+begin_src haskell
-replicateM 10 (tickIO (pure ()))
+** sum example
+
+#+begin_src haskell :exports both
+fmap (expt (Just 2) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
 #+end_src
 
 #+RESULTS:
-| 6304 | nil |
-| 2560 | nil |
-| 1824 | nil |
-| 1660 | nil |
-| 1586 | nil |
-| 1576 | nil |
-| 2470 | nil |
-| 1598 | nil |
-| 1588 | nil |
-| 1616 | nil |
+| 2.0e6 | 1.3e6 | 1.2e6 | 6.1e6 | 1.5e6 | 1.7e6 | 3.0e6 | 6.4e5 | 6.2e5 | 1.7e6 |
 
-#+begin_src haskell
-ticks 100 (const ()) ()
+
+#+begin_src haskell :results output :exports both
+ts <- ticks 10000 sum ([1..1000] :: [Double])
+print $ average (fmap fromIntegral $ fst ts)
 #+end_src
 
 #+RESULTS:
-| 6326 | 2352 | 2200 | 1958 | 1880 | 1938 | 1886 | 1854 | 1874 | 1940 | 1832 | 1812 | 1850 | 1894 | 1900 | 1894 | 1830 | 1832 | 1884 | 1870 | 1852 | 1884 | 1854 | 1846 | 1842 | 1862 | 1836 | 1838 | 1958 | 1986 | 1802 | 1832 | 1930 | 1910 | 1902 | 1870 | 1810 | 1878 | 1776 | 1898 | 1840 | 1790 | 1796 | 1842 | 1824 | 1898 | 1834 | 1906 | 1872 | 1838 | 1812 | 1882 | 1812 | 1884 | 1810 | 1820 | 1926 | 1902 | 1902 | 1854 | 1868 | 1876 | 1922 | 1816 | 1902 | 1886 | 1836 | 1822 | 1834 | 1820 | 1906 | 1886 | 1828 | 1824 | 1868 | 1882 | 1856 | 1876 | 1932 | 1882 | 1872 | 1878 | 1824 | 1844 | 1804 | 1804 | 1846 | 1900 | 1822 | 1836 | 1880 | 1878 | 1878 | 1870 | 1828 | 1800 | 2032 | 1920 | 1874 | 1836 |
+:
+: 54619.4812
 
-* interpreted performance
+* PerfT
 
-#+begin_src haskell
-fmap fst $ ticks 10 sum ([1..10000] :: [Double])
+~PerfT~ allows for multiple measurement points and is polymorphic in what is being measured. It returns a Map of results held in State.
+
+Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
+
+#+begin_src haskell :results output :exports both
+first (average . fmap fromIntegral) <$> ticks 1000 sum [1..1000]
 #+end_src
 
 #+RESULTS:
-| 1307720 | 740114 | 747050 | 2482222 | 729346 | 613916 | 2172022 | 569756 | 663376 | 1181096 |
+: (73752.368,500500)
 
+... with PerfT usage
 
-#+begin_src haskell
-import Data.Text as Text
-import Data.Text.IO as Text
+#+begin_src haskell :results output :exports both
+second (fmap (average . fmap fromIntegral)) <$> runPerfT (times 1000) (sum |$| [1..1000])
 #+end_src
 
 #+RESULTS:
+: (500500,fromList [("",62706.844)])
 
+Comparing performance of sum versus a list fusion approach:
 
-#+begin_src haskell
-ts <- ticks 1000 sum ([1..10000] :: [Double])
-Text.putStrLn $ Text.intercalate "\t" [median ts, average ts, tenth ts]
+#+begin_src haskell :results output :exports both
+fmap (average . fmap fromIntegral) <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap "fusion" (\x -> sum [1..x]) 1000))
 #+end_src
 
 #+RESULTS:
-: 442206	586453	429271
+: fromList [("fusion",114013.79),("sum",63906.848)]
+
+An IO example
 
 #+begin_src haskell
-ts2 <- ticks' 100 sum ([1..1000] :: [Double])
-Text.putStrLn $ Text.intercalate "\t" [median ts2, average ts2, tenth ts2]
+exampleIO' :: IO ()
+exampleIO' = do
+  txt <- Text.readFile "src/Perf.hs"
+  let n = Text.length txt
+  Text.putStrLn $ "length of file is: " <> Text.pack (show n)
+#+end_src
+
+#+begin_src haskell :results output :exports both
+exampleIO = execPerfT time (do
+  txt <- fam "file_read" (Text.readFile "src/Perf.hs")
+  n <- fap "length" Text.length txt
+  fam "print_result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
+#+end_src
+
+#+begin_src sh :results output :exports both
+perf-explore --exampleIO --record --check
 #+end_src
 
 #+RESULTS:
 #+begin_example
-<interactive>:314:47: error:
-    • Variable not in scope: ts2 :: (f0 a0, b0)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
+length of file is: 1751
+length of file is: 1751
 
-<interactive>:314:60: error:
-    • Variable not in scope: ts2 :: (t0 a1, b1)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
+label1              label2              label3              old_result          new_result          status
 
-<interactive>:314:71: error:
-    • Variable not in scope: ts2 :: (f1 a2, b2)
-    • Perhaps you meant one of these:
-        ‘Ghci242.ts’ (imported from Ghci242),
-        ‘Ghci245.ts’ (imported from Ghci245),
-        ‘Ghci248.ts’ (imported from Ghci248)
+normal              file-read           time                4.28e5              4.19e5
+normal              length              time                5.61e3              5.64e3
+normal              print-result        time                5.47e4              5.38e4
+outer               file-read           time                9.37e4              9.46e4
+outer               length              time                5.38e3              5.40e3
+outer               outer-total         time                1.11e5              1.12e5
+outer               print-result        time                5.46e3              5.55e3
 #+end_example
 
+* perf-explore
 
+~perf-explore~ contains some exploratory routines to help develop =perf=
 
-
-#+begin_src haskell
-:set -XAllowAmbiguousTypes
-
-fMono :: Int -> Int
-fMono x = foldl' (+) 0 [1 .. x]
-
-fPoly :: (Enum b, Num b, Additive b) => b -> b
-fPoly x = foldl' (+) 0 [1 .. x]
-
-fLambda :: Int -> Int
-fLambda = \x -> foldl' (+) 0 [1 .. x]
-#+end_src
-
-#+begin_src haskell
-fmap median (ticks 1000 fMono 1000)
+#+begin_src sh :results output :exports both
+perf-explore --help
 #+end_src
 
 #+RESULTS:
-: 73393
+#+begin_example
+basic perf callibration
 
-#+begin_src haskell
-fmap median $ ticks 1000 fPoly 1000
+Usage: perf-explore [-n|--runs ARG] [-l|--length ARG]
+                    [--best | --median | --average | --averagesecs]
+                    [--sums | --lengths | --examples | --example | --exampleIO |
+                      --noops | --ticks | --gauge]
+                    [--time | --space | --spacetime | --allocation]
+                    [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
+                      --noOp] [-g|--golden ARG] [-c|--check] [-r|--record]
+                    [--orgmode | --console] [--header | --noheader]
+                    [--error ARG] [--warning ARG] [--improved ARG] [-w|--raw]
+
+  perf benchmarking
+
+Available options:
+  -n,--runs ARG            number of runs to perform
+  -l,--length ARG          length of list
+  --best                   report upper decile
+  --median                 report median
+  --average                report average
+  --averagesecs            report average in seconds
+  --sums                   run on sum algorithms
+  --lengths                run on length algorithms
+  --examples               run on example algorithms
+  --example                run on the example algorithm
+  --exampleIO              exampleIO test
+  --noops                  noops test
+  --ticks                  tick test
+  --gauge                  gauge runs on exmaple for comparison
+  --time                   measure time performance
+  --space                  measure space performance
+  --spacetime              measure both space and time performance
+  --allocation             measure bytes allocated
+  --sumFuse                fused sum pipeline
+  --sum                    sum
+  --lengthF                foldr id length
+  --constFuse              fused const pipeline
+  --mapInc                 fmap (+1)
+  --noOp                   const ()
+  -g,--golden ARG          golden file name
+  -c,--check               check versus a golden file
+  -r,--record              record the result to a golden file
+  --orgmode                report using orgmode table format
+  --console                report using plain table format
+  --header                 include headers
+  --noheader               dont include headers
+  --error ARG              error level
+  --warning ARG            warning level
+  --improved ARG           improved level
+  -w,--raw                 write raw statistics to file
+  -h,--help                Show this help text
+#+end_example
+
+#+begin_src haskell :results output :exports both
+fmap averageI <$> execPerfT (times 10000) (sum |$| [1..1000])
 #+end_src
 
 #+RESULTS:
-: 72349
+: fromList [("",54874.5718)]
 
-#+begin_src haskell
-fmap median $ ticks 1000 fLambda 1000
+The equivalent to the above code is:
+
+#+begin_src sh :results drawer :exports both
+perf-explore -n 10000 -l 1000 --sum
 #+end_src
 
 #+RESULTS:
-: 72786
+:results:
+label1              label2              results
 
-* compiled performance
+sum                 time                8.59e3
+:end:
 
-#+begin_src sh
-perf-bench -r 1000 -s 1000 --median
+** noops
+
+#+begin_src sh :results drawer :exports both
+perf-explore --noops
 #+end_src
 
 #+RESULTS:
-| list    | test |
-| fMono   | 1954 |
-| fPoly   | 1954 |
-| fLambda | 1956 |
+:results:
+label1              label2              label3              results
 
-#+begin_src sh
-perf-bench -r 100000 -s 1000 --median
+const               1st                 time                2.94e3
+const               2nd                 time                7.80e1
+const               3rd                 time                3.00e1
+const               4th                 time                1.80e1
+const               average             time                2.28e1
+const               best                time                1.72e1
+const               median              time                1.85e1
+pure                1st                 time                8.00e1
+pure                2nd                 time                1.80e1
+pure                3rd                 time                2.00e1
+pure                4th                 time                1.60e1
+pure                average             time                2.00e1
+pure                best                time                1.72e1
+pure                median              time                1.85e1
+:end:
+
+#+begin_src haskell :results output :exports both
+:set -package chart-svg
+:set -package optics-core
+:m +Chart
+:m +Optics.Core
 #+end_src
 
 #+RESULTS:
-| simple  | perf | tests |
-| fMono   | 1954 |       |
-| fPoly   | 1954 |       |
-| fLambda | 1954 |       |
 
-* from bench.hs
-
-FIXME: this doesn't work ...
-
-#+begin_src haskell
-:load app/bench.hs
-#+end_src
-
-#+begin_src sh
-:main -r 100000 -s 1000 --median
-#+end_src
-
-#+RESULTS:
-
-
-
-
-* vectors
-
-#+begin_src sh
-perf-bench -r 1000 -s 10000 --vector --median
-#+end_src
-
-#+RESULTS:
-| vector    |  test |
-| vBoxed    | 13291 |
-| vUnboxed  | 13261 |
-| vStorable | 13264 |
-
-
-#+begin_src haskell
+#+begin_src haskell :results output
+:set -XOverloadedLabels
+import qualified Data.Map.Strict as Map
 import Perf
-import Perf.Cycle
-import Prelude as P
-import Data.Foldable
-#+end_src
-
-
-#+begin_src haskell
-replicateM 100 tick_
+import Prelude
+m <- read <$> readFile "other/noop.map" :: IO (Map.Map Text.Text [Cycles])
+d = m Map.! "fap times"
+filter (> 100) d
 #+end_src
 
 #+RESULTS:
-| 4568 | 1194 | 882 | 790 | 794 | 790 | 784 | 788 | 786 | 800 | 820 | 808 | 780 | 788 | 794 | 796 | 784 | 832 | 788 | 792 | 788 | 786 | 790 | 786 | 788 | 802 | 1038 | 822 | 796 | 796 | 792 | 786 | 792 | 782 | 798 | 792 | 788 | 790 | 788 | 848 | 792 | 794 | 784 | 800 | 792 | 802 | 794 | 790 | 786 | 788 | 794 | 788 | 782 | 794 | 788 | 792 | 782 | 794 | 792 | 792 | 788 | 786 | 792 | 792 | 788 | 784 | 782 | 790 | 790 | 786 | 790 | 794 | 782 | 794 | 790 | 786 | 788 | 780 | 788 | 786 | 794 | 786 | 786 | 894 | 796 | 790 | 786 | 782 | 786 | 788 | 794 | 790 | 772 | 788 | 800 | 790 | 790 | 790 | 792 | 832 |
+:
+: >  >  >  >  > [Cycles {word = 484},Cycles {word = 128},Cycles {word = 136},Cycles {word = 128},Cycles {word = 314}]
 
-
-* Next PerfT
-
-- [ ] multiline
-- [ ] better example
-- [ ] refactor to Writer
-
-#+begin_src haskell
-  result <- do
-      txt <- readFile "readme.org"
-      let n = Text.length txt
-      let x = foldl' (+) 0 [1..n]
-      putStrLn $ "sum of one to number of characters is: " <>
-          (show x :: Text)
-      pure (n, x)
-  putStrLn result
+#+begin_src haskell :file other/noop.svg :results output graphics file :exports both
+writeChartSvg "other/noop.svg" $ mempty & #hudOptions .~ colourHudOptions (rgb light) defaultHudOptions & #charts .~ unnamed [(RectChart (defaultRectStyle & #borderSize .~ 0 & #color .~ Colour 1 1 1 1) (zipWith (\y x -> Rect x (x+1) 0 y) (fromIntegral <$> filter (<= 100) d) [0..]))]
 #+end_src
 
 #+RESULTS:
-: <interactive>:17:12: error: Variable not in scope: result :: String
+[[file:other/noop.svg]]
 
-#+begin_src haskell
-  (result', ms) <- runPerfT $ do
-          txt <- perf "file read" cycles $ readFile "perf-analysis/examples/examples.hs"
-          n <- perf "length" cycles $ pure (Text.length txt)
-          x <- perf "sum" cycles $ pure (foldl' (+) 0 [1..n])
-          perf "print to screen" cycles $
-              putStrLn $ "sum of one to number of characters is: " <>
-              (show x :: Text)
-          pure (n, x)
+** measurement context
+
+Exploration of how the code surrounding measurement effects performance.
+
+#+begin_src sh :results drawer
+perf-explore -n 1000 -l 1000 --ticks
 #+end_src
 
-* Next Perf ToDo
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   2.77e4 | 1.71e4 |    2.91e4 |        2.78e4 |   1.81e1 |   1.56e4 | 2.75e4 |
+| sumCata       |   1.84e4 | 1.86e4 |    1.87e4 |        1.85e4 |   1.81e1 |   1.84e4 | 1.84e4 |
+| sumCo         |   1.78e4 | 2.39e4 |    1.74e4 |        1.74e4 |   2.05e1 |   1.77e4 | 1.81e4 |
+| sumCoCase     |   1.56e4 | 1.77e4 |    1.62e4 |        1.57e4 |   1.84e1 |   1.61e4 | 1.55e4 |
+| sumCoGo       |   1.60e4 | 1.74e4 |    1.71e4 |        1.58e4 |   1.88e1 |   1.76e4 | 1.64e4 |
+| sumF          |   1.10e4 | 1.04e4 |    1.10e4 |        1.09e4 |   1.82e1 |   1.05e4 | 1.10e4 |
+| sumFlip       |   1.19e4 | 1.09e4 |    1.40e4 |        1.22e4 |   1.66e1 |   1.19e4 | 1.20e4 |
+| sumFlipLazy   |   1.27e4 | 1.19e4 |    1.05e4 |        1.05e4 |   1.90e1 |   1.05e4 | 1.50e4 |
+| sumFoldr      |   1.84e4 | 1.87e4 |    1.86e4 |        1.84e4 |   1.71e1 |   1.83e4 | 1.84e4 |
+| sumFuse       |   1.96e3 | 1.96e3 |    1.96e3 |        1.95e3 |   1.68e1 |   3.25e3 | 1.95e3 |
+| sumFuseFoldl' |   1.96e3 | 1.96e3 |    1.96e3 |        1.95e3 |   1.73e1 |   1.95e3 | 1.96e3 |
+| sumFuseFoldr  |   9.61e3 | 1.06e4 |    9.88e3 |        9.60e3 |   1.63e1 |   9.67e3 | 9.63e3 |
+| sumFusePoly   |   1.41e3 | 1.40e3 |    1.39e3 |        1.41e3 |   1.69e1 |   1.40e3 | 1.40e3 |
+| sumLambda     |   1.13e4 | 1.11e4 |    1.11e4 |        1.12e4 |   1.80e1 |   1.11e4 | 1.12e4 |
+| sumMono       |   1.18e4 | 1.11e4 |    1.18e4 |        1.18e4 |   1.82e1 |   1.13e4 | 1.18e4 |
+| sumPoly       |   1.10e4 | 1.11e4 |    1.10e4 |        1.11e4 |   1.87e1 |   1.09e4 | 1.68e4 |
+| sumSum        |   1.22e4 | 1.11e4 |    1.26e4 |        1.22e4 |   1.85e1 |   1.11e4 | 1.29e4 |
+| sumTail       |   1.10e4 | 1.14e4 |    1.15e4 |        1.10e4 |   1.72e1 |   1.15e4 | 1.11e4 |
+| sumTailLazy   |   5.95e3 | 1.17e4 |    5.75e3 |        5.75e3 |   1.93e1 |   1.12e4 | 5.99e3 |
+:end:
 
-- [ ] doctests
-- [ ] make tick a Writer ???
-- [ ] refactor PerfT
-- unboxed, mutable
-- core
-  [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
-- profiling
-- benchmarking
-  criterion
-  [[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][Test.Tasty.Bench]]
-  gauge
-- weigh
-- detecting space leaks
-- laziness, WHNF and all that.
-  [[http://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
-  [[https://stackoverflow.com/questions/6872898/what-is-weak-head-normal-form/6889335#6889335][haskell - What is Weak Head Normal Form? - Stack Overflow]]
+
+#+begin_src sh :results drawer
+perf-explore -n 100000 -l 1000 --ticks
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   1.83e4 | 1.83e4 |    1.81e4 |        1.81e4 |   1.75e1 |   1.81e4 | 1.86e4 |
+| sumCata       |   2.16e4 | 2.16e4 |    2.08e4 |        2.09e4 |   1.75e1 |   2.11e4 | 2.09e4 |
+| sumCo         |   1.83e4 | 1.82e4 |    1.82e4 |        1.88e4 |   1.74e1 |   1.81e4 | 1.81e4 |
+| sumCoCase     |   1.59e4 | 1.87e4 |    1.54e4 |        1.57e4 |   1.76e1 |   1.83e4 | 1.54e4 |
+| sumCoGo       |   2.06e4 | 2.07e4 |    2.07e4 |        2.11e4 |   1.74e1 |   2.07e4 | 2.12e4 |
+| sumF          |   8.87e3 | 9.05e3 |    8.61e3 |        8.73e3 |   1.73e1 |   8.66e3 | 8.84e3 |
+| sumFlip       |   8.57e3 | 8.66e3 |    8.49e3 |        8.65e3 |   1.74e1 |   8.70e3 | 8.80e3 |
+| sumFlipLazy   |   5.60e3 | 8.68e3 |    8.74e3 |        5.91e3 |   1.75e1 |   8.91e3 | 5.53e3 |
+| sumFoldr      |   2.14e4 | 2.10e4 |    2.08e4 |        2.08e4 |   1.75e1 |   2.09e4 | 2.12e4 |
+| sumFuse       |   2.23e3 | 2.13e3 |    2.11e3 |        2.02e3 |   1.69e1 |   1.98e3 | 2.15e3 |
+| sumFuseFoldl' |   2.14e3 | 2.03e3 |    2.20e3 |        1.97e3 |   1.76e1 |   2.22e3 | 2.14e3 |
+| sumFuseFoldr  |   1.22e4 | 1.28e4 |    1.23e4 |        1.28e4 |   1.69e1 |   1.26e4 | 1.23e4 |
+| sumFusePoly   |   1.67e3 | 1.47e3 |    1.46e3 |        1.47e3 |   1.71e1 |   1.42e3 | 1.65e3 |
+| sumLambda     |   9.04e3 | 8.75e3 |    8.70e3 |        8.80e3 |   1.77e1 |   8.70e3 | 9.09e3 |
+| sumMono       |   5.97e3 | 5.96e3 |    5.82e3 |        6.26e3 |   1.85e1 |   5.69e3 | 5.91e3 |
+| sumPoly       |   8.74e3 | 8.85e3 |    8.70e3 |        8.73e3 |   1.76e1 |   8.64e3 | 8.76e3 |
+| sumSum        |   5.90e3 | 6.36e3 |    5.78e3 |        5.78e3 |   1.81e1 |   6.05e3 | 5.88e3 |
+| sumTail       |   1.21e4 | 6.48e3 |    5.85e3 |        1.19e4 |   1.76e1 |   5.86e3 | 1.22e4 |
+| sumTailLazy   |   6.05e3 | 8.40e3 |    6.02e3 |        5.74e3 |   1.75e1 |   5.91e3 | 5.94e3 |
+:end:
+
+*** short list
+#+begin_src sh :results drawer :exports both
+perf-explore -n 10000 -l 10 --best --ticks
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   8.94e1 | 9.30e1 |    9.15e1 |        8.97e1 |   1.54e1 |   9.14e1 | 8.96e1 |
+| sumCata       |   9.74e1 | 9.79e1 |    9.78e1 |        9.81e1 |   1.55e1 |   9.77e1 | 9.62e1 |
+| sumCo         |   9.11e1 | 1.16e2 |    9.15e1 |        9.13e1 |   1.51e1 |   9.11e1 | 8.92e1 |
+| sumCoCase     |   9.05e1 | 9.21e1 |    9.18e1 |        9.18e1 |   1.53e1 |   8.99e1 | 8.90e1 |
+| sumCoGo       |   9.76e1 | 9.90e1 |    9.76e1 |        9.84e1 |   1.54e1 |   9.76e1 | 9.70e1 |
+| sumF          |   7.54e1 | 7.94e1 |    7.75e1 |        7.78e1 |   1.53e1 |   7.73e1 | 7.56e1 |
+| sumFlip       |   7.72e1 | 8.07e1 |    7.75e1 |        7.75e1 |   1.51e1 |   7.78e1 | 7.55e1 |
+| sumFlipLazy   |   7.74e1 | 7.93e1 |    7.72e1 |        7.78e1 |   1.55e1 |   7.62e1 | 7.55e1 |
+| sumFoldr      |   9.75e1 | 9.88e1 |    9.70e1 |        9.77e1 |   1.52e1 |   9.78e1 | 9.71e1 |
+| sumFuse       |   3.59e1 | 3.53e1 |    3.52e1 |        3.22e1 |   1.49e1 |   3.33e1 | 3.22e1 |
+| sumFuseFoldl' |   3.52e1 | 3.50e1 |    3.52e1 |        3.30e1 |   1.50e1 |   3.33e1 | 3.27e1 |
+| sumFuseFoldr  |   5.00e1 | 4.99e1 |    5.06e1 |        4.91e1 |   1.50e1 |   4.91e1 | 4.94e1 |
+| sumFusePoly   |   4.42e1 | 4.39e1 |    4.36e1 |        4.19e1 |   1.51e1 |   4.15e1 | 4.31e1 |
+| sumLambda     |   7.93e1 | 8.10e1 |    7.94e1 |        7.93e1 |   1.54e1 |   7.92e1 | 7.73e1 |
+| sumMono       |   6.33e1 | 6.56e1 |    6.36e1 |        6.36e1 |   1.53e1 |   6.35e1 | 6.31e1 |
+| sumPoly       |   7.93e1 | 8.01e1 |    7.92e1 |        7.93e1 |   1.53e1 |   7.93e1 | 7.73e1 |
+| sumSum        |   7.93e1 | 7.98e1 |    7.95e1 |        7.95e1 |   1.52e1 |   7.93e1 | 7.73e1 |
+| sumTail       |   6.75e1 | 6.99e1 |    6.80e1 |        6.78e1 |   1.56e1 |   6.70e1 | 6.72e1 |
+| sumTailLazy   |   6.80e1 | 7.18e1 |    6.80e1 |        6.89e1 |   1.52e1 |   6.85e1 | 6.72e1 |
+:end:
+
+*** long list
+#+begin_src sh :results drawer :exports both
+perf-explore -n 100 -l 100000 --best --ticks
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   2.26e6 | 2.28e6 |    2.28e6 |        2.25e6 |   1.68e1 |   2.31e6 | 2.26e6 |
+| sumCata       |   2.84e6 | 2.82e6 |    2.81e6 |        3.21e6 |   1.56e1 |   2.82e6 | 2.81e6 |
+| sumCo         |   2.26e6 | 2.27e6 |    5.02e6 |        2.27e6 |   1.66e1 |   2.28e6 | 2.28e6 |
+| sumCoCase     |   2.28e6 | 2.30e6 |    2.32e6 |        2.28e6 |   1.48e1 |   2.97e6 | 2.30e6 |
+| sumCoGo       |   2.84e6 | 2.80e6 |    2.84e6 |        2.85e6 |   1.51e1 |   2.81e6 | 2.81e6 |
+| sumF          |   7.76e5 | 7.78e5 |    7.80e5 |        7.81e5 |   1.51e1 |   9.76e5 | 7.05e5 |
+| sumFlip       |   7.48e5 | 9.04e5 |    7.46e5 |        7.43e5 |   1.68e1 |   7.48e5 | 7.44e5 |
+| sumFlipLazy   |   1.21e6 | 1.22e6 |    1.19e6 |        1.19e6 |   1.61e1 |   1.20e6 | 1.20e6 |
+| sumFoldr      |   3.63e6 | 2.87e6 |    3.25e6 |        2.81e6 |   1.45e1 |   5.89e6 | 2.81e6 |
+| sumFuse       |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.47e1 |   1.92e5 | 1.92e5 |
+| sumFuseFoldl' |   1.92e5 | 1.92e5 |    1.92e5 |        1.92e5 |   1.52e1 |   1.92e5 | 1.92e5 |
+| sumFuseFoldr  |   1.68e6 | 1.64e6 |    1.65e6 |        1.65e6 |   1.50e1 |   1.65e6 | 1.65e6 |
+| sumFusePoly   |   1.32e5 | 1.28e5 |    1.28e5 |        1.28e5 |   1.48e1 |   1.32e5 | 1.28e5 |
+| sumLambda     |   7.90e5 | 8.01e5 |    7.93e5 |        7.92e5 |   1.57e1 |   7.93e5 | 7.92e5 |
+| sumMono       |   7.86e5 | 8.04e5 |    7.87e5 |        7.83e5 |   1.48e1 |   7.99e5 | 7.88e5 |
+| sumPoly       |   7.99e5 | 8.18e5 |    8.06e5 |        8.00e5 |   1.64e1 |   8.10e5 | 8.00e5 |
+| sumSum        |   7.82e5 | 7.92e5 |    7.85e5 |        7.82e5 |   1.66e1 |   7.88e5 | 7.87e5 |
+| sumTail       |   7.43e5 | 7.84e5 |    8.23e5 |        8.18e5 |   1.61e1 |   7.89e5 | 7.38e5 |
+| sumTailLazy   |   1.35e6 | 1.37e6 |    1.34e6 |        1.33e6 |   1.58e1 |   1.35e6 | 1.34e6 |
+:end:
+
+** sums
+
+#+begin_src sh :output drawer :exports both
+perf-explore -n 1000 -l 1000 --sums
+#+end_src
+
+#+RESULTS:
+| label1        | label2 | results |
+|               |        |         |
+| sumAux        | time   | 16200.0 |
+| sumCata       | time   | 15600.0 |
+| sumCo         | time   | 19100.0 |
+| sumCoCase     | time   | 16300.0 |
+| sumCoGo       | time   | 15700.0 |
+| sumF          | time   | 10500.0 |
+| sumFlip       | time   | 10500.0 |
+| sumFlipLazy   | time   |  6130.0 |
+| sumFoldr      | time   | 16900.0 |
+| sumFuse       | time   |  1950.0 |
+| sumFuseFoldl' | time   |  1950.0 |
+| sumFuseFoldr  | time   | 14600.0 |
+| sumFusePoly   | time   |  1400.0 |
+| sumLambda     | time   |  9780.0 |
+| sumMono       | time   | 11200.0 |
+| sumPoly       | time   | 11500.0 |
+| sumSum        | time   | 11100.0 |
+| sumTail       | time   | 11000.0 |
+| sumTailLazy   | time   | 11100.0 |
+
+** lengths
+
+#+begin_src sh :exports both
+perf-explore -n 1000 -l 1000 --lengths
+#+end_src
+
+#+RESULTS:
+| label1           | label2 | results |
+|                  |        |         |
+| lengthAux        | time   | 11000.0 |
+| lengthCo         | time   | 11100.0 |
+| lengthCoCase     | time   | 10500.0 |
+| lengthF          | time   |  9540.0 |
+| lengthFMono      | time   |  9190.0 |
+| lengthFlip       | time   |  9770.0 |
+| lengthFlipLazy   | time   |  4830.0 |
+| lengthFoldr      | time   | 10100.0 |
+| lengthFoldrConst | time   | 11100.0 |
+| lengthTail       | time   |  9830.0 |
+| lengthTailLazy   | time   |  9540.0 |
+
+* Gauge
+
+#+begin_src sh :results output :exports both
+perf-explore -n 1000 -l 1000 --average --gauge
+#+end_src
+
+#+RESULTS:
+#+begin_example
+sumFuse
+benchmarking function ... function                                 time                 849.4 ns
+
+benchmarking function ... function                                 time                 848.6 ns
+
+sum
+benchmarking function ... function                                 time                 3.786 μs
+
+benchmarking function ... function                                 time                 3.791 μs
+
+lengthF
+benchmarking function ... function                                 time                 1.863 μs
+
+benchmarking function ... function                                 time                 1.872 μs
+
+constFuse
+benchmarking function ... function                                 time                 571.0 ns
+
+benchmarking function ... function                                 time                 1.080 μs
+
+mapInc
+benchmarking function ... function                                 time                 9.203 ns
+
+benchmarking function ... function                                 time                 15.99 μs
+
+noop
+benchmarking function ... function                                 time                 5.770 ns
+
+benchmarking function ... function                                 time                 4.740 ns
+
+#+end_example
+
+#+begin_src sh :results drawer :exports both
+perf-explore --examples -n 10000 --averagesecs
+#+end_src
+
+#+RESULTS:
+:results:
+label1              label2              results
+
+constFuse           time                5.25e-7
+lengthF             time                2.01e-6
+mapInc              time                8.65e-9
+noop                time                7.19e-9
+sum                 time                2.52e-6
+sumFuse             time                7.91e-7
+:end:
+
+* Space
+
+Data is collected from GHCStats
+
+- allocated_bytes
+- gcs
+- gcdetails_live_bytes
+- max_live_bytes
+- max_mem_in_use_bytes
+
+#+begin_src sh :results drawer :exports both
+perf-explore -n 10 -l 100000 --space +RTS -T -RTS
+#+end_src
+
+#+RESULTS:
+:results:
+label1              label2              results
+
+sum                 MaxMem              1.05e6
+sum                 allocated           7.25e5
+sum                 gcLiveBytes         3.93e5
+sum                 gcollects           7.00e-1
+sum                 maxLiveBytes        3.93e5
+:end:
 
 * Resources
 
-[[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
-[[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
 [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
+
+* Perf.BigO
+
+Perf.BigO represents functionality to determine the complexity order for a computation.
+
+We could do a regression and minimise the error term, but we know that the largest run contains the most information; we would need to weight the simulations according to some heuristic.
+
+Instead, we:
+
+- estimate the order factor for each possible Order, from N3 to N0, setting the highest n run constant factor to zero,
+- pick the order based on lowest absolute error result summed across all the runs,
+
+#+begin_src haskell :results output :exports both
+sims = 1000
+ns = [1,10,100,1000,10000]
+ms <- tcurve StatBest sims (\x -> sum [1..x]) ns
+ms
+(o',res) = estO ns ms
+o'
+res
+#+end_src
+
+#+RESULTS:
+:
+: >  > [2711.805579584775,2699.1705232100257,6758.985419269684,72156.72363105198,759825.979088117]
+: > Order {factors = [0.0,0.0,0.0,0.0,75.9825979088117,0.0,0.0,0.0]}
+: [2635.822981675963,1939.3445441219087,-839.2743716114855,-3825.8742777597217,0.0]
+
+
+#+begin_src haskell :results output :exports both
+estOrder (\x -> sum [1..x]) 1000 [1,10,100,1000,10000]
+#+end_src
+
+#+RESULTS:
+: BigOrder {bigOrder = N1, bigFactor = 75.94306356108662, bigConstant = 0.0}
+
+* spacetime debug
+
+#+begin_src haskell :results output
+t2 = toMeasureN 2 ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+:t ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+r1 <- snd <$> runPerfT t2 (const () |$| ())
+:t r1
+statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
+:t statD StatAverage
+#+end_src
+
+#+RESULTS:
+:
+: ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
+:   :: Num a => StepMeasure IO [a]
+: > r1 :: Map.Map Text.Text [[Integer]]
+: fromList [([""],[0.0,0.0,0.0,0.0,0.0,15500.0])]
+: statD StatAverage :: [Double] -> Double

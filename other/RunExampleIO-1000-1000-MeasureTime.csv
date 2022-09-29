@@ -1,7 +1,0 @@
-normal,file-read,time,4.19e5
-normal,length,time,5.64e3
-normal,print-result,time,5.38e4
-outer,file-read,time,9.46e4
-outer,length,time,5.40e3
-outer,outer-total,time,1.12e5
-outer,print-result,time,5.55e3

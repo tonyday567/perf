@@ -134,12 +134,12 @@ main = do
   let gold' = optionGolden o
   let gold =
         case golden gold' of
-          "other/golden.csv" ->
+          "other/golden.perf" ->
             gold'
               { golden =
                   "other/"
                     <> intercalate "-" [show r, show n, show l, show mt]
-                    <> ".csv"
+                    <> ".perf"
               }
           _ -> gold'
   let w = optionRawStats o

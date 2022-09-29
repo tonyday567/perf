@@ -13,6 +13,7 @@ module Perf.Space
     spaceLabels,
     space,
     allocation,
+    Bytes(..),
   )
 where
 
@@ -71,6 +72,7 @@ space p = StepMeasure (start p) stop
       pure $ diffSpace s s'
 {-# INLINEABLE space #-}
 
+-- | Number of bytes
 newtype Bytes = Bytes {unbytes :: Word64}
   deriving (Show, Read, Eq, Ord, Num, Real, Enum, Integral)
 

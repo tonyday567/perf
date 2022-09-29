@@ -3,9 +3,8 @@ name:               perf
 version:            0.10.1
 synopsis:           Low-level run time measurement.
 description:
-  A set of tools to accurately measure time performance of Haskell programs.
-  perf aims to be lightweight by having minimal dependencies on standard libraries.
-  See the Perf module for an example and full API documentation. 
+  A set of tools to measure performance of Haskell programs.
+  See the Perf module for an example and full API documentation.
 
 category:           project
 homepage:           https://github.com/tonyday567/perf#readme

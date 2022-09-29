@@ -15,6 +15,7 @@ module Perf.Report
     parseReportConfig,
     writeResult,
     readResult,
+    CompareResult (..),
     compareNote,
     outercalate,
     reportGolden,

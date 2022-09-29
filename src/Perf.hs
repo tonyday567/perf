@@ -6,25 +6,29 @@
 
 -- | == Introduction
 --
--- /perf/ provides high-resolution measurements of the runtime of Haskell functions. It does so by reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture.
+-- /perf/ provides tools for measuring the runtime performance of Haskell functions. It includes:
 --
--- With /perf/ the user may measure both pure and effectful functions, as shown in the Example below. Every piece of code the user may want to profile is passed as an argument to the function, along with a text label (that will be displayed in the final summary) and the measurement function.
+-- - time measurement via reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture. For more details, see  https://en.wikipedia.org/wiki/Time_Stamp_Counter
 --
--- 'PerfT' is a monad transformer designed to collect performance information.
--- The transformer can be used to add performance measurent to existing code using 'Measure's.
+-- - abstraction of what is a 'Measure' so that the library includes both space and time measurement with the same API.
 --
+-- - 'PerfT' which is a monad transformer designed to add the collection of performance information to existing code. Running the code produces a tuple of the original computation results, and a Map of performance measurements that were specified.
 --
--- Running the code produces a tuple of the original computation results, and a Map of performance measurements that were specified.  Indicative results:
+-- - functionality to determine performance order, in 'Perf.BigO'
 --
--- == Note on RDTSC
+-- Usage examples can be found in app/perf-explore.hs and the project's readme.org.
 --
--- Measuring program runtime with RDTSC comes with a set of caveats, such as portability issues, internal timer consistency in the case of multiprocessor architectures, and fluctuations due to power throttling. For more details, see : https://en.wikipedia.org/wiki/Time_Stamp_Counter
 module Perf
   ( -- * re-exports
+    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
     module Perf.Algos,
+    -- | Low-level time performance 'Measure's counting 'Cycles'
     module Perf.Time,
+    -- | Order of complexity computations
     module Perf.BigO,
+    -- | Low-level space performance 'Measure's based on GHC's allocation statistics.
     module Perf.Space,
+    -- | Reporting, including 'Golden' file functionality.
     module Perf.Report,
     module Perf.Stats,
     module Perf.Types,

@@ -15,6 +15,7 @@ module Perf.Report
     parseReportConfig,
     writeResult,
     readResult,
+    CompareResult (..),
     compareNote,
     outercalate,
     reportGolden,
@@ -25,12 +26,8 @@ module Perf.Report
   )
 where
 
-import Box hiding (value)
-import qualified Box.Csv as Csv
 import Control.Monad
-import qualified Data.Attoparsec.Text as A
 import Data.Bool
-import Data.Either (fromRight)
 import Data.Foldable
 import Data.FormatN hiding (format)
 import qualified Data.List as List
@@ -64,7 +61,6 @@ parseHeader h =
     <|> pure h
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
---
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
 
 -- |
@@ -103,17 +99,15 @@ parseReportConfig c =
     <*> parseHeader (includeHeader c)
     <*> parseCompareLevels (levels c)
 
--- | Write results to file, in CSV format.
+-- | Write results to file
 writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
-writeResult f m = glue <$> Csv.rowCommitter (Csv.CsvConfig f ',' Csv.NoHeader) (\(ls, v) -> ls <> [expt (Just 3) v]) <*|> qList (Map.toList m)
+writeResult f m = writeFile f (show m)
 
--- | Read results from file that are in CSV format.
+-- | Read results from file
 readResult :: FilePath -> IO (Map.Map [Text] Double)
 readResult f = do
-  r <- Csv.runCsv (Csv.CsvConfig f ',' Csv.NoHeader) Csv.fields
-  let r' = [x | (Right x) <- r]
-  let l = (\x -> (List.init x, fromRight 0 (A.parseOnly Csv.double (List.last x)))) <$> r'
-  pure $ Map.fromList l
+  a <- readFile f
+  pure (read a)
 
 -- | Comparison data between two results.
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
@@ -222,7 +216,7 @@ data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} derivin
 parseGolden :: String -> Parser Golden
 parseGolden def =
   Golden
-    <$> option str (Options.Applicative.value ("other/" <> def <> ".csv") <> long "golden" <> short 'g' <> help "golden file name")
+    <$> option str (Options.Applicative.value ("other/" <> def <> ".perf") <> long "golden" <> short 'g' <> help "golden file name")
     <*> switch (long "check" <> short 'c' <> help "check versus a golden file")
     <*> switch (long "record" <> short 'r' <> help "record the result to a golden file")
 

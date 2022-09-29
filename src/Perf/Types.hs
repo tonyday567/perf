@@ -52,12 +52,10 @@ import Data.String
 import Data.Text (Text)
 import Prelude
 
-
 -- | Abstraction of a performance measurement within a monadic context.
 --
 -- - measure applies a function to a value, returning a tuple of the performance measure, and the computation result.
 -- - measureM evaluates a monadic value and returns a performance-result tuple.
---
 data Measure m t = Measure
   { measure :: forall a b. (a -> b) -> a -> m (t, b),
     measureM :: forall a. m a -> m (t, a)
@@ -86,7 +84,6 @@ repeated n (Measure p m) =
 {-# INLINEABLE repeated #-}
 
 -- | Abstraction of a performance measurement with a pre and a post step wrapping the computation.
---
 data StepMeasure m t = forall i. StepMeasure {pre :: m i, post :: i -> m t}
 
 instance (Functor m) => Functor (StepMeasure m) where
@@ -138,7 +135,6 @@ multiM action n a =
 {-# INLINEABLE multiM #-}
 
 -- | Performance measurement transformer storing a 'Measure' and a map of named results.
---
 newtype PerfT m t a = PerfT
   { measurePerf :: StateT (Measure m t, Map.Map Text t) m a
   }

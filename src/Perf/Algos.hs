@@ -291,7 +291,6 @@ sumF xs = foldr sumF' id xs 0
 sumFuse :: Int -> Int
 sumFuse x = sum [1 .. x]
 
-
 -- | Fusion under polymorph
 sumFusePoly :: (Enum a, Num a) => a -> a
 sumFusePoly x = sum [1 .. x]
@@ -388,6 +387,7 @@ lengthFoldr = foldr f b
   where
     b = 0
     f _ xs = 1 + xs
+
 -- | foldr style with explicit const usage.
 lengthFoldrConst :: [a] -> Int
 lengthFoldrConst = foldr (const (1 +)) 0

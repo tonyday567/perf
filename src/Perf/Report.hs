@@ -60,7 +60,6 @@ parseHeader h =
     <|> pure h
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
---
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
 
 -- |

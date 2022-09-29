@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               perf
-version:            0.10.0
+version:            0.10.1
 synopsis:           Low-level run time measurement.
 description:
   A set of tools to accurately measure time performance of Haskell programs.

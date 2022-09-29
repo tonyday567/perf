@@ -12,8 +12,7 @@
 --
 -- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 module Perf.Time
-  (
-    tick_,
+  ( tick_,
     warmup,
     tick,
     tickWHNF,
@@ -160,7 +159,6 @@ ticksIO = multiM tickIO
 {-# INLINEABLE ticksIO #-}
 
 -- | tick as a 'StepMeasure'
---
 stepTime :: StepMeasure IO Cycles
 stepTime = StepMeasure start stop
   where

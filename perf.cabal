@@ -68,7 +68,7 @@ executable perf-explore
     , base                  >=4.7   && <5
     , containers            ^>=0.6
     , deepseq               >=1.4.4 && <1.5
-    , formatn               >=0.2 && 0.3
+    , formatn               >=0.2 && <0.3
     , gauge                 ^>=0.2.5
     , mtl                   >=2.2.2 && <2.4
     , optparse-applicative  ^>=0.17

@@ -12,7 +12,7 @@ module Perf.Space
     spaceLabels,
     space,
     allocation,
-    Bytes(..),
+    Bytes (..),
   )
 where
 
@@ -28,7 +28,7 @@ import Prelude hiding (cycle)
 data SpaceStats = SpaceStats {allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64} deriving (Read, Show, Eq)
 
 -- | Convert 'SpaceStats' to a list of numbers.
-ssToList :: Num a => SpaceStats -> [a]
+ssToList :: (Num a) => SpaceStats -> [a]
 ssToList (SpaceStats x1 x2 x3 x4 x5) = [fromIntegral x1, fromIntegral x2, fromIntegral x3, fromIntegral x4, fromIntegral x5]
 
 instance Semigroup SpaceStats where

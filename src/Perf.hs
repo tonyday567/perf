@@ -1,7 +1,3 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | == Introduction

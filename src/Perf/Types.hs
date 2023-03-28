@@ -1,11 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -48,7 +47,6 @@ import Control.Monad.State.Lazy
 import Data.Bifunctor
 import Data.Functor.Identity
 import qualified Data.Map.Strict as Map
-import Data.String
 import Data.Text (Text)
 import Prelude
 

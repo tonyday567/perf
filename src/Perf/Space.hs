@@ -3,7 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | Space performance measurement.
@@ -18,7 +17,6 @@ module Perf.Space
 where
 
 import Control.Monad.State.Lazy
-import Data.String
 import Data.Text (Text)
 import Data.Word
 import GHC.Stats

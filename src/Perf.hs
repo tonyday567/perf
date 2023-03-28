@@ -1,7 +1,3 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | == Introduction
@@ -17,9 +13,9 @@
 -- - functionality to determine performance order, in 'Perf.BigO'
 --
 -- Usage examples can be found in app/perf-explore.hs and the project's readme.org.
---
 module Perf
   ( -- * re-exports
+
     -- | Various (fast loop) algorithms that have been used for testing perf functionality.
     module Perf.Algos,
     -- | Low-level time performance 'Measure's counting 'Cycles'

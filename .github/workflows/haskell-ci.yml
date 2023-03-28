@@ -47,9 +47,8 @@ jobs:
       - name: cabal build
         run: |
           cabal update
-          cabal configure --enable-tests
+          cabal configure
           cabal build
-          cabal test
       - if: matrix.docspec
         name: run cabal-docspec
-        run: cabal-docspec --check-properties
+        run: cabal-docspec

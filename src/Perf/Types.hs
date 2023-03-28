@@ -1,11 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
@@ -48,7 +47,6 @@ import Control.Monad.State.Lazy
 import Data.Bifunctor
 import Data.Functor.Identity
 import qualified Data.Map.Strict as Map
-import Data.String
 import Data.Text (Text)
 import Prelude
 
@@ -105,7 +103,7 @@ toMeasureN n (StepMeasure pre' post') = Measure (multi (step pre' post') n) (mul
 {-# INLINEABLE toMeasureN #-}
 
 -- | A single step measurement.
-step :: Monad m => m i -> (i -> m t) -> (a -> b) -> a -> m (t, b)
+step :: (Monad m) => m i -> (i -> m t) -> (a -> b) -> a -> m (t, b)
 step pre' post' !f !a = do
   !p <- pre'
   !b <- pure $! f a
@@ -114,7 +112,7 @@ step pre' post' !f !a = do
 {-# INLINEABLE step #-}
 
 -- | A single step measurement.
-stepM :: Monad m => m i -> (i -> m t) -> m a -> m (t, a)
+stepM :: (Monad m) => m i -> (i -> m t) -> m a -> m (t, a)
 stepM pre' post' a = do
   !p <- pre'
   !ma <- a
@@ -123,13 +121,13 @@ stepM pre' post' a = do
 {-# INLINEABLE stepM #-}
 
 -- | Multiple measurement
-multi :: Monad m => ((a -> b) -> a -> m (t, b)) -> Int -> (a -> b) -> a -> m ([t], b)
+multi :: (Monad m) => ((a -> b) -> a -> m (t, b)) -> Int -> (a -> b) -> a -> m ([t], b)
 multi action n !f !a =
   fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action f a))
 {-# INLINEABLE multi #-}
 
 -- | Multiple measurements
-multiM :: Monad m => (m a -> m (t, a)) -> Int -> m a -> m ([t], a)
+multiM :: (Monad m) => (m a -> m (t, a)) -> Int -> m a -> m ([t], a)
 multiM action n a =
   fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action a))
 {-# INLINEABLE multiM #-}
@@ -214,12 +212,12 @@ runPerfT m p = fmap (second snd) <$> flip runStateT (m, Map.empty) $ measurePerf
 
 -- | Consume the PerfT layer and return the original monadic result.
 -- Fingers crossed, PerfT structure should be completely compiled away.
-evalPerfT :: Monad m => Measure m t -> PerfT m t a -> m a
+evalPerfT :: (Monad m) => Measure m t -> PerfT m t a -> m a
 evalPerfT m p = fmap fst <$> flip runStateT (m, Map.empty) $ measurePerf p
 {-# INLINEABLE evalPerfT #-}
 
 -- | Consume a PerfT layer and return the measurement.
-execPerfT :: Monad m => Measure m t -> PerfT m t a -> m (Map.Map Text t)
+execPerfT :: (Monad m) => Measure m t -> PerfT m t a -> m (Map.Map Text t)
 execPerfT m p = fmap snd <$> flip execStateT (m, Map.empty) $ measurePerf p
 {-# INLINEABLE execPerfT #-}
 

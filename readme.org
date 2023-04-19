@@ -33,18 +33,16 @@ import qualified Data.Text.IO as Text
 import qualified Data.Map.Strict as Map
 import Control.Monad
 import Data.Bifunctor
-import Chart
-import Optics.Core
 putStrLn "ok"
 #+end_src
 
 #+RESULTS:
 #+begin_example
-Build profile: -w ghc-8.10.7 -O1
+Build profile: -w ghc-9.4.4 -O1
 In order, the following will be built (use -v for more details):
- - perf-0.10.0 (lib) (ephemeral targets)
-Preprocessing library for perf-0.10.0..
-GHCi, version 8.10.7: https://www.haskell.org/ghc/  :? for help
+ - perf-0.10.3 (lib) (ephemeral targets)
+Preprocessing library for perf-0.10.3..
+GHCi, version 9.4.4: https://www.haskell.org/ghc/  :? for help
 Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
 [1 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
 [2 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
@@ -57,7 +55,7 @@ Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
 [9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
 Ok, 9 modules loaded.
 > Ok, 9 modules loaded.
->  >  >  >  >  >  >  >  >  >  >  >  >  >  > ok
+ok
 #+end_example
 
 * Time
@@ -617,7 +615,7 @@ Instead, we:
 #+begin_src haskell :results output :exports both
 sims = 1000
 ns = [1,10,100,1000,10000]
-ms <- tcurve StatBest sims (\x -> sum [1..x]) ns
+ms <- tcurve StatBest sims (\x -> sum $ nub [1..x]) ns
 ms
 (o',res) = estO ns ms
 o'
@@ -625,18 +623,18 @@ res
 #+end_src
 
 #+RESULTS:
-:
-: >  > [2711.805579584775,2699.1705232100257,6758.985419269684,72156.72363105198,759825.979088117]
-: > Order {factors = [0.0,0.0,0.0,0.0,75.9825979088117,0.0,0.0,0.0]}
-: [2635.822981675963,1939.3445441219087,-839.2743716114855,-3825.8742777597217,0.0]
+: [4117.0,4114.0,3651.8571428571427,3750.175675675676,3558.5338492166466,4158.8070490225755,3794.519835946401]
+: Order {factors = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,3794.519835946401]}
+: [322.48016405359886,319.48016405359886,-142.66269308925848,-44.3441602707253,-235.9859867297546,364.28721307617434,0.0]
 
 
 #+begin_src haskell :results output :exports both
-estOrder (\x -> sum [1..x]) 1000 [1,10,100,1000,10000]
+import Data.List (nub)
+estOrder (\x -> nub [1..x]) 1000 [1,10,100,1000,10000]
 #+end_src
 
 #+RESULTS:
-: BigOrder {bigOrder = N1, bigFactor = 75.94306356108662, bigConstant = 0.0}
+: BigOrder {bigOrder = N0, bigFactor = 3736.428266738495, bigConstant = 0.0}
 
 * spacetime debug
 
@@ -656,6 +654,7 @@ statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
 : > r1 :: Map.Map Text.Text [[Integer]]
 : fromList [([""],[0.0,0.0,0.0,0.0,0.0,15500.0])]
 : statD StatAverage :: [Double] -> Double
+
 
 * perf R&D
 

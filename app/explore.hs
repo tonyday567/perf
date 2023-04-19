@@ -9,7 +9,7 @@ module Main where
 import Control.DeepSeq
 import Control.Monad.State.Lazy
 import Data.FormatN
-import Data.List (intercalate)
+import Data.List (intercalate, nub)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -19,7 +19,7 @@ import Options.Applicative
 import Perf
 import Prelude
 
-data RunType = RunExample | RunExamples | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
+data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
 data Options = Options
   { optionN :: Int,
@@ -38,6 +38,7 @@ parseRun :: Parser RunType
 parseRun =
   flag' RunSums (long "sums" <> help "run on sum algorithms")
     <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
+    <|> flag' RunNub (long "nub" <> help "nub test")
     <|> flag' RunExamples (long "examples" <> help "run on example algorithms")
     <|> flag' RunExample (long "example" <> help "run on the example algorithm")
     <|> flag' RunExampleIO (long "exampleIO" <> help "exampleIO test")
@@ -150,6 +151,10 @@ main = do
   let cfg = optionReportConfig o
 
   case r of
+    RunNub -> do
+      m <- execPerfT (measureDs mt n) $ void $ ffap "nub" nub [1 .. l]
+      when w (writeFile raw (show m))
+      report cfg gold (measureLabels mt) (statify s m)
     RunExample -> do
       m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
       when w (writeFile raw (show m))

@@ -1,5 +1,5 @@
 packages:
   perf.cabal
 
-write-ghc-environment-files: always
-
+allow-newer: numhask-space:semigroupoids,
+             tdigest:semigroupoids

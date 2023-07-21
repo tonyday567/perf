@@ -49,6 +49,7 @@ import Data.Functor.Identity
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import Prelude
+import Control.Monad
 
 -- | Abstraction of a performance measurement within a monadic context.
 --

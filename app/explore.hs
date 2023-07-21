@@ -18,6 +18,7 @@ import Gauge
 import Options.Applicative
 import Perf
 import Prelude
+import Control.Monad
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 

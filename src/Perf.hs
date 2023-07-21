@@ -29,6 +29,7 @@ module Perf
     module Perf.Stats,
     module Perf.Types,
     module Perf.Measure,
+    module Perf.Count,
   )
 where
 
@@ -40,4 +41,5 @@ import Perf.Space
 import Perf.Stats
 import Perf.Time
 import Perf.Types
+import Perf.Count
 import Prelude hiding (cycle)

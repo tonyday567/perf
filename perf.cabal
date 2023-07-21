@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               perf
-version:            0.10.3
+version:            0.11.0.0
 synopsis:           Low-level run time measurement.
 description:
   A set of tools to measure performance of Haskell programs.
@@ -37,6 +37,7 @@ library
     Perf
     Perf.Algos
     Perf.BigO
+    Perf.Count
     Perf.Measure
     Perf.Report
     Perf.Space

@@ -21,6 +21,8 @@ module Perf.Report
     reportGolden,
     reportOrg2D,
     Golden (..),
+    defaultGolden,
+    goldenFromOptions,
     parseGolden,
     report,
   )
@@ -39,6 +41,7 @@ import qualified Data.Text.IO as Text
 import GHC.Generics
 import Options.Applicative
 import Text.Printf hiding (parseFormat)
+import Data.List (intercalate)
 
 -- | Type of format for report
 data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)
@@ -211,6 +214,16 @@ reportToConsole xs = traverse_ Text.putStrLn xs
 
 -- | Golden file options.
 data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
+
+-- | Default filepath is "other/golden.perf"
+defaultGolden :: Golden
+defaultGolden = Golden "other/golden.perf" False False
+
+-- | Make a filepath from supplied options
+goldenFromOptions :: [String] -> Golden -> Golden
+goldenFromOptions xs g = bool g g {golden = fp} (golden g == golden defaultGolden)
+  where
+    fp = "other/" <> intercalate "-" xs <> ".perf"
 
 -- | Parse command-line golden file options.
 parseGolden :: String -> Parser Golden

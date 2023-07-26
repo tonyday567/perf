@@ -1,7 +1,4 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Order of complexity calculations.
 --
@@ -40,11 +37,11 @@ module Perf.BigO
 where
 
 import Data.Bool
-import qualified Data.List as List
-import qualified Data.Map.Strict as Map
+import Data.List qualified as List
+import Data.Map.Strict qualified as Map
 import Data.Maybe
 import Data.Monoid
-import qualified Data.Vector as V
+import Data.Vector qualified as V
 import GHC.Generics
 import Perf.Stats
 import Perf.Time

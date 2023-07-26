@@ -1,5 +1,2 @@
 packages:
   perf.cabal
-
-allow-newer: numhask-space:semigroupoids,
-             tdigest:semigroupoids

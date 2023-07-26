@@ -1,12 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Abstract types of performance measurement.
 module Perf.Types
@@ -43,13 +35,13 @@ module Perf.Types
 where
 
 import Control.DeepSeq
+import Control.Monad
 import Control.Monad.State.Lazy
 import Data.Bifunctor
 import Data.Functor.Identity
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Prelude
-import Control.Monad
 
 -- | Abstraction of a performance measurement within a monadic context.
 --

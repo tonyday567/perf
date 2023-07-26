@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Reporting on performance, potentially checking versus a canned results.
@@ -32,16 +31,16 @@ import Control.Monad
 import Data.Bool
 import Data.Foldable
 import Data.FormatN hiding (format)
-import qualified Data.List as List
+import Data.List (intercalate)
+import Data.List qualified as List
 import Data.Map.Merge.Strict
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
 import Text.Printf hiding (parseFormat)
-import Data.List (intercalate)
 
 -- | Type of format for report
 data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)

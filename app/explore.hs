@@ -1,24 +1,21 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- | basic measurement and callibration
 module Main where
 
 import Control.DeepSeq
+import Control.Monad
 import Control.Monad.State.Lazy
 import Data.FormatN
 import Data.List (intercalate, nub)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
 import Gauge
 import Options.Applicative
 import Perf
 import Prelude
-import Control.Monad
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
@@ -133,17 +130,7 @@ main = do
   let a = optionExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let gold' = optionGolden o
-  let gold =
-        case golden gold' of
-          "other/golden.perf" ->
-            gold'
-              { golden =
-                  "other/"
-                    <> intercalate "-" [show r, show n, show l, show mt]
-                    <> ".perf"
-              }
-          _ -> gold'
+  let gold = goldenFromOptions [show r, show n, show l, show mt] (optionGolden o)
   let w = optionRawStats o
   let raw =
         "other/"

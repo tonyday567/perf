@@ -1,6 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Statistical choices for multiple performance measurements.
 module Perf.Stats
@@ -22,8 +20,8 @@ module Perf.Stats
 where
 
 import Control.Monad.State.Lazy
-import qualified Data.List as List
-import qualified Data.Map.Strict as Map
+import Data.List qualified as List
+import Data.Map.Strict qualified as Map
 import Data.Text (Text, pack)
 import NumHask.Space (quantile)
 import Options.Applicative

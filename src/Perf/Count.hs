@@ -1,9 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 -- | Simple counter.
 module Perf.Count
   ( count,
@@ -24,5 +18,5 @@ count = StepMeasure start stop
 
 -- | Count the number of times measured.
 countN :: Int -> Measure IO Int
-countN n = fmap sum $ toMeasureN n $ count
+countN n = sum <$> toMeasureN n count
 {-# INLINEABLE countN #-}

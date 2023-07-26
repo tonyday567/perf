@@ -1,9 +1,4 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Space performance measurement.
 module Perf.Space
@@ -16,13 +11,13 @@ module Perf.Space
   )
 where
 
+import Control.Monad
 import Data.Text (Text)
 import Data.Word
 import GHC.Stats
 import Perf.Types
 import System.Mem
 import Prelude hiding (cycle)
-import Control.Monad
 
 -- | GHC allocation statistics.
 data SpaceStats = SpaceStats {allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64} deriving (Read, Show, Eq)

@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-
 -- | == Introduction
 --
 -- /perf/ provides tools for measuring the runtime performance of Haskell functions. It includes:
@@ -35,11 +33,11 @@ where
 
 import Perf.Algos
 import Perf.BigO
+import Perf.Count
 import Perf.Measure
 import Perf.Report
 import Perf.Space
 import Perf.Stats
 import Perf.Time
 import Perf.Types
-import Perf.Count
 import Prelude hiding (cycle)

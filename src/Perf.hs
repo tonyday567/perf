@@ -14,20 +14,24 @@
 module Perf
   ( -- * re-exports
 
-    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
-    module Perf.Algos,
-    -- | Low-level time performance 'Measure's counting 'Cycles'
+    module Perf.Types,
+    -- | Representation of what a Performance 'Measure' is.
+    module Perf.Measure,
+    -- | Low-level time performance 'Measure' counting 'Cycles'
     module Perf.Time,
-    -- | Order of complexity computations
-    module Perf.BigO,
     -- | Low-level space performance 'Measure's based on GHC's allocation statistics.
     module Perf.Space,
+    -- | Simple loop counter
+    module Perf.Count,
+
+    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
+    module Perf.Algos,
+    -- | Order of complexity computations
+    module Perf.BigO,
     -- | Reporting, including 'Golden' file functionality.
     module Perf.Report,
+    -- | Statistical support
     module Perf.Stats,
-    module Perf.Types,
-    module Perf.Measure,
-    module Perf.Count,
   )
 where
 

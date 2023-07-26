@@ -2,7 +2,8 @@
 
 -- | Abstract types of performance measurement.
 module Perf.Types
-  ( Measure (..),
+  ( -- * Measure
+    Measure (..),
     repeated,
     StepMeasure (..),
     toMeasure,

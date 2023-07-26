@@ -1,5 +1,2 @@
 packages:
   perf.cabal
-
-write-ghc-environment-files: always
-

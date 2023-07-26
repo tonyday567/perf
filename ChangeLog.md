@@ -1,3 +1,8 @@
+0.11.0.0
+===
+* added Perf.Count
+* GHC 9.6.2 support
+
 0.10.0
 ===
 * GHC 9.2.1 support

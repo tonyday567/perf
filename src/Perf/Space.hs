@@ -1,9 +1,4 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Space performance measurement.
 module Perf.Space
@@ -16,7 +11,7 @@ module Perf.Space
   )
 where
 
-import Control.Monad.State.Lazy
+import Control.Monad
 import Data.Text (Text)
 import Data.Word
 import GHC.Stats

@@ -1,17 +1,16 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Order of complexity calculations.
 --
--- <https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N))%20etc What is Order of Complexity> .
+-- References
 --
--- <https://donsbot.wordpress.com/2008/06/04/haskell-as-fast-as-c-working-at-a-high-altitude-for-low-level-performance/ donsbot blog>
+--  - <https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N))%20etc What is Order of Complexity> .
 --
--- <https://www.fpcomplete.com/haskell/tutorial/profiling/ profiling>
+-- -  <https://donsbot.wordpress.com/2008/06/04/haskell-as-fast-as-c-working-at-a-high-altitude-for-low-level-performance/ Hskell as fast as C ~ donsbot blog>
 --
--- <https://www.reddit.com/r/haskell/comments/nl0rkl/looking_for_good_rules_of_thumbs_on_what_haskell/ rules of thumb>
+-- - <https://www.fpcomplete.com/haskell/tutorial/profiling/ profiling ~ fpcomplete>
+--
+-- -  <https://www.reddit.com/r/haskell/comments/nl0rkl/looking_for_good_rules_of_thumbs_on_what_haskell/ rules of thumb ~ reddit>
 module Perf.BigO
   ( O (..),
     olist,
@@ -40,11 +39,11 @@ module Perf.BigO
 where
 
 import Data.Bool
-import qualified Data.List as List
-import qualified Data.Map.Strict as Map
+import Data.List qualified as List
+import Data.Map.Strict qualified as Map
 import Data.Maybe
 import Data.Monoid
-import qualified Data.Vector as V
+import Data.Vector qualified as V
 import GHC.Generics
 import Perf.Stats
 import Perf.Time
@@ -275,7 +274,10 @@ tcurve = dcurve (fmap (fmap fromIntegral) . times)
 -- | BigOrder estimate
 --
 -- > estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
--- BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
+-- > BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
+--
+-- > estOrder (\x -> sum $ nub [1..x]) 100 [1,10,100,1000]
+-- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
 estOrder :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
 estOrder f sims ns = do
   xs <- tcurve StatBest sims f ns

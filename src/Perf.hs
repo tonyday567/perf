@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-
 -- | == Introduction
 --
 -- /perf/ provides tools for measuring the runtime performance of Haskell functions. It includes:
@@ -15,25 +13,29 @@
 -- Usage examples can be found in app/perf-explore.hs and the project's readme.org.
 module Perf
   ( -- * re-exports
-
-    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
-    module Perf.Algos,
-    -- | Low-level time performance 'Measure's counting 'Cycles'
+    module Perf.Types,
+    -- | Representation of what a Performance 'Measure' is.
+    module Perf.Measure,
+    -- | Low-level time performance 'Measure' counting 'Cycles'
     module Perf.Time,
-    -- | Order of complexity computations
-    module Perf.BigO,
     -- | Low-level space performance 'Measure's based on GHC's allocation statistics.
     module Perf.Space,
+    -- | Simple loop counter
+    module Perf.Count,
+    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
+    module Perf.Algos,
+    -- | Order of complexity computations
+    module Perf.BigO,
     -- | Reporting, including 'Golden' file functionality.
     module Perf.Report,
+    -- | Statistical support
     module Perf.Stats,
-    module Perf.Types,
-    module Perf.Measure,
   )
 where
 
 import Perf.Algos
 import Perf.BigO
+import Perf.Count
 import Perf.Measure
 import Perf.Report
 import Perf.Space

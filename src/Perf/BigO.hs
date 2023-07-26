@@ -275,6 +275,9 @@ tcurve = dcurve (fmap (fmap fromIntegral) . times)
 --
 -- > estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
 -- > BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
+--
+-- > estOrder (\x -> sum $ nub [1..x]) 100 [1,10,100,1000]
+-- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
 estOrder :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
 estOrder f sims ns = do
   xs <- tcurve StatBest sims f ns

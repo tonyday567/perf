@@ -37,26 +37,8 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-#+begin_example
-Build profile: -w ghc-9.4.4 -O1
-In order, the following will be built (use -v for more details):
- - perf-0.10.3 (lib) (ephemeral targets)
-Preprocessing library for perf-0.10.3..
-GHCi, version 9.4.4: https://www.haskell.org/ghc/  :? for help
-Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
-[1 of 9] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted )
-[2 of 9] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted )
-[3 of 9] Compiling Perf.Types       ( src/Perf/Types.hs, interpreted )
-[4 of 9] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted )
-[5 of 9] Compiling Perf.Space       ( src/Perf/Space.hs, interpreted )
-[6 of 9] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted )
-[7 of 9] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted )
-[8 of 9] Compiling Perf.Algos       ( src/Perf/Algos.hs, interpreted )
-[9 of 9] Compiling Perf             ( src/Perf.hs, interpreted )
-Ok, 9 modules loaded.
-> Ok, 9 modules loaded.
-ok
-#+end_example
+: Ok, 10 modules loaded.
+: ok
 
 * Time
 ** What is a tick?
@@ -526,22 +508,6 @@ benchmarking function ... function                                 time        
 
 #+end_example
 
-#+begin_src sh :results drawer :exports both
-perf-explore --examples -n 10000 --averagesecs
-#+end_src
-
-#+RESULTS:
-:results:
-label1              label2              results
-
-constFuse           time                5.25e-7
-lengthF             time                2.01e-6
-mapInc              time                8.65e-9
-noop                time                7.19e-9
-sum                 time                2.52e-6
-sumFuse             time                7.91e-7
-:end:
-
 * Space
 
 Data is collected from GHCStats
@@ -552,20 +518,18 @@ Data is collected from GHCStats
 - max_live_bytes
 - max_mem_in_use_bytes
 
-#+begin_src sh :results drawer :exports both
+#+begin_src sh :results ouput :exports both
 perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 #+end_src
 
 #+RESULTS:
-:results:
-label1              label2              results
-
-sum                 MaxMem              1.05e6
-sum                 allocated           7.25e5
-sum                 gcLiveBytes         3.93e5
-sum                 gcollects           7.00e-1
-sum                 maxLiveBytes        3.93e5
-:end:
+| label1 | label2       |  results |
+|        |              |          |
+| sum    | MaxMem       | 839000.0 |
+| sum    | allocated    | 416000.0 |
+| sum    | gcLiveBytes  | 220000.0 |
+| sum    | gcollects    |      0.1 |
+| sum    | maxLiveBytes |      0.0 |
 
 * Resources
 
@@ -583,58 +547,17 @@ Instead, we:
 - pick the order based on lowest absolute error result summed across all the runs,
 
 #+begin_src haskell :results output :exports both
-sims = 1000
-ns = [1,10,100,1000,10000]
-ms <- tcurve StatBest sims (\x -> sum $ nub [1..x]) ns
-ms
-(o',res) = estO ns ms
-o'
-res
-#+end_src
-
-#+RESULTS:
-: [4117.0,4114.0,3651.8571428571427,3750.175675675676,3558.5338492166466,4158.8070490225755,3794.519835946401]
-: Order {factors = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,3794.519835946401]}
-: [322.48016405359886,319.48016405359886,-142.66269308925848,-44.3441602707253,-235.9859867297546,364.28721307617434,0.0]
-
-
-#+begin_src haskell :results output :exports both
+import qualified Prelude as P
 import Data.List (nub)
-estOrder (\x -> nub [1..x]) 1000 [1,10,100,1000,10000]
+estOrder (\x -> sum $ nub [1..x]) 10 [1,10,100,1000]
 #+end_src
 
 #+RESULTS:
-: BigOrder {bigOrder = N0, bigFactor = 3736.428266738495, bigConstant = 0.0}
-
-* spacetime debug
-
-#+begin_src haskell :results output
-t2 = toMeasureN 2 ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-:t ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-r1 <- snd <$> runPerfT t2 (const () |$| ())
-:t r1
-statify StatAverage (fmap (fmap (fmap fromIntegral)) r1)
-:t statD StatAverage
-#+end_src
-
-#+RESULTS:
-:
-: ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
-:   :: Num a => StepMeasure IO [a]
-: > r1 :: Map.Map Text.Text [[Integer]]
-: fromList [([""],[0.0,0.0,0.0,0.0,0.0,15500.0])]
-: statD StatAverage :: [Double] -> Double
-
+: BigOrder {bigOrder = N2, bigFactor = 13.545801, bigConstant = 0.0}
 
 * perf R&D
 
-** docperf
-
-- https://github.com/haskell/cabal/pull/7688
-- integrate bigo here
-- [[https://github.com/tonyday567/doctest-discover/settings]]
-
-** perf R&D
+** references
 - core
   [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
 - profiling
@@ -675,30 +598,35 @@ https://stackoverflow.com/questions/32123475/profiling-builds-with-stack
 
 https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/profiling.html
 
-```
+#+begin_src sh :results output
 mkdir -p .stack-bin
 stack clean
 stack install --work-dir .stack-work-profile --profile --local-bin-path .stack-bin --ghc-options=-fno-prof-auto
 stack exec --profile -- example +RTS -p -hc -s
 stack exec -- hp2ps -c example.hp && ps2pdf example.ps
 stack exec ghc-prof-flamegraph -- example.prof
-```
+#+end_src
 
 memory checks
-
-```
+#+begin_
+src sh :results output
 hp2ps -e8in -c examples.hp
 hp2ps -e8in -c examples.hy # types
 hp2ps -e8in -c examples.hp # constructors
 stack exec example -- +RTS -s - additional memory
 stack exec example -- +RTS -xt -hy
-```
+#+end_src
+
 ** reference
 
-[[https://github.com/haskell-perf][Haskell performance · GitHub]]
+[[https://github.com/haskell-perf][Haskell performance · GitHub
+]]
 [[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
+
 [[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
+
 https://github.com/ndmitchell/spaceleak
+
 [[https://jyp.github.io/posts/controlled-fusion.html][The Spume of Years - Controlling Fusion In Haskell]]
 
 *** Cache speed references

@@ -13,7 +13,6 @@
 -- Usage examples can be found in app/perf-explore.hs and the project's readme.org.
 module Perf
   ( -- * re-exports
-
     module Perf.Types,
     -- | Representation of what a Performance 'Measure' is.
     module Perf.Measure,
@@ -23,7 +22,6 @@ module Perf
     module Perf.Space,
     -- | Simple loop counter
     module Perf.Count,
-
     -- | Various (fast loop) algorithms that have been used for testing perf functionality.
     module Perf.Algos,
     -- | Order of complexity computations

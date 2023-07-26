@@ -608,8 +608,8 @@ stack exec ghc-prof-flamegraph -- example.prof
 #+end_src
 
 memory checks
-#+begin_
-src sh :results output
+
+#+begin_src sh :results output
 hp2ps -e8in -c examples.hp
 hp2ps -e8in -c examples.hy # types
 hp2ps -e8in -c examples.hp # constructors

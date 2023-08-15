@@ -126,7 +126,7 @@ library
         Perf.Types
     ghc-options: -O2
 
-test-suite perf-bench
+benchmark perf-bench
     import: ghc-options-exe-stanza
     import: ghc-options-stanza
     import: ghc2021-stanza

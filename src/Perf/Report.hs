@@ -43,7 +43,6 @@ import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
 import System.Exit
-import System.IO
 import Text.Printf hiding (parseFormat)
 import Text.Read
 
@@ -157,7 +156,7 @@ reportGolden cfg f m = do
     Right o -> do
       let n = compareNote (levels cfg) o m
       _ <- reportToConsole $ formatCompare (format cfg) (includeHeader cfg) n
-      pure $ Right $ bool ExitSuccess (ExitFailure 69) (hasDegraded n)
+      pure $ Right $ bool ExitSuccess (ExitFailure 1) (hasDegraded n)
 
 -- | Org-mode style header.
 formatOrgHeader :: Map.Map [Text] a -> [Text] -> [Text]

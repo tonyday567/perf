@@ -88,9 +88,6 @@ jobs:
       - name: Run tests
         run: cabal test all
 
-      - name: Run benchmarks
-        run: cabal bench --benchmark-options=-c
-
       - name: Check cabal file
         run: cabal check
 

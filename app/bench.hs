@@ -15,8 +15,8 @@ import Data.Text.IO qualified as Text
 import Gauge
 import Options.Applicative
 import Perf
-import Prelude
 import System.Exit
+import Prelude
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
@@ -131,8 +131,7 @@ main = do
   let a = optionExample o
   let r = optionRunType o
   let mt = optionMeasureType o
-  let gold = goldenFromOptions [show r, show n, show l, show mt] (optionGolden o) { check=True  }
-  putStrLn (show gold)
+  let gold = goldenFromOptions [show r, show n, show l, show mt] (optionGolden o) {check = True}
   let w = optionRawStats o
   let raw =
         "other/"

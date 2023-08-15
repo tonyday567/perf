@@ -37,8 +37,38 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-: Ok, 10 modules loaded.
-: ok
+#+begin_example
+Build profile: -w ghc-9.6.2 -O1
+In order, the following will be built (use -v for more details):
+ - perf-0.11.0.0 (exe:perf-explore) (ephemeral targets)
+Preprocessing executable 'perf-explore' for perf-0.11.0.0..
+GHCi, version 9.6.2: https://www.haskell.org/ghc/  :? for help
+Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
+[1 of 2] Compiling Main             ( app/explore.hs, interpreted )
+Ok, one module loaded.
+> [1 of 2] Compiling Main             ( app/explore.hs, interpreted )
+Ok, one module loaded.
+>
+>
+ok
+#+end_example
+
+#+begin_src elisp
+(setq haskell-process-args-cabal-repl '("perf:exe:perf-explore"))
+#+end_src
+
+#+RESULTS:
+| perf:exe:perf-explore |
+
+#+begin_src haskell :results output
+:main -c
+#+end_src
+
+#+RESULTS:
+: label1              label2              old_result          new_result          status
+:
+: sum                 time                4.64e3              1.71e4              degraded
+
 
 * Time
 ** What is a tick?

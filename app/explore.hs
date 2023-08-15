@@ -16,6 +16,7 @@ import Gauge
 import Options.Applicative
 import Perf
 import Prelude
+import System.Exit
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
@@ -121,7 +122,7 @@ testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
 testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
-main :: IO ()
+main :: IO ExitCode
 main = do
   o <- execParser opts
   let !n = optionN o
@@ -173,6 +174,6 @@ main = do
     RunTicks -> do
       m <- statTicksSums n l s
       when w (writeFile raw (show m))
-      reportOrg2D (fmap (expt (Just 3)) m)
+      reportOrg2D (fmap (expt (Just 3)) m) >> pure ExitSuccess
     RunGauge -> do
-      mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)
+      mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples) >> pure ExitSuccess

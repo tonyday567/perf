@@ -126,7 +126,7 @@ library
         Perf.Types
     ghc-options: -O2
 
-executable perf-explore
+benchmark perf-explore
     import: ghc-options-exe-stanza
     import: ghc-options-stanza
     import: ghc2021-stanza
@@ -143,3 +143,4 @@ executable perf-explore
         , perf
         , text                 >=1.2 && <2.1
     ghc-options: -O2
+    type: exitcode-stdio-1.0

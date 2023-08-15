@@ -24,6 +24,7 @@ module Perf.Report
     goldenFromOptions,
     parseGolden,
     report,
+    hasDegraded,
   )
 where
 
@@ -41,6 +42,10 @@ import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
 import Text.Printf hiding (parseFormat)
+import System.Exit
+import System.IO
+import Control.Exception
+import Text.Read
 
 -- | Type of format for report
 data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)
@@ -105,14 +110,17 @@ parseReportConfig c =
 writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
 writeResult f m = writeFile f (show m)
 
--- | Read results from file
-readResult :: FilePath -> IO (Map.Map [Text] Double)
+-- | Read results from a file.
+readResult :: FilePath -> IO (Either String (Map.Map [Text] Double))
 readResult f = do
-  a <- readFile f
-  pure (read a)
+  a :: Either SomeException String <- try (readFile' f)
+  pure $ either (Left . show) readEither a
 
 -- | Comparison data between two results.
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
+
+hasDegraded :: Map.Map a CompareResult -> Bool
+hasDegraded m = any ((=="degraded") . noteResult) $ fmap snd (Map.toList m)
 
 -- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
@@ -139,11 +147,17 @@ outercalate :: Text -> [Text] -> Text
 outercalate c ts = c <> Text.intercalate c ts <> c
 
 -- | Report to a console, comparing the measurement versus a canned file.
-reportGolden :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO ()
+--
+-- Returns a Left 'ExitFailure' if performance degradation is detected, Returns a Left if the golden file doesn't exist or contains bad data.
+reportGolden :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO (Either String ExitCode)
 reportGolden cfg f m = do
   mOrig <- readResult f
-  let n = compareNote (levels cfg) mOrig m
-  reportToConsole $ formatCompare (format cfg) (includeHeader cfg) n
+  case mOrig of
+    Left s -> pure $ Left s
+    Right o -> do
+      let n = compareNote (levels cfg) o m
+      _ <- reportToConsole $ formatCompare (format cfg) (includeHeader cfg) n
+      pure $ Right $ bool ExitSuccess (ExitFailure 69) (hasDegraded n)
 
 -- | Org-mode style header.
 formatOrgHeader :: Map.Map [Text] a -> [Text] -> [Text]
@@ -233,15 +247,23 @@ parseGolden def =
     <*> switch (long "record" <> short 'r' <> help "record the result to a golden file")
 
 -- | Report results
-report :: ReportConfig -> Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
+--
+-- If a goldenFile is checked, and performance has degraded, the function will exit with 'ExitFailure' so that 'cabal bench' and other types of processes such as CI can signal performance issues.
+report :: ReportConfig -> Golden -> [Text] -> Map.Map [Text] [Double] -> IO ExitCode
 report cfg g labels m = do
-  bool
-    (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')))
-    (reportGolden cfg (golden g) m')
+  x <- bool
+    (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')) >> pure ExitSuccess)
+    (do
+        x' <- reportGolden cfg (golden g) m'
+        case x' of
+          Left s -> putStrLn s >> pure ExitSuccess
+          Right e -> pure e
+    )
     (check g)
   when
     (record g)
     (writeResult (golden g) m')
+  pure x
   where
     m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
 

@@ -126,7 +126,26 @@ library
         Perf.Types
     ghc-options: -O2
 
-benchmark perf-explore
+test-suite perf-bench
+    import: ghc-options-exe-stanza
+    import: ghc-options-stanza
+    import: ghc2021-stanza
+    main-is: bench.hs
+    hs-source-dirs: app
+    build-depends:
+        , base                 >=4.7 && <5
+        , containers           >=0.6 && <0.7
+        , deepseq              >=1.4.4 && <1.5
+        , formatn              >=0.2.1 && <0.4
+        , gauge                ^>=0.2.5
+        , mtl                  >=2.2.2 && <2.4
+        , optparse-applicative >=0.17 && <0.19
+        , perf
+        , text                 >=1.2 && <2.1
+    ghc-options: -O2
+    type: exitcode-stdio-1.0
+
+executable perf-explore
     import: ghc-options-exe-stanza
     import: ghc-options-stanza
     import: ghc2021-stanza
@@ -143,4 +162,3 @@ benchmark perf-explore
         , perf
         , text                 >=1.2 && <2.1
     ghc-options: -O2
-    type: exitcode-stdio-1.0

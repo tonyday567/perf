@@ -28,6 +28,7 @@ module Perf.Report
   )
 where
 
+import Control.Exception
 import Control.Monad
 import Data.Bool
 import Data.Foldable
@@ -41,10 +42,9 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
-import Text.Printf hiding (parseFormat)
 import System.Exit
 import System.IO
-import Control.Exception
+import Text.Printf hiding (parseFormat)
 import Text.Read
 
 -- | Type of format for report
@@ -113,14 +113,14 @@ writeResult f m = writeFile f (show m)
 -- | Read results from a file.
 readResult :: FilePath -> IO (Either String (Map.Map [Text] Double))
 readResult f = do
-  a :: Either SomeException String <- try (readFile' f)
+  a :: Either SomeException String <- try (readFile f)
   pure $ either (Left . show) readEither a
 
 -- | Comparison data between two results.
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
 
 hasDegraded :: Map.Map a CompareResult -> Bool
-hasDegraded m = any ((=="degraded") . noteResult) $ fmap snd (Map.toList m)
+hasDegraded m = any ((== "degraded") . noteResult) $ fmap snd (Map.toList m)
 
 -- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
@@ -251,15 +251,16 @@ parseGolden def =
 -- If a goldenFile is checked, and performance has degraded, the function will exit with 'ExitFailure' so that 'cabal bench' and other types of processes such as CI can signal performance issues.
 report :: ReportConfig -> Golden -> [Text] -> Map.Map [Text] [Double] -> IO ExitCode
 report cfg g labels m = do
-  x <- bool
-    (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')) >> pure ExitSuccess)
-    (do
-        x' <- reportGolden cfg (golden g) m'
-        case x' of
-          Left s -> putStrLn s >> pure ExitSuccess
-          Right e -> pure e
-    )
-    (check g)
+  x <-
+    bool
+      (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')) >> pure ExitSuccess)
+      ( do
+          x' <- reportGolden cfg (golden g) m'
+          case x' of
+            Left s -> putStrLn s >> pure ExitSuccess
+            Right e -> pure e
+      )
+      (check g)
   when
     (record g)
     (writeResult (golden g) m')

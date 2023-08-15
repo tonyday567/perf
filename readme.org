@@ -10,7 +10,7 @@
 
 - provides a monad transformer, ~PerfT~, as a light-weight wrapper for use on existing code. ~PerfT~ modifications can be included in code bases, as opposed to performance being separated code and  process, with any effects able to be erased at compile time with ~evalPerfT~.
 
-- focuses on using the rdtsc instruction set that comes with the x86 chip to measure accurate time performance as number of clock cycles.
+- focuses on using the [[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]] instruction set that comes with the x86 chip to measure accurate time performance as number of clock cycles.
 
 - abstracts the concept of what is being measured, so that concepts such as counters, debug checks, time and space performance can be treated equivalently.
 
@@ -468,7 +468,7 @@ perf-explore -n 1000 -l 1000 --lengths
 | lengthTail       | time   |  9830.0 |
 | lengthTailLazy   | time   |  9540.0 |
 
-* Gauge
+** Gauge comparison
 
 #+begin_src sh :results output :exports both
 perf-explore -n 1000 -l 1000 --average --gauge
@@ -508,7 +508,7 @@ benchmarking function ... function                                 time        
 
 #+end_example
 
-* Space
+** Space
 
 Data is collected from GHCStats
 
@@ -531,10 +531,6 @@ perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 | sum    | gcollects    |      0.1 |
 | sum    | maxLiveBytes |      0.0 |
 
-* Resources
-
-[[https://en.wikipedia.org/wiki/Time_Stamp_Counter][rdtsc]]
-
 * Perf.BigO
 
 Perf.BigO represents functionality to determine the complexity order for a computation.
@@ -555,81 +551,112 @@ estOrder (\x -> sum $ nub [1..x]) 10 [1,10,100,1000]
 #+RESULTS:
 : BigOrder {bigOrder = N2, bigFactor = 13.545801, bigConstant = 0.0}
 
-* perf R&D
+* References
 
-** references
-- core
-  [[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][Performance/GHC - HaskellWiki]]
-- profiling
-- detecting space leaks
-- laziness, WHNF and all that.
-  [[http://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
-  [[https://stackoverflow.com/questions/6872898/what-is-weak-head-normal-form/6889335#6889335][haskell - What is Weak Head Normal Form? - Stack Overflow]]
+[[https://github.com/haskell-perf/checklist][The Haskell performance checklist]]
 
-** core
-*** godbolt
-https://godbolt.org/
+[[https://github.com/ndmitchell/spaceleak][ndmitchell/spaceleak: Notes on space leaks]]
 
-*** ghc performance example
-https://gitlab.haskell.org/ghc/ghc/-/issues/15185
+** Core
 
-*** ghc incantations
+[[https://ghc.gitlab.haskell.org/ghc/doc/users_guide/debugging.html#options-debugging][5.13. Debugging the compiler]]
 
 #+begin_src sh
---nonmoving-gc -A128m -N<cores/2> -qn<cores/2> -Fd4
+ghc app/speed.hs -ddump-simpl -ddump-to-file -fforce-recomp -dlint -O
 #+end_src
 
-from: [[https://gitlab.haskell.org/ghc/ghc/-/issues/15185][Enum instance for IntX / WordX are inefficient (#15185) · Issues · Glasgow Ha...]]
+[[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][haskell wiki: Looking at the Core]]
 
-#+begin_src sh
-ghc --make Fact.hs -ddump-simpl -ddump-to-file -O
-#+end_src
+[[https://godbolt.org/][godbolt]]
+
+[[https://gitlab.haskell.org/ghc/ghc/-/issues/15185][ghc issue 15185: Enum instance for IntX / WordX are inefficient]]
+
+[[https://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
 
 ** Profiling
+*** setup
+[[https://ghc.gitlab.haskell.org/ghc/doc/users_guide/profiling.html#prof-heap][8. Profiling]]
 
-https://www.tweag.io/blog/2020-01-30-haskell-profiling/
-
-hp2pretty
-
-threadscope
-
-https://stackoverflow.com/questions/32123475/profiling-builds-with-stack
-
-
-https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/profiling.html
+A typical configuration step for profiling:
 
 #+begin_src sh :results output
-mkdir -p .stack-bin
-stack clean
-stack install --work-dir .stack-work-profile --profile --local-bin-path .stack-bin --ghc-options=-fno-prof-auto
-stack exec --profile -- example +RTS -p -hc -s
-stack exec -- hp2ps -c example.hp && ps2pdf example.ps
-stack exec ghc-prof-flamegraph -- example.prof
+cabal configure --enable-library-profiling --enable-executable-profiling -fprof-auto -fprof -write-ghc-environment-files=always
 #+end_src
 
-memory checks
+A cabal.project.local with profiling enabled:
+
+#+begin_quote
+write-ghc-environment-files: always
+ignore-project: False
+flags: +prof +prof-auto
+library-profiling: True
+executable-profiling: True
+#+end_quote
+
+Examples from markup-parse R&D:
+
+Executable compilation:
 
 #+begin_src sh :results output
-hp2ps -e8in -c examples.hp
-hp2ps -e8in -c examples.hy # types
-hp2ps -e8in -c examples.hp # constructors
-stack exec example -- +RTS -s - additional memory
-stack exec example -- +RTS -xt -hy
+ghc -prof -fprof-auto -rtsopts app/speed0.hs -threaded -fforce-recomp
 #+end_src
 
-** reference
+Executable run:
 
-[[https://github.com/haskell-perf][Haskell performance · GitHub
-]]
-[[https://github.com/haskell-perf/checklist][GitHub - haskell-perf/checklist: The Haskell performance checklist]]
+#+begin_src sh :results output
+app/speed0 +RTS -s -p -hc -l -RTS
+#+end_src
 
-[[https://hackage.haskell.org/package/tasty-bench-0.3/docs/Test-Tasty-Bench.html][spineless, tagless, g-machine]]
+*** Space usage output (-s)
 
-https://github.com/ndmitchell/spaceleak
+#+begin_example
+885,263,472 bytes allocated in the heap
+       8,507,448 bytes copied during GC
+         163,200 bytes maximum residency (4 sample(s))
+          27,752 bytes maximum slop
+               6 MiB total memory in use (0 MiB lost due to fragmentation)
 
-[[https://jyp.github.io/posts/controlled-fusion.html][The Spume of Years - Controlling Fusion In Haskell]]
+                                     Tot time (elapsed)  Avg pause  Max pause
+  Gen  0       207 colls,     0 par    0.009s   0.010s     0.0001s    0.0002s
+  Gen  1         4 colls,     0 par    0.001s   0.001s     0.0004s    0.0005s
 
-*** Cache speed references
+  TASKS: 4 (1 bound, 3 peak workers (3 total), using -N1)
+
+  SPARKS: 0 (0 converted, 0 overflowed, 0 dud, 0 GC'd, 0 fizzled)
+
+  INIT    time    0.006s  (  0.006s elapsed)
+  MUT     time    0.367s  (  0.360s elapsed)
+  GC      time    0.010s  (  0.011s elapsed)
+  RP      time    0.000s  (  0.000s elapsed)
+  PROF    time    0.000s  (  0.000s elapsed)
+  EXIT    time    0.001s  (  0.001s elapsed)
+  Total   time    0.384s  (  0.380s elapsed)
+#+end_example
+
+*** Cost center profile (-p)
+
+Dumped to speed0.prof
+
+#+begin_example
+COST CENTRE MODULE                SRC                                            %time %alloc
+
+token       MarkupParse           src/MarkupParse.hs:(259,1)-(260,20)             50.2   50.4
+wrappedQ'   MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(215,1)-(217,78)   20.8   23.1
+ws_         MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(135,1)-(146,4)    14.3    5.5
+eq          MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:243:1-30           10.6   11.1
+gather      MarkupParse           src/MarkupParse.hs:(420,1)-(428,100)             2.4    3.7
+runParser   FlatParse.Basic       src/FlatParse/Basic.hs:(217,1)-(225,24)          1.0    6.0
+#+end_example
+
+*** heap analysis (-hc -l)
+
+#+begin_src sh :results output
+eventlog2html speed0.eventlog
+#+end_src
+
+Produces speed0.eventlog.html which contains heap charts.
+
+** Cache speed
 
 The average cycles per + operation can get down to about 0.7 cycles, and there are about 4 cache registers per cycle, so a sum pipeline uses 2.8 register instructions per +.
 
@@ -642,3 +669,5 @@ The average cycles per + operation can get down to about 0.7 cycles, and there a
 | DRAM hit          | 195 cycles     |
 | L1 miss           | 40 cycles      |
 | L2 miss           | >600 cycles     |
+
+

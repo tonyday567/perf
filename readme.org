@@ -18,7 +18,7 @@
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
-#+begin_src haskell :results output :exports both
+#+begin_src haskell :results output
 :r
 :set prompt "> "
 :set -Wno-type-defaults
@@ -37,8 +37,22 @@ putStrLn "ok"
 #+end_src
 
 #+RESULTS:
-: Ok, 10 modules loaded.
-: ok
+#+begin_example
+Preprocessing library for perf-0.12.0.0..
+Building library for perf-0.12.0.0..
+[ 7 of 10] Compiling Perf.Report      ( src/Perf/Report.hs, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf/Report.o, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf/Report.dyn_o ) [Source file changed]
+[10 of 10] Compiling Perf             ( src/Perf.hs, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf.o, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf.dyn_o ) [Source file changed]
+Preprocessing benchmark 'perf-bench' for perf-0.12.0.0..
+GHCi, version 9.6.2: https://www.haskell.org/ghc/  :? for help
+Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
+[1 of 2] Compiling Main             ( app/bench.hs, interpreted )
+Ok, one module loaded.
+> [1 of 2] Compiling Main             ( app/bench.hs, interpreted )
+Ok, one module loaded.
+>
+>
+ok
+#+end_example
 
 * Time
 ** What is a tick?
@@ -192,7 +206,7 @@ outer               print-result        time                5.46e3              
 
 * perf-explore
 
-~perf-explore~ contains some exploratory routines to help develop =perf=
+~perf-explore~ contains some exploratory routines used to develop =perf=
 
 #+begin_src sh :results output :exports both
 perf-explore --help
@@ -200,56 +214,57 @@ perf-explore --help
 
 #+RESULTS:
 #+begin_example
-basic perf callibration
+examples of perf usage
 
-Usage: perf-explore [-n|--runs ARG] [-l|--length ARG]
+Usage: perf-explore [-n|--runs ARG]
                     [--best | --median | --average | --averagesecs]
-                    [--sums | --lengths | --examples | --example | --exampleIO |
-                      --noops | --ticks | --gauge]
-                    [--time | --space | --spacetime | --allocation]
+                    [--time | --space | --spacetime | --allocation | --count]
+                    [-g|--golden ARG] [--nocheck] [-r|--record]
+                    [--header | --noheader] [--error ARG] [--warning ARG]
+                    [--improved ARG]
+                    [--sums | --lengths | --nub | --examples | --example |
+                      --exampleIO | --noops | --ticks | --gauge]
+                    [-l|--length ARG]
                     [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
-                      --noOp] [-g|--golden ARG] [-c|--check] [-r|--record]
-                    [--orgmode | --console] [--header | --noheader]
-                    [--error ARG] [--warning ARG] [--improved ARG] [-w|--raw]
+                      --noOp]
 
-  perf benchmarking
+  perf exploration
 
 Available options:
   -n,--runs ARG            number of runs to perform
-  -l,--length ARG          length of list
   --best                   report upper decile
   --median                 report median
   --average                report average
   --averagesecs            report average in seconds
+  --time                   measure time performance
+  --space                  measure space performance
+  --spacetime              measure both space and time performance
+  --allocation             measure bytes allocated
+  --count                  measure count
+  -g,--golden ARG          golden file name
+  --nocheck                do not check versus the golden file
+  -r,--record              record the result to the golden file
+  --header                 include headers
+  --noheader               dont include headers
+  --error ARG              error level
+  --warning ARG            warning level
+  --improved ARG           improved level
   --sums                   run on sum algorithms
   --lengths                run on length algorithms
+  --nub                    nub test
   --examples               run on example algorithms
   --example                run on the example algorithm
   --exampleIO              exampleIO test
   --noops                  noops test
   --ticks                  tick test
   --gauge                  gauge runs on exmaple for comparison
-  --time                   measure time performance
-  --space                  measure space performance
-  --spacetime              measure both space and time performance
-  --allocation             measure bytes allocated
+  -l,--length ARG          length of list
   --sumFuse                fused sum pipeline
   --sum                    sum
   --lengthF                foldr id length
   --constFuse              fused const pipeline
   --mapInc                 fmap (+1)
   --noOp                   const ()
-  -g,--golden ARG          golden file name
-  -c,--check               check versus a golden file
-  -r,--record              record the result to a golden file
-  --orgmode                report using orgmode table format
-  --console                report using plain table format
-  --header                 include headers
-  --noheader               dont include headers
-  --error ARG              error level
-  --warning ARG            warning level
-  --improved ARG           improved level
-  -w,--raw                 write raw statistics to file
   -h,--help                Show this help text
 #+end_example
 
@@ -276,7 +291,7 @@ perf-explore -n 10000 -l 1000 --sum
 This no-op experiment is useful to understand the pure time performance of the machinery around measurement. It can be (re)run with:
 
 #+begin_src sh :results output :exports both
-perf-explore --noops --raw
+perf-explore --noops
 #+end_src
 
 #+RESULTS:

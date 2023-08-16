@@ -2,31 +2,32 @@
 
 -- | Reporting on performance, potentially checking versus a canned results.
 module Perf.Report
-  ( Format (..),
-    parseFormat,
+  ( Name,
     Header (..),
     parseHeader,
     CompareLevels (..),
     defaultCompareLevels,
     parseCompareLevels,
-    ReportConfig (..),
-    defaultReportConfig,
-    parseReportConfig,
+    ReportOptions (..),
+    defaultReportOptions,
+    parseReportOptions,
+    infoReportOptions,
+    report,
+    reportMain,
+    reportMainWith,
     writeResult,
     readResult,
     CompareResult (..),
     compareNote,
-    outercalate,
-    reportGolden,
     reportOrg2D,
     Golden (..),
     defaultGolden,
-    goldenFromOptions,
     parseGolden,
-    report,
+    replaceDefaultFilePath,
   )
 where
 
+import Control.Exception
 import Control.Monad
 import Data.Bool
 import Data.Foldable
@@ -40,27 +41,95 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
+import Perf.Measure
+import Perf.Stats
+import Perf.Types
+import System.Exit
 import Text.Printf hiding (parseFormat)
+import Text.Read
 
--- | Type of format for report
-data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)
-
--- | Command-line parser for 'Format'
-parseFormat :: Format -> Parser Format
-parseFormat f =
-  flag' OrgMode (long "orgmode" <> help "report using orgmode table format")
-    <|> flag' ConsoleMode (long "console" <> help "report using plain table format")
-    <|> pure f
+-- | Benchmark name
+type Name = String
 
 -- | Whether to include header information.
 data Header = Header | NoHeader deriving (Eq, Show, Generic)
 
 -- | Command-line parser for 'Header'
-parseHeader :: Header -> Parser Header
-parseHeader h =
+parseHeader :: Parser Header
+parseHeader =
   flag' Header (long "header" <> help "include headers")
     <|> flag' NoHeader (long "noheader" <> help "dont include headers")
-    <|> pure h
+    <|> pure Header
+
+-- | Options for production of a performance report.
+data ReportOptions = ReportOptions
+  { -- | Number of times to run a benchmark.
+    reportN :: Int,
+    reportStatDType :: StatDType,
+    reportMeasureType :: MeasureType,
+    reportGolden :: Golden,
+    reportHeader :: Header,
+    reportCompare :: CompareLevels
+  }
+  deriving (Eq, Show, Generic)
+
+-- | Default options
+--
+-- >>> defaultReportOptions
+-- ReportOptions {reportN = 1000, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
+defaultReportOptions :: ReportOptions
+defaultReportOptions =
+  ReportOptions
+    1000
+    StatAverage
+    MeasureTime
+    defaultGolden
+    Header
+    defaultCompareLevels
+
+-- | Command-line parser for 'ReportOptions'
+parseReportOptions :: Parser ReportOptions
+parseReportOptions =
+  ReportOptions
+    <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
+    <*> parseStatD
+    <*> parseMeasure
+    <*> parseGolden
+    <*> parseHeader
+    <*> parseCompareLevels defaultCompareLevels
+
+-- | Default command-line parser.
+infoReportOptions :: ParserInfo ReportOptions
+infoReportOptions =
+  info
+    (parseReportOptions <**> helper)
+    (fullDesc <> progDesc "perf benchmarking" <> header "reporting options")
+
+-- | Run and report a benchmark to the console. For example,
+--
+-- @reportMain "foo" (fap "sum" sum [1..1000])@ would:
+--
+-- - run a benchmark for summing the numbers 1 to a thousand.
+--
+-- - look for saved performance data in other/foo-1000-MeasureTime-StatAverage.perf
+--
+-- - report on performance in isolation or versus the canned data file if it exists.
+--
+-- - exit with failure if the performace had degraded.
+reportMain :: Name -> PerfT IO [[Double]] a -> IO ()
+reportMain name t = do
+  o <- execParser infoReportOptions
+  reportMainWith o name t
+
+-- | Run and report a benchmark to the console with the supplied options.
+reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
+reportMainWith o name t = do
+  let !n = reportN o
+  let s = reportStatDType o
+  let mt = reportMeasureType o
+  let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
+  m <- execPerfT (measureDs mt n) t
+  report o' (statify s m)
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
@@ -79,40 +148,21 @@ parseCompareLevels c =
     <*> option auto (value (warningLevel c) <> long "warning" <> help "warning level")
     <*> option auto (value (improvedLevel c) <> long "improved" <> help "improved level")
 
--- | Report configuration options
-data ReportConfig = ReportConfig
-  { format :: Format,
-    includeHeader :: Header,
-    levels :: CompareLevels
-  }
-  deriving (Eq, Show, Generic)
-
--- |
--- >>> defaultReportConfig
--- ReportConfig {format = ConsoleMode, includeHeader = Header, levels = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
-defaultReportConfig :: ReportConfig
-defaultReportConfig = ReportConfig ConsoleMode Header defaultCompareLevels
-
--- | Parse 'ReportConfig' command line options.
-parseReportConfig :: ReportConfig -> Parser ReportConfig
-parseReportConfig c =
-  ReportConfig
-    <$> parseFormat (format c)
-    <*> parseHeader (includeHeader c)
-    <*> parseCompareLevels (levels c)
-
 -- | Write results to file
 writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
 writeResult f m = writeFile f (show m)
 
--- | Read results from file
-readResult :: FilePath -> IO (Map.Map [Text] Double)
+-- | Read results from a file.
+readResult :: FilePath -> IO (Either String (Map.Map [Text] Double))
 readResult f = do
-  a <- readFile f
-  pure (read a)
+  a :: Either SomeException String <- try (readFile f)
+  pure $ either (Left . show) readEither a
 
 -- | Comparison data between two results.
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
+
+hasDegraded :: Map.Map a CompareResult -> Bool
+hasDegraded m = any ((== "degraded") . noteResult) $ fmap snd (Map.toList m)
 
 -- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult
@@ -134,43 +184,18 @@ compareNote cfg x y =
       | y' / x' < (1 - improvedLevel cfg) = "improvement"
       | otherwise = ""
 
--- | Like intercalate, but on the outside as well.
-outercalate :: Text -> [Text] -> Text
-outercalate c ts = c <> Text.intercalate c ts <> c
-
--- | Report to a console, comparing the measurement versus a canned file.
-reportGolden :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO ()
-reportGolden cfg f m = do
-  mOrig <- readResult f
-  let n = compareNote (levels cfg) mOrig m
-  reportToConsole $ formatCompare (format cfg) (includeHeader cfg) n
-
--- | Org-mode style header.
-formatOrgHeader :: Map.Map [Text] a -> [Text] -> [Text]
-formatOrgHeader m ts =
-  [ outercalate "|" ((("label" <>) . Text.pack . show <$> [1 .. labelCols]) <> ts),
-    outercalate "|" (replicate (labelCols + 1) "---")
-  ]
-  where
-    labelCols = maximum $ length <$> Map.keys m
-
 -- | Console-style header information.
-formatConsoleHeader :: Map.Map [Text] a -> [Text] -> [Text]
-formatConsoleHeader m ts =
-  [mconcat $ Text.pack . printf "%-20s" <$> ((("label" <>) . Text.pack . show <$> [1 .. labelCols]) <> ts), mempty]
+formatHeader :: Map.Map [Text] a -> [Text] -> [Text]
+formatHeader m ts =
+  [mconcat $ Text.pack . printf "%-16s" <$> ((("label" <>) . Text.pack . show <$> [1 .. labelCols]) <> ts), mempty]
   where
     labelCols = maximum $ length <$> Map.keys m
 
 -- | Format a comparison.
-formatCompare :: Format -> Header -> Map.Map [Text] CompareResult -> [Text]
-formatCompare f h m =
-  case f of
-    OrgMode ->
-      bool [] (formatOrgHeader m ["old_result", "new_result", "status"]) (h == Header)
-        <> Map.elems (Map.mapWithKey (\k a -> outercalate "|" (k <> compareReport a)) m)
-    ConsoleMode ->
-      bool [] (formatConsoleHeader m ["old_result", "new_result", "status"]) (h == Header)
-        <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> compareReport a)) m)
+formatCompare :: Header -> Map.Map [Text] CompareResult -> [Text]
+formatCompare h m =
+  bool [] (formatHeader m ["old result", "new result", "change"]) (h == Header)
+    <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> compareReport a)) m)
   where
     compareReport (CompareResult x y n) =
       [ maybe mempty (expt (Just 3)) x,
@@ -178,17 +203,11 @@ formatCompare f h m =
         n
       ]
 
--- | Format a result in org-mode style
-formatOrg :: Header -> Map.Map [Text] Text -> [Text]
-formatOrg h m =
-  bool [] (formatOrgHeader m ["results"]) (h == Header)
-    <> Map.elems (Map.mapWithKey (\k a -> outercalate "|" (k <> [a])) m)
-
--- | Format a result in console-style
-formatConsole :: Header -> Map.Map [Text] Text -> [Text]
-formatConsole h m =
-  bool [] (formatConsoleHeader m ["results"]) (h == Header)
-    <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-20s" <$> (k <> [a])) m)
+-- | Format a result as lines of text.
+formatText :: Header -> Map.Map [Text] Text -> [Text]
+formatText h m =
+  bool [] (formatHeader m ["results"]) (h == Header)
+    <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> [a])) m)
 
 -- | Format a result as a table.
 reportOrg2D :: Map.Map [Text] Text -> IO ()
@@ -214,39 +233,60 @@ reportToConsole xs = traverse_ Text.putStrLn xs
 -- | Golden file options.
 data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
 
--- | Default filepath is "other/golden.perf"
+-- | Default filepath is "other/bench.perf"
 defaultGolden :: Golden
-defaultGolden = Golden "other/golden.perf" False False
+defaultGolden = Golden "other/bench.perf" True False
 
--- | Make a filepath from supplied options
-goldenFromOptions :: [String] -> Golden -> Golden
-goldenFromOptions xs g = bool g g {golden = fp} (golden g == golden defaultGolden)
-  where
-    fp = "other/" <> intercalate "-" xs <> ".perf"
+-- | Replace the golden file name stem if it's the default.
+replaceGoldenDefault :: FilePath -> Golden -> Golden
+replaceGoldenDefault s g = bool g g {golden = s} (golden g == golden defaultGolden)
+
+defaultGoldenPath :: FilePath -> FilePath
+defaultGoldenPath fp = "other/" <> fp <> ".perf"
+
+-- | Replace the Golden file path with the suggested stem, but only if the user did not specify a specific file path at the command line.
+replaceDefaultFilePath :: FilePath -> ReportOptions -> ReportOptions
+replaceDefaultFilePath fp o =
+  o {reportGolden = replaceGoldenDefault (defaultGoldenPath fp) (reportGolden o)}
 
 -- | Parse command-line golden file options.
-parseGolden :: String -> Parser Golden
-parseGolden def =
+parseGolden :: Parser Golden
+parseGolden =
   Golden
-    <$> option str (Options.Applicative.value ("other/" <> def <> ".perf") <> long "golden" <> short 'g' <> help "golden file name")
-    <*> switch (long "check" <> short 'c' <> help "check versus a golden file")
-    <*> switch (long "record" <> short 'r' <> help "record the result to a golden file")
+    <$> option str (Options.Applicative.value (golden defaultGolden) <> long "golden" <> short 'g' <> help "golden file name")
+    -- True is the default for 'check'.
+    <*> flag True False (long "nocheck" <> help "do not check versus the golden file")
+    <*> switch (long "record" <> short 'r' <> help "record the result to the golden file")
+
+reportConsoleNoCompare :: Header -> Map.Map [Text] Double -> IO ()
+reportConsoleNoCompare h m =
+  reportToConsole (formatText h (expt (Just 3) <$> m))
+
+reportConsoleCompare :: Header -> Map.Map [Text] CompareResult -> IO ()
+reportConsoleCompare h m =
+  reportToConsole (formatCompare h m)
 
 -- | Report results
-report :: ReportConfig -> Golden -> [Text] -> Map.Map [Text] [Double] -> IO ()
-report cfg g labels m = do
-  bool
-    (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')))
-    (reportGolden cfg (golden g) m')
-    (check g)
+--
+-- If a goldenFile is checked, and performance has degraded, the function will exit with 'ExitFailure' so that 'cabal bench' and other types of processes can signal performance issues.
+report :: ReportOptions -> Map.Map [Text] [Double] -> IO ()
+report o m = do
   when
-    (record g)
-    (writeResult (golden g) m')
+    (record (reportGolden o))
+    (writeResult (golden (reportGolden o)) m')
+  case check (reportGolden o) of
+    False -> reportConsoleNoCompare (reportHeader o) m'
+    True -> do
+      mOrig <- readResult (golden (reportGolden o))
+      case mOrig of
+        Left _ -> do
+          reportConsoleNoCompare (reportHeader o) m'
+          unless
+            (record (reportGolden o))
+            (putStrLn "No golden file found. To create one, run with '-r'")
+        Right orig -> do
+          let n = compareNote (reportCompare o) orig m'
+          _ <- reportConsoleCompare (reportHeader o) n
+          when (hasDegraded n) (exitWith $ ExitFailure 1)
   where
-    m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss labels) <$> Map.toList m
-
--- | Format a result given 'Format' and 'Header' preferences.
-formatIn :: Format -> Header -> Map.Map [Text] Text -> [Text]
-formatIn f h = case f of
-  OrgMode -> formatOrg h
-  ConsoleMode -> formatConsole h
+    m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList m

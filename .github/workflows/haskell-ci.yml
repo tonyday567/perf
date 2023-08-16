@@ -15,6 +15,60 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: haskell-actions/run-ormolu@v11
+  bench:
+    name: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up GHC
+        uses: haskell/actions/setup@v2
+        id: setup
+        with:
+          ghc-version: '9.6'
+
+      - name: Installed minor versions of GHC and Cabal
+        shell: bash
+        run: |
+          GHC_VERSION=$(ghc --numeric-version)
+          CABAL_VERSION=$(cabal --numeric-version)
+          echo "GHC_VERSION=${GHC_VERSION}"     >> "${GITHUB_ENV}"
+          echo "CABAL_VERSION=${CABAL_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Configure the build
+        run: |
+          cabal configure --enable-benchmarks --disable-documentation
+          cabal build --dry-run
+        # The last step generates dist-newstyle/cache/plan.json for the cache key.
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: benchmark-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: |
+            benchmark-ghc-${{ env.GHC_VERSION }}-cabal-${{ env.CABAL_VERSION }}-
+
+      - name: Install dependencies
+        run: cabal build all --only-dependencies
+
+      # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
+      - name: Save cached dependencies
+        uses: actions/cache/save@v3
+        # Caches are immutable, trying to save with the same key would error.
+        if: ${{ !steps.cache.outputs.cache-hit
+          || steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build
+        run: cabal build all
+
+      - name: Run benchmark
+        run: cabal bench all
+
   cabal:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

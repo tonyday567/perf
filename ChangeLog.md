@@ -1,3 +1,9 @@
+0.12.0.0
+===
+* added reportMain and support for executable development.
+* refactored app/perf-explore
+* created app/perf-bench and aded as a `cabal bench` thing.
+
 0.11.0.0
 ===
 * added Perf.Count

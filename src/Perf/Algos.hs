@@ -152,8 +152,8 @@ testExample (PatternMapInc label f a) = void $ fap label f a
 testExample (PatternNoOp label f a) = void $ fap label f a
 
 -- | run an example measurement.
-statExamples :: (MonadIO m) => Int -> Int -> (Int -> Measure m [a]) -> m (Map.Map Text [a])
-statExamples n l m = execPerfT (m n) $ mapM_ testExample ((`examplePattern` l) <$> allExamples)
+statExamples :: (Semigroup a, MonadIO m) => Int -> PerfT m a ()
+statExamples l = mapM_ testExample ((`examplePattern` l) <$> allExamples)
 
 -- | Unification of sum function applications
 data SumPattern a

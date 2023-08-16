@@ -3,6 +3,7 @@
 -- | Reporting on performance, potentially checking versus a canned results.
 module Perf.Report
   ( Format (..),
+    Name,
     parseFormat,
     Header (..),
     parseHeader,
@@ -17,18 +18,19 @@ module Perf.Report
     CompareResult (..),
     compareNote,
     outercalate,
-    reportGolden,
     reportOrg2D,
     Golden (..),
     defaultGolden,
-    goldenFromOptions,
+    replaceDefault,
+    defaultPath,
     parseGolden,
     report,
     hasDegraded,
     ReportOptions (..),
-    reportOptions,
+    parseReportOptions,
     infoReportOptions,
     reportMain,
+    reportMainWith,
   )
 where
 
@@ -55,6 +57,9 @@ import Perf.Types
 
 -- | Type of format for report
 data Format = OrgMode | ConsoleMode deriving (Eq, Show, Generic)
+
+-- | Benchmark name
+type Name = String
 
 -- | Command-line parser for 'Format'
 parseFormat :: Format -> Parser Format
@@ -155,8 +160,8 @@ outercalate c ts = c <> Text.intercalate c ts <> c
 -- | Report to a console, comparing the measurement versus a canned file.
 --
 -- Returns a Left 'ExitFailure' if performance degradation is detected, Returns a Left if the golden file doesn't exist or contains bad data.
-reportGolden :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO (Either String ExitCode)
-reportGolden cfg f m = do
+reportGolden' :: ReportConfig -> FilePath -> Map.Map [Text] Double -> IO (Either String ExitCode)
+reportGolden' cfg f m = do
   mOrig <- readResult f
   case mOrig of
     Left s -> do
@@ -236,22 +241,23 @@ reportToConsole xs = traverse_ Text.putStrLn xs
 -- | Golden file options.
 data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
 
--- | Default filepath is "other/golden.perf"
+-- | Default filepath is "other/bench.perf"
 defaultGolden :: Golden
-defaultGolden = Golden "other/golden.perf" True False
+defaultGolden = Golden "other/bench.perf" True False
 
--- | Make a filepath from supplied options
-goldenFromOptions :: [String] -> Golden -> Golden
-goldenFromOptions xs g = bool g g {golden = fp} (golden g == golden defaultGolden)
-  where
-    fp = "other/" <> intercalate "-" xs <> ".perf"
+-- | Replace the golden file name stem if it's the default.
+replaceDefault :: FilePath -> Golden -> Golden
+replaceDefault s g = bool g g {golden = s} (golden g == golden defaultGolden)
+
+defaultPath :: FilePath -> FilePath
+defaultPath fp = "other/" <> fp <> ".perf"
 
 -- | Parse command-line golden file options.
 --
-parseGolden :: String -> Parser Golden
-parseGolden def =
+parseGolden :: Parser Golden
+parseGolden =
   Golden
-    <$> option str (Options.Applicative.value ("other/" <> def <> ".perf") <> long "golden" <> short 'g' <> help "golden file name")
+    <$> option str (Options.Applicative.value (golden defaultGolden) <> long "golden" <> short 'g' <> help "golden file name")
         -- True is the default for 'check'.
     <*> flag True False (long "nocheck" <> help "do not check versus the golden file")
     <*> switch (long "record" <> short 'r' <> help "record the result to the golden file")
@@ -265,7 +271,7 @@ report cfg g labels m = do
     bool
       (reportToConsole (formatIn (format cfg) (includeHeader cfg) (expt (Just 3) <$> m')) >> pure ExitSuccess)
       ( do
-          x' <- reportGolden cfg (golden g) m'
+          x' <- reportGolden' cfg (golden g) m'
           case x' of
             Left _ -> putStrLn "No golden file found to check. To create a golden file, run with '-r'" >> pure ExitSuccess
             Right e -> pure e
@@ -285,37 +291,44 @@ formatIn f h = case f of
   ConsoleMode -> formatConsole h
 
 data ReportOptions = ReportOptions
-  { reportOptionN :: Int,
-    reportOptionStatDType :: StatDType,
-    reportOptionMeasureType :: MeasureType,
-    reportOptionGolden :: Golden,
-    reportOptionReportConfig :: ReportConfig
+  { reportN :: Int,
+    reportStatDType :: StatDType,
+    reportMeasureType :: MeasureType,
+    reportGolden :: Golden,
+    reportReportConfig :: ReportConfig
   }
   deriving (Eq, Show, Generic)
 
-reportOptions :: Parser ReportOptions
-reportOptions =
+parseReportOptions :: Parser ReportOptions
+parseReportOptions =
   ReportOptions
     <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
     <*> parseStatD
     <*> parseMeasure
-    <*> parseGolden "golden"
+    <*> parseGolden
     <*> parseReportConfig defaultReportConfig
 
 infoReportOptions :: ParserInfo ReportOptions
 infoReportOptions =
   info
-    (reportOptions <**> helper)
+    (parseReportOptions <**> helper)
     (fullDesc <> progDesc "perf benchmarking" <> header "reporting options")
 
-reportMain :: PerfT IO [[Double]] a -> IO ()
-reportMain t = do
+reportMain :: Name -> PerfT IO [[Double]] a -> IO ()
+reportMain name t = do
   o <- execParser infoReportOptions
-  let !n = reportOptionN o
-  let s = reportOptionStatDType o
-  let mt = reportOptionMeasureType o
-  let gold = goldenFromOptions [show n, show mt, show s] (reportOptionGolden o)
-  let cfg = reportOptionReportConfig o
+  reportMainWith o name t
+
+reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO b
+reportMainWith o name t = do
+  let !n = reportN o
+  let s = reportStatDType o
+  let mt = reportMeasureType o
+  let gold =
+        replaceDefault
+        (defaultPath $ intercalate "-" [name, show n, show mt, show s])
+        (reportGolden o)
+  let cfg = reportReportConfig o
   m <- execPerfT (measureDs mt n) t
   code <- report cfg gold (measureLabels mt) (statify s m)
   exitWith code

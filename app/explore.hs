@@ -20,16 +20,12 @@ import Prelude
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
-data Options = Options
-  { optionN :: Int,
-    optionLength :: Int,
-    optionStatDType :: StatDType,
-    optionRunType :: RunType,
-    optionMeasureType :: MeasureType,
-    optionExample :: Example,
-    optionGolden :: Golden,
-    optionReportConfig :: ReportConfig,
-    optionRawStats :: Bool
+data ExploreOptions = ExploreOptions
+  {
+    exploreReportOptions :: ReportOptions,
+    exploreRun :: RunType,
+    exploreLength :: Int,
+    exploreExample :: Example
   }
   deriving (Eq, Show)
 
@@ -46,24 +42,19 @@ parseRun =
     <|> flag' RunGauge (long "gauge" <> help "gauge runs on exmaple for comparison")
     <|> pure RunExample
 
-options :: Parser Options
-options =
-  Options
-    <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
-    <*> option auto (value 1000 <> long "length" <> short 'l' <> help "length of list")
-    <*> parseStatD
+exploreOptions :: Parser ExploreOptions
+exploreOptions =
+  ExploreOptions
+    <$> parseReportOptions
     <*> parseRun
-    <*> parseMeasure
+    <*> option auto (value 1000 <> long "length" <> short 'l' <> help "length of list")
     <*> parseExample
-    <*> parseGolden "golden"
-    <*> parseReportConfig defaultReportConfig
-    <*> switch (long "raw" <> short 'w' <> help "write raw statistics to file")
 
-opts :: ParserInfo Options
-opts =
+exploreOpts :: ParserInfo ExploreOptions
+exploreOpts =
   info
-    (options <**> helper)
-    (fullDesc <> progDesc "perf benchmarking" <> header "basic perf callibration")
+    (exploreOptions <**> helper)
+    (fullDesc <> progDesc "perf exploration" <> header "examples of perf usage")
 
 -- | * exampleIO
 exampleIO :: (Semigroup t) => PerfT IO t ()
@@ -122,58 +113,48 @@ testGaugeExample (PatternConstFuse label f a) = testGauge label f a
 testGaugeExample (PatternMapInc label f a) = testGauge label f a
 testGaugeExample (PatternNoOp label f a) = testGauge label f a
 
-main :: IO ExitCode
+main :: IO ()
 main = do
-  o <- execParser opts
-  let !n = optionN o
-  let !l = optionLength o
-  let s = optionStatDType o
-  let a = optionExample o
-  let r = optionRunType o
-  let mt = optionMeasureType o
-  let gold = goldenFromOptions [show r, show n, show l, show mt] (optionGolden o)
-  let w = optionRawStats o
-  let raw =
-        "other/"
-          <> intercalate "-" [show r, show n, show l, show mt]
-          <> ".map"
-  let cfg = optionReportConfig o
+  o <- execParser exploreOpts
+  let rep = exploreReportOptions o
+  let n = reportN rep
+  let s = reportStatDType rep
+  let mt = reportMeasureType rep
+  let !l = exploreLength o
+  let a = exploreExample o
+  let r = exploreRun o
+  let cfg = reportReportConfig rep
 
   case r of
     RunNub -> do
-      m <- execPerfT (measureDs mt n) $ void $ ffap "nub" nub [1 .. l]
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (statify s m)
+      reportMainWith rep (show r) (ffap "nub" nub [1 .. l])
     RunExample -> do
-      m <- execPerfT (measureDs mt n) $ testExample (examplePattern a l)
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (statify s m)
+      reportMainWith rep (intercalate "-" [show r, show a, show l]) $
+        testExample (examplePattern a l)
     RunExamples -> do
-      m <- statExamples n l (measureDs mt)
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (statify s m)
+      reportMainWith rep (intercalate "-" [show r, show l]) $
+        (statExamples l)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""
-      when w (writeFile raw (show ms))
-      report cfg gold (measureLabels mt) (fmap (statD s) <$> ms)
+      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show s]) (reportGolden rep)
+      exitWith =<< report cfg fp (measureLabels mt) (fmap (statD s) <$> ms)
     RunSums -> do
       m <- statSums n l (measureDs mt)
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (statify s m)
+      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n, show l, show s]) (reportGolden rep)
+      exitWith =<< report cfg fp (measureLabels mt) (statify s m)
     RunLengths -> do
       m <- statLengths n l (measureDs mt)
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (statify s m)
+      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n, show l, show s]) (reportGolden rep)
+      exitWith =<< report cfg fp (measureLabels mt) (statify s m)
     RunNoOps -> do
       m <- perfNoOps (measureDs mt n)
-      when w (writeFile raw (show m))
-      report cfg gold (measureLabels mt) (allStats 4 (Map.mapKeys (: []) m))
+      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n]) (reportGolden rep)
+      exitWith =<< report cfg fp (measureLabels mt) (allStats 4 (Map.mapKeys (: []) m))
     RunTicks -> do
       m <- statTicksSums n l s
-      when w (writeFile raw (show m))
-      reportOrg2D (fmap (expt (Just 3)) m) >> pure ExitSuccess
+      reportOrg2D (fmap (expt (Just 3)) m)
     RunGauge -> do
-      mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples) >> pure ExitSuccess
+      mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)

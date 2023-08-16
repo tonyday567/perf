@@ -76,6 +76,7 @@ data ReportOptions = ReportOptions
 -- | Default options
 --
 -- >>> defaultReportOptions
+-- ReportOptions {reportN = 1000, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
 defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions

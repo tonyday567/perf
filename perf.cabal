@@ -16,7 +16,9 @@ description:
 
 build-type: Simple
 tested-with: GHC == 8.10.7 || ==9.2.8 || ==9.4.5 || ==9.6.2
-extra-doc-files: ChangeLog.md
+extra-doc-files:
+  ChangeLog.md
+  readme.org
 
 source-repository head
     type: git
@@ -103,7 +105,7 @@ library
     build-depends:
         , base                 >=4.7 && <5
         , containers           >=0.6 && <0.7
-        , deepseq              >=1.4.4 && <1.5
+        , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
         , numhask-space        >=0.10 && <0.12
@@ -126,25 +128,6 @@ library
         Perf.Types
     ghc-options: -O2
 
-benchmark perf-bench
-    import: ghc-options-exe-stanza
-    import: ghc-options-stanza
-    import: ghc2021-stanza
-    main-is: bench.hs
-    hs-source-dirs: app
-    build-depends:
-        , base                 >=4.7 && <5
-        , containers           >=0.6 && <0.7
-        , deepseq              >=1.4.4 && <1.5
-        , formatn              >=0.2.1 && <0.4
-        , gauge                ^>=0.2.5
-        , mtl                  >=2.2.2 && <2.4
-        , optparse-applicative >=0.17 && <0.19
-        , perf
-        , text                 >=1.2 && <2.1
-    ghc-options: -O2
-    type: exitcode-stdio-1.0
-
 executable perf-explore
     import: ghc-options-exe-stanza
     import: ghc-options-stanza
@@ -154,7 +137,7 @@ executable perf-explore
     build-depends:
         , base                 >=4.7 && <5
         , containers           >=0.6 && <0.7
-        , deepseq              >=1.4.4 && <1.5
+        , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
         , gauge                ^>=0.2.5
         , mtl                  >=2.2.2 && <2.4
@@ -162,3 +145,15 @@ executable perf-explore
         , perf
         , text                 >=1.2 && <2.1
     ghc-options: -O2
+
+benchmark perf-bench
+    import: ghc-options-exe-stanza
+    import: ghc-options-stanza
+    import: ghc2021-stanza
+    main-is: bench.hs
+    hs-source-dirs: app
+    build-depends:
+        , base                 >=4.7 && <5
+        , perf
+    ghc-options: -O2
+    type: exitcode-stdio-1.0

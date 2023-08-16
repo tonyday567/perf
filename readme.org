@@ -220,8 +220,8 @@ Usage: perf-explore [-n|--runs ARG]
                     [--best | --median | --average | --averagesecs]
                     [--time | --space | --spacetime | --allocation | --count]
                     [-g|--golden ARG] [--nocheck] [-r|--record]
-                    [--orgmode | --console] [--header | --noheader]
-                    [--error ARG] [--warning ARG] [--improved ARG]
+                    [--header | --noheader] [--error ARG] [--warning ARG]
+                    [--improved ARG]
                     [--sums | --lengths | --nub | --examples | --example |
                       --exampleIO | --noops | --ticks | --gauge]
                     [-l|--length ARG]
@@ -244,8 +244,6 @@ Available options:
   -g,--golden ARG          golden file name
   --nocheck                do not check versus the golden file
   -r,--record              record the result to the golden file
-  --orgmode                report using orgmode table format
-  --console                report using plain table format
   --header                 include headers
   --noheader               dont include headers
   --error ARG              error level

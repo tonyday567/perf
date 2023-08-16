@@ -129,7 +129,9 @@ main = do
       reportMainWith repOptions (intercalate "-" [show r, show a, show l]) $
         testExample (examplePattern a l)
     RunExamples -> do
-      reportMainWith repOptions (intercalate "-" [show r, show l])
+      reportMainWith
+        repOptions
+        (intercalate "-" [show r, show l])
         (statExamples l)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt 1) exampleIO

@@ -9,6 +9,7 @@ module Perf.Report
     defaultCompareLevels,
     parseCompareLevels,
     ReportOptions (..),
+    defaultReportOptions,
     parseReportOptions,
     infoReportOptions,
     report,
@@ -21,8 +22,8 @@ module Perf.Report
     reportOrg2D,
     Golden (..),
     defaultGolden,
-    replaceDefaultFilePath,
     parseGolden,
+    replaceDefaultFilePath,
   )
 where
 
@@ -60,8 +61,10 @@ parseHeader =
     <|> flag' NoHeader (long "noheader" <> help "dont include headers")
     <|> pure Header
 
+-- | Options for production of a performance report.
 data ReportOptions = ReportOptions
-  { reportN :: Int,
+  { -- | Number of times to run a benchmark.
+    reportN :: Int,
     reportStatDType :: StatDType,
     reportMeasureType :: MeasureType,
     reportGolden :: Golden,
@@ -70,6 +73,20 @@ data ReportOptions = ReportOptions
   }
   deriving (Eq, Show, Generic)
 
+-- | Default options
+--
+-- >>> defaultReportOptions
+defaultReportOptions :: ReportOptions
+defaultReportOptions =
+  ReportOptions
+    1000
+    StatAverage
+    MeasureTime
+    defaultGolden
+    Header
+    defaultCompareLevels
+
+-- | Command-line parser for 'ReportOptions'
 parseReportOptions :: Parser ReportOptions
 parseReportOptions =
   ReportOptions
@@ -80,17 +97,30 @@ parseReportOptions =
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
 
+-- | Default command-line parser.
 infoReportOptions :: ParserInfo ReportOptions
 infoReportOptions =
   info
     (parseReportOptions <**> helper)
     (fullDesc <> progDesc "perf benchmarking" <> header "reporting options")
 
+-- | Run and report a benchmark to the console. For example,
+--
+-- @reportMain "foo" (fap "sum" sum [1..1000])@ would:
+--
+-- - run a benchmark for summing the numbers 1 to a thousand.
+--
+-- - look for saved performance data in other/foo-1000-MeasureTime-StatAverage.perf
+--
+-- - report on performance in isolation or versus the canned data file if it exists.
+--
+-- - exit with failure if the performace had degraded.
 reportMain :: Name -> PerfT IO [[Double]] a -> IO ()
 reportMain name t = do
   o <- execParser infoReportOptions
   reportMainWith o name t
 
+-- | Run and report a benchmark to the console with the supplied options.
 reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
 reportMainWith o name t = do
   let !n = reportN o
@@ -213,6 +243,7 @@ replaceGoldenDefault s g = bool g g {golden = s} (golden g == golden defaultGold
 defaultGoldenPath :: FilePath -> FilePath
 defaultGoldenPath fp = "other/" <> fp <> ".perf"
 
+-- | Replace the Golden file path with the suggested stem, but only if the user did not specify a specific file path at the command line.
 replaceDefaultFilePath :: FilePath -> ReportOptions -> ReportOptions
 replaceDefaultFilePath fp o =
   o {reportGolden = replaceGoldenDefault (defaultGoldenPath fp) (reportGolden o)}

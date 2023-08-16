@@ -18,7 +18,7 @@
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
-#+begin_src haskell :results output :exports both
+#+begin_src haskell :results output
 :r
 :set prompt "> "
 :set -Wno-type-defaults
@@ -38,16 +38,19 @@ putStrLn "ok"
 
 #+RESULTS:
 #+begin_example
-Build profile: -w ghc-9.6.2 -O1
-In order, the following will be built (use -v for more details):
- - perf-0.11.0.0 (bench:perf-bench) (ephemeral targets)
-Preprocessing benchmark 'perf-bench' for perf-0.11.0.0..
+Preprocessing library for perf-0.12.0.0..
+Building library for perf-0.12.0.0..
+[ 7 of 10] Compiling Perf.Report      ( src/Perf/Report.hs, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf/Report.o, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf/Report.dyn_o ) [Source file changed]
+[10 of 10] Compiling Perf             ( src/Perf.hs, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf.o, /Users/tonyday/haskell/perf/dist-newstyle/build/x86_64-osx/ghc-9.6.2/perf-0.12.0.0/build/Perf.dyn_o ) [Source file changed]
+Preprocessing benchmark 'perf-bench' for perf-0.12.0.0..
 GHCi, version 9.6.2: https://www.haskell.org/ghc/  :? for help
 Loaded GHCi configuration from /Users/tonyday/haskell/perf/.ghci
 [1 of 2] Compiling Main             ( app/bench.hs, interpreted )
 Ok, one module loaded.
 > [1 of 2] Compiling Main             ( app/bench.hs, interpreted )
 Ok, one module loaded.
+>
+>
 ok
 #+end_example
 

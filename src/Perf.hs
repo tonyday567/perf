@@ -1,6 +1,6 @@
 -- | == Introduction
 --
--- /perf/ provides tools for measuring the runtime performance of Haskell functions. It includes:
+-- @perf@ provides tools for measuring the runtime performance of Haskell functions. It includes:
 --
 -- - time measurement via reading the RDTSC register (TSC stands for "time stamp counter"), which is present on all x86 CPUs since the Pentium architecture. For more details, see  https://en.wikipedia.org/wiki/Time_Stamp_Counter
 --
@@ -10,7 +10,7 @@
 --
 -- - functionality to determine performance order, in 'Perf.BigO'
 --
--- Usage examples can be found in app/perf-explore.hs and the project's readme.org.
+-- - reporting functionality in 'Perf.Report'. @perf@ can be run via 'cabal bench'; see the project's cabal file for an example.
 module Perf
   ( -- * re-exports
     module Perf.Types,
@@ -26,7 +26,7 @@ module Perf
     module Perf.Algos,
     -- | Order of complexity computations
     module Perf.BigO,
-    -- | Reporting, including 'Golden' file functionality.
+    -- | Reporting
     module Perf.Report,
     -- | Statistical support
     module Perf.Stats,

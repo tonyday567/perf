@@ -67,7 +67,7 @@ jobs:
         run: cabal build all
 
       - name: Run benchmark
-        run: cabal benchmark all
+        run: cabal bench all
 
   cabal:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}

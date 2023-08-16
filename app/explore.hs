@@ -15,7 +15,6 @@ import Data.Text.IO qualified as Text
 import Gauge
 import Options.Applicative
 import Perf
-import System.Exit
 import Prelude
 
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
@@ -116,43 +115,42 @@ testGaugeExample (PatternNoOp label f a) = testGauge label f a
 main :: IO ()
 main = do
   o <- execParser exploreOpts
-  let rep = exploreReportOptions o
-  let n = reportN rep
-  let s = reportStatDType rep
-  let mt = reportMeasureType rep
+  let repOptions = exploreReportOptions o
+  let n = reportN repOptions
+  let s = reportStatDType repOptions
+  let mt = reportMeasureType repOptions
   let !l = exploreLength o
   let a = exploreExample o
   let r = exploreRun o
-  let cfg = reportReportConfig rep
 
   case r of
     RunNub -> do
-      reportMainWith rep (show r) (ffap "nub" nub [1 .. l])
+      reportMainWith repOptions (show r) (ffap "nub" nub [1 .. l])
     RunExample -> do
-      reportMainWith rep (intercalate "-" [show r, show a, show l]) $
+      reportMainWith repOptions (intercalate "-" [show r, show a, show l]) $
         testExample (examplePattern a l)
     RunExamples -> do
-      reportMainWith rep (intercalate "-" [show r, show l]) $
+      reportMainWith repOptions (intercalate "-" [show r, show l]) $
         (statExamples l)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""
-      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show s]) (reportGolden rep)
-      exitWith =<< report cfg fp (measureLabels mt) (fmap (statD s) <$> ms)
+      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show s]) repOptions
+      report o' (fmap (statD s) <$> ms)
     RunSums -> do
       m <- statSums n l (measureDs mt)
-      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n, show l, show s]) (reportGolden rep)
-      exitWith =<< report cfg fp (measureLabels mt) (statify s m)
+      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
+      report o' (statify s m)
     RunLengths -> do
       m <- statLengths n l (measureDs mt)
-      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n, show l, show s]) (reportGolden rep)
-      exitWith =<< report cfg fp (measureLabels mt) (statify s m)
+      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
+      report o' (statify s m)
     RunNoOps -> do
       m <- perfNoOps (measureDs mt n)
-      let fp = replaceDefault (defaultPath $ intercalate "-" [show r, show mt, show n]) (reportGolden rep)
-      exitWith =<< report cfg fp (measureLabels mt) (allStats 4 (Map.mapKeys (: []) m))
+      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n]) repOptions
+      report o' (allStats 4 (Map.mapKeys (: []) m))
     RunTicks -> do
       m <- statTicksSums n l s
       reportOrg2D (fmap (expt (Just 3)) m)

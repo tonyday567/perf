@@ -51,25 +51,6 @@ Ok, one module loaded.
 ok
 #+end_example
 
-#+begin_src elisp
-(setq haskell-process-args-cabal-repl '("perf:bench:perf-bench"))
-#+end_src
-
-#+RESULTS:
-| perf:bench:perf-bench |
-
-#+begin_src haskell :results output
-main
-#+end_src
-
-#+RESULTS:
-: Golden {golden = "other/RunExample-1000-1000-MeasureTime.perf", check = True, record = False}
-: label1              label2              old_result          new_result          status
-:
-: sum                 time                4.64e3              1.80e4              degraded
-: ExitFailure 69
-
-
 * Time
 ** What is a tick?
 
@@ -222,7 +203,7 @@ outer               print-result        time                5.46e3              
 
 * perf-explore
 
-~perf-explore~ contains some exploratory routines to help develop =perf=
+~perf-explore~ contains some exploratory routines used to develop =perf=
 
 #+begin_src sh :results output :exports both
 perf-explore --help
@@ -230,48 +211,36 @@ perf-explore --help
 
 #+RESULTS:
 #+begin_example
-basic perf callibration
+examples of perf usage
 
-Usage: perf-explore [-n|--runs ARG] [-l|--length ARG]
+Usage: perf-explore [-n|--runs ARG]
                     [--best | --median | --average | --averagesecs]
-                    [--sums | --lengths | --examples | --example | --exampleIO |
-                      --noops | --ticks | --gauge]
-                    [--time | --space | --spacetime | --allocation]
-                    [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
-                      --noOp] [-g|--golden ARG] [-c|--check] [-r|--record]
+                    [--time | --space | --spacetime | --allocation | --count]
+                    [-g|--golden ARG] [--nocheck] [-r|--record]
                     [--orgmode | --console] [--header | --noheader]
-                    [--error ARG] [--warning ARG] [--improved ARG] [-w|--raw]
+                    [--error ARG] [--warning ARG] [--improved ARG]
+                    [--sums | --lengths | --nub | --examples | --example |
+                      --exampleIO | --noops | --ticks | --gauge]
+                    [-l|--length ARG]
+                    [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
+                      --noOp]
 
-  perf benchmarking
+  perf exploration
 
 Available options:
   -n,--runs ARG            number of runs to perform
-  -l,--length ARG          length of list
   --best                   report upper decile
   --median                 report median
   --average                report average
   --averagesecs            report average in seconds
-  --sums                   run on sum algorithms
-  --lengths                run on length algorithms
-  --examples               run on example algorithms
-  --example                run on the example algorithm
-  --exampleIO              exampleIO test
-  --noops                  noops test
-  --ticks                  tick test
-  --gauge                  gauge runs on exmaple for comparison
   --time                   measure time performance
   --space                  measure space performance
   --spacetime              measure both space and time performance
   --allocation             measure bytes allocated
-  --sumFuse                fused sum pipeline
-  --sum                    sum
-  --lengthF                foldr id length
-  --constFuse              fused const pipeline
-  --mapInc                 fmap (+1)
-  --noOp                   const ()
+  --count                  measure count
   -g,--golden ARG          golden file name
-  -c,--check               check versus a golden file
-  -r,--record              record the result to a golden file
+  --nocheck                do not check versus the golden file
+  -r,--record              record the result to the golden file
   --orgmode                report using orgmode table format
   --console                report using plain table format
   --header                 include headers
@@ -279,7 +248,22 @@ Available options:
   --error ARG              error level
   --warning ARG            warning level
   --improved ARG           improved level
-  -w,--raw                 write raw statistics to file
+  --sums                   run on sum algorithms
+  --lengths                run on length algorithms
+  --nub                    nub test
+  --examples               run on example algorithms
+  --example                run on the example algorithm
+  --exampleIO              exampleIO test
+  --noops                  noops test
+  --ticks                  tick test
+  --gauge                  gauge runs on exmaple for comparison
+  -l,--length ARG          length of list
+  --sumFuse                fused sum pipeline
+  --sum                    sum
+  --lengthF                foldr id length
+  --constFuse              fused const pipeline
+  --mapInc                 fmap (+1)
+  --noOp                   const ()
   -h,--help                Show this help text
 #+end_example
 
@@ -306,7 +290,7 @@ perf-explore -n 10000 -l 1000 --sum
 This no-op experiment is useful to understand the pure time performance of the machinery around measurement. It can be (re)run with:
 
 #+begin_src sh :results output :exports both
-perf-explore --noops --raw
+perf-explore --noops
 #+end_src
 
 #+RESULTS:

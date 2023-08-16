@@ -1,0 +1,1 @@
+fromList [(["normal","file-read","time"],595810.0),(["normal","length","time"],11003.0),(["normal","print-result","time"],143838.0),(["outer","file-read","time"],136071.0),(["outer","length","time"],1447.0),(["outer","outer-total","time"],166853.0),(["outer","print-result","time"],26988.0)]

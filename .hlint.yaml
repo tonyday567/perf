@@ -1,3 +1,4 @@
 - ignore: {name: Reduce duplication, within: Perf.Measure}
 - ignore: {name: Redundant Lambda}
 - ignore: {name: Eta reduce}
+- ignore: {name: Use if}

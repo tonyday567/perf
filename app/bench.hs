@@ -1,9 +1,9 @@
 -- | Sum example, measured using default settings.
 module Main where
 
+import Data.List qualified as List
 import Perf
 import Prelude
-import Data.List qualified as List
 
 main :: IO ()
 main = do

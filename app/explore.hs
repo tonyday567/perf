@@ -20,8 +20,7 @@ import Prelude
 data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
 
 data ExploreOptions = ExploreOptions
-  {
-    exploreReportOptions :: ReportOptions,
+  { exploreReportOptions :: ReportOptions,
     exploreRun :: RunType,
     exploreLength :: Int,
     exploreExample :: Example
@@ -130,7 +129,7 @@ main = do
       reportMainWith repOptions (intercalate "-" [show r, show a, show l]) $
         testExample (examplePattern a l)
     RunExamples -> do
-      reportMainWith repOptions (intercalate "-" [show r, show l]) $
+      reportMainWith repOptions (intercalate "-" [show r, show l])
         (statExamples l)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt 1) exampleIO

@@ -40,12 +40,12 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Generics
 import Options.Applicative
-import System.Exit
-import Text.Printf hiding (parseFormat)
-import Text.Read
 import Perf.Measure
 import Perf.Stats
 import Perf.Types
+import System.Exit
+import Text.Printf hiding (parseFormat)
+import Text.Read
 
 -- | Benchmark name
 type Name = String
@@ -164,7 +164,7 @@ formatHeader m ts =
 formatCompare :: Header -> Map.Map [Text] CompareResult -> [Text]
 formatCompare h m =
   bool [] (formatHeader m ["old result", "new result", "change"]) (h == Header)
-        <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> compareReport a)) m)
+    <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> compareReport a)) m)
   where
     compareReport (CompareResult x y n) =
       [ maybe mempty (expt (Just 3)) x,
@@ -215,15 +215,14 @@ defaultGoldenPath fp = "other/" <> fp <> ".perf"
 
 replaceDefaultFilePath :: FilePath -> ReportOptions -> ReportOptions
 replaceDefaultFilePath fp o =
-  o { reportGolden = replaceGoldenDefault (defaultGoldenPath fp) (reportGolden o) }
+  o {reportGolden = replaceGoldenDefault (defaultGoldenPath fp) (reportGolden o)}
 
 -- | Parse command-line golden file options.
---
 parseGolden :: Parser Golden
 parseGolden =
   Golden
     <$> option str (Options.Applicative.value (golden defaultGolden) <> long "golden" <> short 'g' <> help "golden file name")
-        -- True is the default for 'check'.
+    -- True is the default for 'check'.
     <*> flag True False (long "nocheck" <> help "do not check versus the golden file")
     <*> switch (long "record" <> short 'r' <> help "record the result to the golden file")
 
@@ -240,22 +239,22 @@ reportConsoleCompare h m =
 -- If a goldenFile is checked, and performance has degraded, the function will exit with 'ExitFailure' so that 'cabal bench' and other types of processes can signal performance issues.
 report :: ReportOptions -> Map.Map [Text] [Double] -> IO ()
 report o m = do
-  when (record (reportGolden o))
+  when
+    (record (reportGolden o))
     (writeResult (golden (reportGolden o)) m')
-  case (check (reportGolden o)) of
-      False -> reportConsoleNoCompare (reportHeader o) m'
-      True -> do
-          mOrig <- readResult (golden (reportGolden o))
-          case mOrig of
-            Left _ -> do
-              reportConsoleNoCompare (reportHeader o) m'
-              when (not $ record (reportGolden o))
-                (putStrLn "No golden file found. To create one, run with '-r'")
-              pure ()
-            Right orig -> do
-              let n = compareNote (reportCompare o) orig m'
-              _ <- reportConsoleCompare (reportHeader o) n
-              when (hasDegraded n) (exitWith $ ExitFailure 1)
-              pure ()
+  case check (reportGolden o) of
+    False -> reportConsoleNoCompare (reportHeader o) m'
+    True -> do
+      mOrig <- readResult (golden (reportGolden o))
+      case mOrig of
+        Left _ -> do
+          reportConsoleNoCompare (reportHeader o) m'
+          unless
+            (record (reportGolden o))
+            (putStrLn "No golden file found. To create one, run with '-r'")
+        Right orig -> do
+          let n = compareNote (reportCompare o) orig m'
+          _ <- reportConsoleCompare (reportHeader o) n
+          when (hasDegraded n) (exitWith $ ExitFailure 1)
   where
     m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList m

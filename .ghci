@@ -1,3 +1,2 @@
-:set prompt "> "
 :set -XOverloadedStrings
 :set -Wno-type-defaults

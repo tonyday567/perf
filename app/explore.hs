@@ -70,8 +70,8 @@ statTicks l f a n s = do
   addStat [l, "tickLazy"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickLazy n f a)
   addStat [l, "tickForce"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickForce n f a)
   addStat [l, "tickForceArgs"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickForceArgs n f a)
-  addStat [l, "stepTime"] . statD s . fmap fromIntegral =<< lift (snd . head . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
-  addStat [l, "times"] . statD s . fmap fromIntegral =<< lift (snd . head . Map.toList <$> execPerfT (times n) (f |$| a))
+  addStat [l, "stepTime"] . statD s . fmap fromIntegral =<< lift (mconcat . fmap snd . take 1 . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
+  addStat [l, "times"] . statD s . fmap fromIntegral =<< lift (mconcat . fmap snd . take 1 . Map.toList <$> execPerfT (times n) (f |$| a))
 
 statTicksSum :: (NFData b, Enum b, Num b) => SumPattern b -> Int -> StatDType -> StateT (Map.Map [Text] Double) IO ()
 statTicksSum (SumFuse label f a) n s = statTicks label f a n s

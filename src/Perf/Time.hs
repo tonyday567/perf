@@ -1,17 +1,14 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Use of 'System.Clock' from the [clock](https://hackage.haskell.org/package/clock) library to measure time performance of a computation.
---
 module Perf.Time
   ( Nanos,
     defaultClock,
     toSecs,
     nanosWith,
     nanos,
-
     tick_,
     warmup,
-
     tickWith,
     tick,
     tickWHNF,
@@ -30,11 +27,11 @@ where
 
 import Control.DeepSeq
 import Control.Monad (replicateM_)
+import Data.Bool
 import Perf.Types
 import System.Clock
-import Prelude
 import System.Info
-import Data.Bool
+import Prelude
 
 -- | A performance measure of number of nanoseconds.
 type Nanos = Integer
@@ -48,7 +45,6 @@ defaultClock :: Clock
 defaultClock = bool ThreadCPUTime MonotonicRaw (os == "mingw32")
 
 -- | A single 'defaultClock' reading (note that the absolute value is not meaningful).
---
 nanos :: IO Nanos
 nanos = nanosWith defaultClock
 
@@ -68,7 +64,6 @@ warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
 
 -- | tick from a specific 'Clock'
---
 tickWith :: Clock -> (a -> b) -> a -> IO (Nanos, b)
 tickWith c !f !a = do
   !t <- nanosWith c

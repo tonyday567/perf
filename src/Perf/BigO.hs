@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | [Order of complexity](https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N)) calculations.
---
 module Perf.BigO
   ( O (..),
     olist,

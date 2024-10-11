@@ -1137,15 +1137,6 @@ Exploration of how the code surrounding measurement effects performance.
 
 ## Space
 
-Data is collected from GHCStats
-
--   allocated-bytes
--   gcs
--   gcdetails_live_bytes
--   max_live_bytes
--   max_mem_in_use_bytes
-
-   
      perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 
      label1          label2          old result      new result      change
@@ -1155,6 +1146,14 @@ Data is collected from GHCStats
      sum             gcLiveBytes     2.15e5          2.17e5
      sum             gcollects       1.00e-1         1.00e-1
      sum             maxLiveBytes    0.00e0          0.00e0
+
+Data is collected from GHCStats
+
+-   allocated_bytes
+-   gcs
+-   gcdetails_live_bytes
+-   max_live_bytes
+-   max_mem_in_use_bytes
 
 
 <a id="org753786d"></a>

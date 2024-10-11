@@ -14,8 +14,8 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Options.Applicative
 import Perf
-import Prelude
 import System.Clock
+import Prelude
 
 data RunType = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
@@ -118,7 +118,9 @@ main = do
         (intercalate "-" [show r, show l])
         (statExamples l)
     RunClocks -> do
-      reportMainWith repOptions (intercalate "-" [show r, show a, show l, show c])
+      reportMainWith
+        repOptions
+        (intercalate "-" [show r, show a, show l, show c])
         (testExample (examplePattern a l))
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt c 1) exampleIO

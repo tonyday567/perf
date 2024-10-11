@@ -78,7 +78,7 @@ data ReportOptions = ReportOptions
 -- | Default options
 --
 -- >>> defaultReportOptions
--- ReportOptions {reportN = 1000, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
+-- ReportOptions {reportN = 1000, reportClock = MonotonicRaw, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
 defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
@@ -177,7 +177,7 @@ readResult f = do
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
 
 hasDegraded :: Map.Map a CompareResult -> Bool
-hasDegraded m = any ((== "degraded") . noteResult) $ fmap snd (Map.toList m)
+hasDegraded m = any (((== "degraded") . noteResult) . snd) (Map.toList m)
 
 -- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult

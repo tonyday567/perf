@@ -222,8 +222,7 @@ outer label outerm meas p =
   (\((a, m), m') -> (a, (m', m)))
     <$> runPerfT
       outerm
-      ( fam label (runPerfT meas p)
-      )
+      (fam label (runPerfT meas p))
 
 -- | run a PerfT and calculate excess performance over the entire computation
 slop :: (MonadIO m, Num t, Semigroup t) => Text -> Measure m t -> PerfT m t a -> m (a, Map.Map Text t)
@@ -231,8 +230,7 @@ slop l meas p =
   (\((a, m), m') -> (a, m <> Map.insert "slop" (m' Map.! l - Map.foldl' (+) 0 m) m'))
     <$> runPerfT
       meas
-      ( fam l (runPerfT meas p)
-      )
+      (fam l (runPerfT meas p))
 
 -- | run a multi PerfT and calculate excess performance over the entire computation
 slops :: (MonadIO m, Num t, Semigroup t) => Int -> Measure m t -> PerfT m [t] a -> m (a, (Map.Map Text t, Map.Map Text [t]))
@@ -240,5 +238,4 @@ slops n meas p =
   (\((a, ms), m') -> (a, (Map.insert "slop" (m' Map.! "outer" - Map.foldl' (+) 0 (fmap sum ms)) m', ms)))
     <$> runPerfT
       meas
-      ( fam "outer" (runPerfT (repeated n meas) p)
-      )
+      (fam "outer" (runPerfT (repeated n meas) p))

@@ -17,8 +17,8 @@ import Perf.Space
 import Perf.Stats
 import Perf.Time
 import Perf.Types
-import Prelude hiding (cycle)
 import System.Clock
+import Prelude hiding (cycle)
 
 -- | Command-line measurement options.
 data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation | MeasureCount deriving (Eq, Show)

@@ -1145,15 +1145,16 @@ Data is collected from GHCStats
 -   max_live_bytes
 -   max_mem_in_use_bytes
 
-    perf-explore -n 10 -l 100000 --space +RTS -T -RTS
+   
+     perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 
-    label1          label2          old result      new result      change
+     label1          label2          old result      new result      change
     
-    sum             MaxMem          4.61e6          4.61e6
-    sum             allocated       4.20e5          4.20e5
-    sum             gcLiveBytes     2.15e5          2.17e5
-    sum             gcollects       1.00e-1         1.00e-1
-    sum             maxLiveBytes    0.00e0          0.00e0
+     sum             MaxMem          4.61e6          4.61e6
+     sum             allocated       4.20e5          4.20e5
+     sum             gcLiveBytes     2.15e5          2.17e5
+     sum             gcollects       1.00e-1         1.00e-1
+     sum             maxLiveBytes    0.00e0          0.00e0
 
 
 <a id="org753786d"></a>

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Use of 'System.Clock' from the [clock](https://hackage.haskell.org/package/clock) library to measure time performance of a computation.
@@ -27,10 +28,8 @@ where
 
 import Control.DeepSeq
 import Control.Monad (replicateM_)
-import Data.Bool
 import Perf.Types
 import System.Clock
-import System.Info
 import Prelude
 
 -- | A performance measure of number of nanoseconds.
@@ -42,7 +41,12 @@ toSecs ns = fromIntegral ns / 1e9
 
 -- | 'MonotonicRaw' is the default for macOS & linux, at around 42 nano time resolution, and a 'tick_' measurement of around 170 nanos. For Windows, 'ThreadCPUTime' has a similar time resolution at 42 nanos and a 'tick_' of around 500 nanos.
 defaultClock :: Clock
-defaultClock = bool ThreadCPUTime MonotonicRaw (os == "mingw32")
+
+#ifdef mingw32_HOST_OS
+defaultClock = ThreadCPUTime
+#else
+defaultClock = MonotonicRaw
+#endif
 
 -- | A single 'defaultClock' reading (note that the absolute value is not meaningful).
 nanos :: IO Nanos

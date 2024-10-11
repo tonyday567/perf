@@ -91,9 +91,6 @@ perfNoOps meas =
     fap "const" (const ()) ()
     fam "pure" (pure ())
 
-allClocks :: [Clock]
-allClocks = [Monotonic, Realtime, ProcessCPUTime, ThreadCPUTime, MonotonicRaw]
-
 main :: IO ()
 main = do
   o <- execParser exploreOpts

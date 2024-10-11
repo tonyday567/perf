@@ -112,7 +112,7 @@ parseClock =
     <|> flag' ProcessCPUTime (long "ProcessCPUTime")
     <|> flag' ThreadCPUTime (long "ThreadCPUTime")
 #ifdef mingw32_HOST_OS
-    <|> pure ThreadCPUClock
+    <|> pure ThreadCPUTime
 #else
     <|> flag' MonotonicRaw (long "MonotonicRaw")
     <|> pure MonotonicRaw

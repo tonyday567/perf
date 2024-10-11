@@ -52,7 +52,7 @@
 
 # Setup
 
-Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
+Note that running perf.org is very slow compared with an external process which accesses the compiled version of the library.
 
     :r
     :set -Wno-type-defaults
@@ -1139,11 +1139,11 @@ Exploration of how the code surrounding measurement effects performance.
 
 Data is collected from GHCStats
 
--   allocated<sub>bytes</sub>
+-   allocated-bytes
 -   gcs
--   gcdetails<sub>live</sub><sub>bytes</sub>
--   max<sub>live</sub><sub>bytes</sub>
--   max<sub>mem</sub><sub>in</sub><sub>use</sub><sub>bytes</sub>
+-   gcdetails_live_bytes
+-   max_live_bytes
+-   max_mem_in_use_bytes
 
     perf-explore -n 10 -l 100000 --space +RTS -T -RTS
 
@@ -1177,118 +1177,6 @@ Instead, we:
 
 
 <a id="org47311bd"></a>
-
-# References
-
-[The Haskell performance checklist](https://github.com/haskell-perf/checklist)
-
-[ndmitchell/spaceleak: Notes on space leaks](https://github.com/ndmitchell/spaceleak)
-
-
-<a id="orgadd7f60"></a>
-
-## Core
-
-[5.13. Debugging the compiler](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/debugging.html#options-debugging)
-
-    ghc app/speed.hs -ddump-simpl -ddump-to-file -fforce-recomp -dlint -O
-
-[haskell wiki: Looking at the Core](https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core)
-
-[godbolt](https://godbolt.org/)
-
-[ghc issue 15185: Enum instance for IntX / WordX are inefficient](https://gitlab.haskell.org/ghc/ghc/-/issues/15185)
-
-[fixpt - All About Strictness Analysis (part 1)](https://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html)
-
-
-<a id="org31e588b"></a>
-
-## Profiling
-
-
-<a id="orgf72792c"></a>
-
-### setup
-
-[8. Profiling](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/profiling.html#prof-heap)
-
-A typical configuration step for profiling:
-
-    cabal configure --enable-library-profiling --enable-executable-profiling -fprof-auto -fprof -write-ghc-environment-files=always
-
-A cabal.project.local with profiling enabled:
-
-> write-ghc-environment-files: always
-> ignore-project: False
-> flags: +prof +prof-auto
-> library-profiling: True
-> executable-profiling: True
-
-Examples from markup-parse R&D:
-
-Executable compilation:
-
-    ghc -prof -fprof-auto -rtsopts app/speed0.hs -threaded -fforce-recomp
-
-Executable run:
-
-    app/speed0 +RTS -s -p -hc -l -RTS
-
-
-<a id="org1d9ca37"></a>
-
-### Space usage output (-s)
-
-    885,263,472 bytes allocated in the heap
-           8,507,448 bytes copied during GC
-             163,200 bytes maximum residency (4 sample(s))
-              27,752 bytes maximum slop
-                   6 MiB total memory in use (0 MiB lost due to fragmentation)
-    
-                                         Tot time (elapsed)  Avg pause  Max pause
-      Gen  0       207 colls,     0 par    0.009s   0.010s     0.0001s    0.0002s
-      Gen  1         4 colls,     0 par    0.001s   0.001s     0.0004s    0.0005s
-    
-      TASKS: 4 (1 bound, 3 peak workers (3 total), using -N1)
-    
-      SPARKS: 0 (0 converted, 0 overflowed, 0 dud, 0 GC'd, 0 fizzled)
-    
-      INIT    time    0.006s  (  0.006s elapsed)
-      MUT     time    0.367s  (  0.360s elapsed)
-      GC      time    0.010s  (  0.011s elapsed)
-      RP      time    0.000s  (  0.000s elapsed)
-      PROF    time    0.000s  (  0.000s elapsed)
-      EXIT    time    0.001s  (  0.001s elapsed)
-      Total   time    0.384s  (  0.380s elapsed)
-
-
-<a id="orgeb93acc"></a>
-
-### Cost center profile (-p)
-
-Dumped to speed0.prof
-
-    COST CENTRE MODULE                SRC                                            %time %alloc
-    
-    token       MarkupParse           src/MarkupParse.hs:(259,1)-(260,20)             50.2   50.4
-    wrappedQ'   MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(215,1)-(217,78)   20.8   23.1
-    ws_         MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(135,1)-(146,4)    14.3    5.5
-    eq          MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:243:1-30           10.6   11.1
-    gather      MarkupParse           src/MarkupParse.hs:(420,1)-(428,100)             2.4    3.7
-    runParser   FlatParse.Basic       src/FlatParse/Basic.hs:(217,1)-(225,24)          1.0    6.0
-
-
-<a id="org76c2a10"></a>
-
-### heap analysis (-hc -l)
-
-    eventlog2html speed0.eventlog
-
-Produces speed0.eventlog.html which contains heap charts.
-
-
-<a id="org3a53ed0"></a>
 
 ## Cache speed
 

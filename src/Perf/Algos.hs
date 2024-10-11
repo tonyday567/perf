@@ -83,7 +83,6 @@ where
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bifunctor
-import Data.Foldable
 import Data.Functor.Foldable
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)

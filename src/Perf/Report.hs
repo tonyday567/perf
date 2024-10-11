@@ -44,6 +44,7 @@ import Options.Applicative
 import Perf.Measure
 import Perf.Stats
 import Perf.Types
+import System.Clock
 import System.Exit
 import Text.Printf hiding (parseFormat)
 import Text.Read
@@ -65,6 +66,7 @@ parseHeader =
 data ReportOptions = ReportOptions
   { -- | Number of times to run a benchmark.
     reportN :: Int,
+    reportClock :: Clock,
     reportStatDType :: StatDType,
     reportMeasureType :: MeasureType,
     reportGolden :: Golden,
@@ -81,6 +83,7 @@ defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
     1000
+    MonotonicRaw
     StatAverage
     MeasureTime
     defaultGolden
@@ -92,11 +95,22 @@ parseReportOptions :: Parser ReportOptions
 parseReportOptions =
   ReportOptions
     <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
+    <*> parseClock
     <*> parseStatD
     <*> parseMeasure
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
+
+-- | Parse command-line 'Clock' options.
+parseClock :: Parser Clock
+parseClock =
+  flag' Monotonic (long "Monotonic")
+    <|> flag' Realtime (long "Realtime")
+    <|> flag' ProcessCPUTime (long "ProcessCPUTime")
+    <|> flag' ThreadCPUTime (long "ThreadCPUTime")
+    <|> flag' MonotonicRaw (long "MonotonicRaw")
+    <|> pure MonotonicRaw
 
 -- | Default command-line parser.
 infoReportOptions :: ParserInfo ReportOptions
@@ -126,9 +140,10 @@ reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
 reportMainWith o name t = do
   let !n = reportN o
   let s = reportStatDType o
+  let c = reportClock o
   let mt = reportMeasureType o
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
-  m <- execPerfT (measureDs mt n) t
+  m <- execPerfT (measureDs mt c n) t
   report o' (statify s m)
 
 -- | Levels of geometric difference in compared performance that triggers reporting.

@@ -12,12 +12,12 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Gauge
 import Options.Applicative
 import Perf
 import Prelude
+import System.Clock
 
-data RunType = RunExample | RunExamples | RunNub | RunExampleIO | RunSums | RunLengths | RunGauge | RunNoOps | RunTicks deriving (Eq, Show)
+data RunType = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
 data ExploreOptions = ExploreOptions
   { exploreReportOptions :: ReportOptions,
@@ -32,12 +32,12 @@ parseRun =
   flag' RunSums (long "sums" <> help "run on sum algorithms")
     <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
     <|> flag' RunNub (long "nub" <> help "nub test")
+    <|> flag' RunClocks (long "clocks" <> help "clock test")
     <|> flag' RunExamples (long "examples" <> help "run on example algorithms")
     <|> flag' RunExample (long "example" <> help "run on the example algorithm")
     <|> flag' RunExampleIO (long "exampleIO" <> help "exampleIO test")
     <|> flag' RunNoOps (long "noops" <> help "noops test")
     <|> flag' RunTicks (long "ticks" <> help "tick test")
-    <|> flag' RunGauge (long "gauge" <> help "gauge runs on exmaple for comparison")
     <|> pure RunExample
 
 exploreOptions :: Parser ExploreOptions
@@ -91,25 +91,8 @@ perfNoOps meas =
     fap "const" (const ()) ()
     fam "pure" (pure ())
 
--- | * gauge experiment
-testGauge ::
-  (NFData b) =>
-  Text ->
-  (a -> b) ->
-  a ->
-  IO ()
-testGauge label f a = do
-  Text.putStrLn label
-  benchmarkWith defaultConfig (whnf f a)
-  benchmarkWith defaultConfig (nf f a)
-
-testGaugeExample :: ExamplePattern Int -> IO ()
-testGaugeExample (PatternSumFuse label f a) = testGauge label f a
-testGaugeExample (PatternSum label f a) = testGauge label f a
-testGaugeExample (PatternLengthF label f a) = testGauge label f a
-testGaugeExample (PatternConstFuse label f a) = testGauge label f a
-testGaugeExample (PatternMapInc label f a) = testGauge label f a
-testGaugeExample (PatternNoOp label f a) = testGauge label f a
+allClocks :: [Clock]
+allClocks = [Monotonic, Realtime, ProcessCPUTime, ThreadCPUTime, MonotonicRaw]
 
 main :: IO ()
 main = do
@@ -118,6 +101,7 @@ main = do
   let n = reportN repOptions
   let s = reportStatDType repOptions
   let mt = reportMeasureType repOptions
+  let c = reportClock repOptions
   let !l = exploreLength o
   let a = exploreExample o
   let r = exploreRun o
@@ -133,27 +117,28 @@ main = do
         repOptions
         (intercalate "-" [show r, show l])
         (statExamples l)
+    RunClocks -> do
+      reportMainWith repOptions (intercalate "-" [show r, show a, show l, show c])
+        (testExample (examplePattern a l))
     RunExampleIO -> do
-      m1 <- execPerfT (measureDs mt 1) exampleIO
-      (_, (m', m2)) <- outer "outer-total" (measureDs mt 1) (measureDs mt 1) exampleIO
+      m1 <- execPerfT (measureDs mt c 1) exampleIO
+      (_, (m', m2)) <- outer "outer-total" (measureDs mt c 1) (measureDs mt c 1) exampleIO
       let ms = mconcat [Map.mapKeys (\x -> ["normal", x]) m1, Map.mapKeys (\x -> ["outer", x]) (m2 <> m')]
       putStrLn ""
       let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show s]) repOptions
       report o' (fmap (statD s) <$> ms)
     RunSums -> do
-      m <- statSums n l (measureDs mt)
+      m <- statSums n l (measureDs mt c)
       let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
       report o' (statify s m)
     RunLengths -> do
-      m <- statLengths n l (measureDs mt)
+      m <- statLengths n l (measureDs mt c)
       let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
       report o' (statify s m)
     RunNoOps -> do
-      m <- perfNoOps (measureDs mt n)
+      m <- perfNoOps (measureDs mt c n)
       let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n]) repOptions
       report o' (allStats 4 (Map.mapKeys (: []) m))
     RunTicks -> do
       m <- statTicksSums n l s
       reportOrg2D (fmap (expt (Just 3)) m)
-    RunGauge -> do
-      mapM_ testGaugeExample ((`examplePattern` l) <$> allExamples)

@@ -18,6 +18,7 @@ import Perf.Stats
 import Perf.Time
 import Perf.Types
 import Prelude hiding (cycle)
+import System.Clock
 
 -- | Command-line measurement options.
 data MeasureType = MeasureTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation | MeasureCount deriving (Eq, Show)
@@ -33,10 +34,10 @@ parseMeasure =
     <|> pure MeasureTime
 
 -- | unification of the different measurements to being a list of doubles.
-measureDs :: MeasureType -> Int -> Measure IO [[Double]]
-measureDs mt n =
+measureDs :: MeasureType -> Clock -> Int -> Measure IO [[Double]]
+measureDs mt c n =
   case mt of
-    MeasureTime -> fmap ((: []) . fromIntegral) <$> times n
+    MeasureTime -> fmap ((: []) . fromIntegral) <$> timesWith c n
     MeasureSpace -> toMeasureN n (ssToList <$> space False)
     MeasureSpaceTime -> toMeasureN n ((\x y -> ssToList x <> [fromIntegral y]) <$> space False <*> stepTime)
     MeasureAllocation -> fmap ((: []) . fromIntegral) <$> toMeasureN n (allocation False)

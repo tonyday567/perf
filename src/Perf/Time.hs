@@ -1,13 +1,18 @@
 {-# LANGUAGE ViewPatterns #-}
 
--- | 'tick' uses the rdtsc chipset to measure time performance of a computation.
+-- | Use of 'System.Clock' from the [clock](https://hackage.haskell.org/package/clock) library to measure time performance of a computation.
 --
--- The measurement unit is one oscillation of the chip crystal as measured by the <https://en.wikipedia.org/wiki/Time_Stamp_Counter rdtsc> instruction which inspects the TSC register.
---
--- For reference, a computer with a frequency of 2 GHz means that one cycle is equivalent to 0.5 nanoseconds.
 module Perf.Time
-  ( tick_,
+  ( Nanos,
+    defaultClock,
+    toSecs,
+    nanosWith,
+    nanos,
+
+    tick_,
     warmup,
+
+    tickWith,
     tick,
     tickWHNF,
     tickLazy,
@@ -16,179 +21,186 @@ module Perf.Time
     tickIO,
     ticks,
     ticksIO,
-    Cycles (..),
-    cputime,
-    clocktime,
     time,
     times,
+    timesWith,
     stepTime,
   )
 where
 
 import Control.DeepSeq
 import Control.Monad (replicateM_)
-import Data.Fixed
-import Data.Time
-import GHC.Word (Word64)
 import Perf.Types
-import System.CPUTime
-import System.CPUTime.Rdtsc
+import System.Clock
 import Prelude
+import System.Info
+import Data.Bool
 
--- | Clock count.
-newtype Cycles = Cycles {word :: Word64}
-  deriving (Show, Read, Eq, Ord, Num, Real, Enum, Integral)
+-- | A performance measure of number of nanoseconds.
+type Nanos = Integer
 
-instance Semigroup Cycles where
-  (<>) = (+)
+-- | Convert 'Nanos' to seconds.
+toSecs :: Nanos -> Double
+toSecs ns = fromIntegral ns / 1e9
 
-instance Monoid Cycles where
-  mempty = 0
+-- | 'MonotonicRaw' is the default for macOS & linux, at around 42 nano time resolution, and a 'tick_' measurement of around 170 nanos. For Windows, 'ThreadCPUTime' has a similar time resolution at 42 nanos and a 'tick_' of around 500 nanos.
+defaultClock :: Clock
+defaultClock = bool ThreadCPUTime MonotonicRaw (os == "mingw32")
 
--- | tick_ measures the number of cycles it takes to read the rdtsc chip twice: the difference is then how long it took to read the clock the second time.
-tick_ :: IO Cycles
+-- | A single 'defaultClock' reading (note that the absolute value is not meaningful).
+--
+nanos :: IO Nanos
+nanos = nanosWith defaultClock
+
+-- | A single reading of a specific 'Clock'.
+nanosWith :: Clock -> IO Nanos
+nanosWith c = toNanoSecs <$> getTime c
+
+-- | tick_ measures the number of nanos it takes to read the clock.
+tick_ :: IO Nanos
 tick_ = do
-  t <- rdtsc
-  t' <- rdtsc
-  pure (Cycles (t' - t))
+  t <- nanos
+  t' <- nanos
+  pure (t' - t)
 
--- | Warm up the register, to avoid a high first measurement. Without a warmup, one or more larger values can occur at the start of a measurement spree, and often are in the zone of an L2 miss.
+-- | Warm up the clock, to avoid a high first measurement. Without a warmup, one or more larger values can occur at the start of a measurement spree, and often are in the zone of an L2 miss.
 warmup :: Int -> IO ()
 warmup n = replicateM_ n tick_
+
+-- | tick from a specific 'Clock'
+--
+tickWith :: Clock -> (a -> b) -> a -> IO (Nanos, b)
+tickWith c !f !a = do
+  !t <- nanosWith c
+  !a' <- pure $! f a
+  !t' <- nanosWith c
+  pure (t' - t, a')
+{-# INLINEABLE tickWith #-}
 
 -- | /tick f a/
 --
 -- - strictly evaluates f and a to WHNF
--- - starts the cycle counter
+-- - reads the clock
 -- - strictly evaluates f a to WHNF
--- - stops the cycle counter
--- - returns (number of cycles, f a)
-tick :: (a -> b) -> a -> IO (Cycles, b)
+-- - reads the clock
+-- - returns (nanos, f a)
+tick :: (a -> b) -> a -> IO (Nanos, b)
 tick !f !a = do
-  !t <- rdtsc
+  !t <- nanos
   !a' <- pure $! f a
-  !t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  !t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tick #-}
 
 -- | /tickWHNF f a/
 --
--- - starts the cycle counter
+-- - reads the clock
 -- - strictly evaluates f a to WHNF (this may also kick off thunk evaluation in f or a which will also be captured in the cycle count)
--- - stops the cycle counter
--- - returns (number of cycles, f a)
-tickWHNF :: (a -> b) -> a -> IO (Cycles, b)
+-- - reads the clock
+-- - returns (nanos, f a)
+tickWHNF :: (a -> b) -> a -> IO (Nanos, b)
 tickWHNF f a = do
-  !t <- rdtsc
+  !t <- nanos
   !a' <- pure $! f a
-  !t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  !t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tickWHNF #-}
 
 -- | /tickLazy f a/
 --
--- - starts the cycle counter
+-- - reads the clock
 -- - lazily evaluates f a
--- - stops the cycle counter
--- - returns (number of cycles, f a)
-tickLazy :: (a -> b) -> a -> IO (Cycles, b)
+-- - reads the clock
+-- - returns (nanos, f a)
+tickLazy :: (a -> b) -> a -> IO (Nanos, b)
 tickLazy f a = do
-  t <- rdtsc
+  t <- nanos
   let a' = f a
-  t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tickLazy #-}
 
 -- | /tickForce f a/
 --
 -- - deeply evaluates f and a,
--- - starts the cycle counter
+-- - reads the clock
 -- - deeply evaluates f a
--- - stops the cycle counter
--- - returns (number of cycles, f a)
-tickForce :: (NFData a, NFData b) => (a -> b) -> a -> IO (Cycles, b)
+-- - reads the clock
+-- - returns (nanos, f a)
+tickForce :: (NFData a, NFData b) => (a -> b) -> a -> IO (Nanos, b)
 tickForce (force -> !f) (force -> !a) = do
-  !t <- rdtsc
+  !t <- nanos
   !a' <- pure (force (f a))
-  !t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  !t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tickForce #-}
 
 -- | /tickForceArgs f a/
 --
 -- - deeply evaluates f and a,
--- - starts the cycle counter
+-- - reads the clock
 -- - strictly evaluates f a to WHNF
--- - stops the cycle counter
--- - returns (number of cycles, f a)
-tickForceArgs :: (NFData a) => (a -> b) -> a -> IO (Cycles, b)
+-- - reads the clock
+-- - returns (nanos, f a)
+tickForceArgs :: (NFData a) => (a -> b) -> a -> IO (Nanos, b)
 tickForceArgs (force -> !f) (force -> !a) = do
-  !t <- rdtsc
+  !t <- nanos
   !a' <- pure $! f a
-  !t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  !t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tickForceArgs #-}
 
 -- | measures an /IO a/
-tickIO :: IO a -> IO (Cycles, a)
+tickIO :: IO a -> IO (Nanos, a)
 tickIO a = do
-  !t <- rdtsc
+  !t <- nanos
   !a' <- a
-  !t' <- rdtsc
-  pure (Cycles (t' - t), a')
+  !t' <- nanos
+  pure (t' - t, a')
 {-# INLINEABLE tickIO #-}
+
+-- | measures an /IO a/
+tickIOWith :: Clock -> IO a -> IO (Nanos, a)
+tickIOWith c a = do
+  !t <- nanosWith c
+  !a' <- a
+  !t' <- nanosWith c
+  pure (t' - t, a')
+{-# INLINEABLE tickIOWith #-}
 
 -- | n measurements of a tick
 --
--- returns a list of Cycles and the last evaluated f a
-ticks :: Int -> (a -> b) -> a -> IO ([Cycles], b)
+-- returns a list of Nanos and the last evaluated f a
+ticks :: Int -> (a -> b) -> a -> IO ([Nanos], b)
 ticks = multi tick
 {-# INLINEABLE ticks #-}
 
 -- | n measurements of a tickIO
 --
--- returns an IO tuple; list of Cycles and the last evaluated f a
-ticksIO :: Int -> IO a -> IO ([Cycles], a)
+-- returns an IO tuple; list of Nanos and the last evaluated f a
+ticksIO :: Int -> IO a -> IO ([Nanos], a)
 ticksIO = multiM tickIO
 {-# INLINEABLE ticksIO #-}
 
 -- | tick as a 'StepMeasure'
-stepTime :: StepMeasure IO Cycles
+stepTime :: StepMeasure IO Nanos
 stepTime = StepMeasure start stop
   where
-    start = Cycles <$> rdtsc
-    stop r = fmap (\x -> x - r) (Cycles <$> rdtsc)
+    start = nanos
+    stop r = fmap (\x -> x - r) nanos
 {-# INLINEABLE stepTime #-}
 
--- | a measure using 'getCPUTime' from System.CPUTime (unit is picoseconds)
-cputime :: StepMeasure IO Integer
-cputime = StepMeasure start stop
-  where
-    start = getCPUTime
-    stop a = do
-      t <- getCPUTime
-      return $ t - a
-
--- | a measure using 'getCurrentTime' (unit is seconds)
-clocktime :: StepMeasure IO Double
-clocktime = StepMeasure start stop
-  where
-    start = getCurrentTime
-    stop a = do
-      t <- getCurrentTime
-      return $ fromNominalDiffTime $ diffUTCTime t a
-
-fromNominalDiffTime :: NominalDiffTime -> Double
-fromNominalDiffTime t = fromInteger i * 1e-12
-  where
-    (MkFixed i) = nominalDiffTimeToSeconds t
-
 -- | tick as a 'Measure'
-time :: Measure IO Cycles
+time :: Measure IO Nanos
 time = Measure tick tickIO
 {-# INLINEABLE time #-}
 
 -- | tick as a multi-Measure
-times :: Int -> Measure IO [Cycles]
+times :: Int -> Measure IO [Nanos]
 times n = Measure (ticks n) (ticksIO n)
 {-# INLINEABLE times #-}
+
+-- | tickWith as a multi-Measure
+timesWith :: Clock -> Int -> Measure IO [Nanos]
+timesWith c n = Measure (multi (tickWith c) n) (multiM (tickIOWith c) n)
+{-# INLINEABLE timesWith #-}

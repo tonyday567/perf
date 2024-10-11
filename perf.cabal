@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.12.0.1
+version: 0.13.0.0
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -9,16 +9,20 @@ author: Tony Day, Marco Zocca
 maintainer: tonyday567@gmail.com
 homepage: https://github.com/tonyday567/perf#readme
 bug-reports: https://github.com/tonyday567/perf/issues
-synopsis: Low-level run time measurement.
+synopsis: Performance methods and monad.
 description:
     A set of tools to measure performance of Haskell programs.
-    See the Perf module for an example and full API documentation.
+    See the Perf module and readme for an example and full API documentation.
 
 build-type: Simple
-tested-with: GHC == 8.10 || ==9.2 || ==9.4 || ==9.6 || ==9.8
+tested-with:
+    , GHC == 9.10.1
+    , GHC == 9.8.2
+    , GHC == 9.6.5
+
 extra-doc-files:
     ChangeLog.md
-    readme.org
+    readme.md
 
 source-repository head
     type: git
@@ -110,7 +114,8 @@ library
         , mtl                  >=2.2.2 && <2.4
         , numhask-space        >=0.10 && <0.12
         , optparse-applicative >=0.17 && <0.19
-        , rdtsc                >=1.3 && <1.4
+        -- , rdtsc                >=1.3 && <1.4
+        , clock
         , recursion-schemes    >=5.2.2 && <5.3
         , text                 >=1.2 && <2.2
         , time                 >=1.9 && <1.13
@@ -139,9 +144,9 @@ executable perf-explore
         , containers           >=0.6 && <0.8
         , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
-        , gauge                >=0.2.5 && <0.3
         , mtl                  >=2.2.2 && <2.4
         , optparse-applicative >=0.17 && <0.19
+        , clock
         , perf
         , text                 >=1.2 && <2.2
     ghc-options: -O2

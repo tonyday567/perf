@@ -1,0 +1,642 @@
+#+TITLE: perf
+#+PROPERTY: header-args :exports both
+#+PROPERTY: header-args :eval no-export
+
+[[https://hackage.haskell.org/package/perf][file:https://img.shields.io/hackage/v/perf.svg]] [[https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci][file:https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg]]
+
+* Introduction
+
+~perf~ provides some ideas, code and a library for low-level performance measurement for Haskell hacking. The library:
+
+- provides a monad transformer, ~PerfT~, as a light-weight wrapper for use on existing code. ~PerfT~ modifications can be included in code bases, as opposed to performance being separated code and process, with any effects able to be erased at compile time with ~evalPerfT~.
+
+- focuses on fast and accurate measurement.
+
+- is polymorphic to what, exactly, is being measured, so that concepts such as counters, debug checks, time and space performance can share treatment.
+
+- can measure big O for algorithms that can be defined in terms of input size growth.
+
+* Setup
+
+Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
+
+#+begin_src haskell-ng :results output
+:r
+:set -Wno-type-defaults
+:set -Wno-unused-do-bind
+:set -Wno-name-shadowing
+:set -XOverloadedStrings
+:set -XOverloadedLabels
+import Perf
+import Data.FormatN
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import qualified Data.Map.Strict as Map
+import Control.Monad
+import Data.Bifunctor
+import System.Clock
+putStrLn "ok"
+
+#+end_src
+
+#+RESULTS:
+: [ 1 of 10] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted ) [Source file changed]
+: [ 3 of 10] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted ) [Source file changed]
+: [ 6 of 10] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted ) [Source file changed]
+: [ 7 of 10] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted ) [Source file changed]
+: [ 8 of 10] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted ) [Perf.Stats changed]
+: [10 of 10] Compiling Perf             ( src/Perf.hs, interpreted ) [Perf.BigO changed]
+: Ok, 10 modules reloaded.
+: ok
+
+* System.Clock
+
+The default clock is MonoticRaw for linux & macOS, and ThreadCPUTime for Windows.
+
+** resolution
+
+#+begin_src haskell-ng :results output
+getRes Monotonic
+getRes Realtime
+getRes ProcessCPUTime
+getRes ThreadCPUTime
+getRes MonotonicRaw
+#+end_src
+
+#+RESULTS:
+: TimeSpec {sec = 0, nsec = 1000}
+: TimeSpec {sec = 0, nsec = 1000}
+: TimeSpec {sec = 0, nsec = 1000}
+: TimeSpec {sec = 0, nsec = 42}
+: TimeSpec {sec = 0, nsec = 42}
+
+
+
+
+
+* Time
+** What is a tick?
+
+A fundamental operation of Perf.Time is tick, which sandwiches a (strict) function application between two readings of a clock, and returns time in nanoseconds, and the computation result. In this way, the `Perf` monad can be inserted into the midst of a computation in an attempt to measure performance in-situ as opposed to sitting off in a separate and decontextualized process.
+
+#+begin_src haskell-ng :results output :exports both
+:t tick
+#+end_src
+
+#+RESULTS:
+: tick :: (a -> b) -> a -> IO (Nanos, b)
+
+=tick= returns in the IO monad, because reading a cycle counter is an IO effect. A trivial but fundamental point is that performance measurement effects the computation being measured.
+
+
+** tick_
+
+tick_ measures the nanoseconds between two immediate clock reads.
+
+#+begin_src haskell-ng :results output :exports both
+:t tick_
+#+end_src
+
+#+RESULTS:
+: tick_ :: IO Nanos
+
+
+#+begin_src haskell-ng :results output :exports both
+replicateM 10 tick_
+#+end_src
+
+#+RESULTS:
+: [1833,500,416,416,416,375,375,416,416,416]
+
+** multiple ticks
+
+#+begin_src haskell-ng :results output :exports both
+fmap (fmap (fst)) . replicateM 10 $ tick (const ()) ()
+#+end_src
+
+#+RESULTS:
+: [7000,2333,2000,2208,1958,1959,1959,2000,2000,1959]
+
+Here, ~const () ()~ was evaluated and took 7 micro-seconds for the first effect, reducing down to 2 msecs after 10 effects.
+
+** tickIO
+
+~tickIO~ measures the evaluation of an IO value.
+
+#+begin_src haskell-ng :results output :exports both
+:t tickIO
+#+end_src
+
+#+RESULTS:
+: tickIO :: IO a -> IO (Cycles, a)
+
+#+begin_src haskell-ng :results output :exports both
+fmap (fmap fst) . replicateM 10 $ tickIO (pure ())
+#+end_src
+
+#+RESULTS:
+: [5541,1625,1458,1833,1375,1416,1375,1375,1375,1375]
+
+** sum example
+
+#+begin_src haskell-ng :exports both
+fmap (expt (Just 2) . fromIntegral) . fst <$> ticks 10 sum ([1..10000] :: [Double])
+#+end_src
+
+#+RESULTS:
+: ["5.0e5","2.4e5","2.4e5","2.4e5","2.4e5","2.4e5","2.4e5","2.4e5","2.5e5","2.4e5"]
+
+
+#+begin_src haskell-ng :results output :exports both
+ts <- ticks 10000 sum ([1..1000] :: [Double])
+print $ average (fmap fromIntegral $ fst ts)
+#+end_src
+
+#+RESULTS:
+: 10747.1975
+
+* PerfT
+
+~PerfT~ allows for multiple measurement points and is polymorphic in what is being measured. It returns a Map of results held in State.
+
+Compare a lower-level usage of ticks, measuring the average of summing to one thousand over one thousand trials:
+
+#+begin_src haskell-ng :results output :exports both
+first (average . fmap fromIntegral) <$> ticks 1000 sum [1..1000]
+#+end_src
+
+#+RESULTS:
+: (25947.635,500500)
+
+... with PerfT usage
+
+#+begin_src haskell-ng :results output :exports both
+second (fmap (average . fmap fromIntegral)) <$> runPerfT (times 1000) (sum |$| [1..1000])
+#+end_src
+
+#+RESULTS:
+: (500500,fromList [("",26217.098)])
+
+Comparing performance of sum versus a list fusion approach:
+
+#+begin_src haskell-ng :results output :exports both
+fmap (average . fmap fromIntegral) <$> (execPerfT (times 1000) $ do; (fap "sum" sum [1..1000]); (fap "fusion" (\x -> sum [1..x]) 1000))
+#+end_src
+
+#+RESULTS:
+: fromList [("fusion",32871.248),("sum",26924.128)]
+
+An IO example
+
+#+begin_src haskell-ng
+exampleIO' :: IO ()
+exampleIO' = do
+  txt <- Text.readFile "src/Perf.hs"
+  let n = Text.length txt
+  Text.putStrLn $ "length of file is: " <> Text.pack (show n)
+#+end_src
+
+#+begin_src haskell-ng :results output :exports both
+exampleIO = execPerfT time (do
+  txt <- fam "file_read" (Text.readFile "src/Perf.hs")
+  n <- fap "length" Text.length txt
+  fam "print_result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n)))
+#+end_src
+
+#+begin_src sh :results output :exports both
+perf-explore --exampleIO
+#+end_src
+
+#+RESULTS:
+#+begin_example
+length of file is: 1794
+length of file is: 1794
+
+label1          label2          label3          old result      new result      change
+
+normal          file-read       time            2.31e5          1.28e5          improvement
+normal          length          time            2.71e3          2.00e3          improvement
+normal          print-result    time            3.75e4          1.32e4          improvement
+outer           file-read       time            6.05e4          3.64e4          improvement
+outer           length          time            9.59e2          6.25e2          improvement
+outer           outer-total     time            7.39e4          4.02e4          improvement
+outer           print-result    time            9.79e3          1.71e3          improvement
+#+end_example
+
+* perf-explore
+
+~perf-explore~ contains some exploratory routines used to develop =perf=
+
+#+begin_src sh :results output :exports both
+perf-explore --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+examples of perf usage
+
+Usage: perf-explore [-n|--runs ARG]
+                    [--Monotonic | --Realtime | --ProcessCPUTime |
+                      --ThreadCPUTime | --MonotonicRaw]
+                    [--best | --median | --average]
+                    [--time | --space | --spacetime | --allocation | --count]
+                    [-g|--golden ARG] [--nocheck] [-r|--record]
+                    [--header | --noheader] [--error ARG] [--warning ARG]
+                    [--improved ARG]
+                    [--sums | --lengths | --nub | --clocks | --examples |
+                      --example | --exampleIO | --noops | --ticks]
+                    [-l|--length ARG]
+                    [--sumFuse | --sum | --lengthF | --constFuse | --mapInc |
+                      --noOp]
+
+  perf exploration
+
+Available options:
+  -n,--runs ARG            number of runs to perform
+  --best                   report upper decile
+  --median                 report median
+  --average                report average
+  --time                   measure time performance
+  --space                  measure space performance
+  --spacetime              measure both space and time performance
+  --allocation             measure bytes allocated
+  --count                  measure count
+  -g,--golden ARG          golden file name
+  --nocheck                do not check versus the golden file
+  -r,--record              record the result to the golden file
+  --header                 include headers
+  --noheader               dont include headers
+  --error ARG              error level
+  --warning ARG            warning level
+  --improved ARG           improved level
+  --sums                   run on sum algorithms
+  --lengths                run on length algorithms
+  --nub                    nub test
+  --clocks                 clock test
+  --examples               run on example algorithms
+  --example                run on the example algorithm
+  --exampleIO              exampleIO test
+  --noops                  noops test
+  --ticks                  tick test
+  -l,--length ARG          length of list
+  --sumFuse                fused sum pipeline
+  --sum                    sum
+  --lengthF                foldr id length
+  --constFuse              fused const pipeline
+  --mapInc                 fmap (+1)
+  --noOp                   const ()
+  -h,--help                Show this help text
+#+end_example
+
+#+begin_src haskell-ng :results output :exports both
+fmap averageI <$> execPerfT (times 10000) (sum |$| [1..1000])
+#+end_src
+
+#+RESULTS:
+: fromList [("",136055.5594)]
+
+The equivalent to the above code is:
+
+#+begin_src sh :results output :exports both
+perf-explore -n 10000 -l 1000 --sum --nocheck
+#+end_src
+
+#+RESULTS:
+: label1          label2          results
+:
+: sum             time            6.32e3
+
+** noops
+
+This no-op experiment is useful to understand the pure time performance of the machinery around measurement. It can be (re)run with:
+
+#+begin_src sh :results output :exports both
+perf-explore --noops
+#+end_src
+
+#+RESULTS:
+#+begin_example
+label1          label2          label3          old result      new result      change
+
+const           1st             time            1.72e4          8.79e3          improvement
+const           2nd             time            2.09e2          1.25e2          improvement
+const           3rd             time            1.66e2          1.25e2          improvement
+const           4th             time            2.08e2          8.30e1          improvement
+const           average         time            2.08e2          1.10e2          improvement
+const           best            time            1.31e2          6.31e1          improvement
+const           median          time            1.60e2          7.76e1          improvement
+pure            1st             time            1.00e3          1.25e2          improvement
+pure            2nd             time            1.67e2          8.30e1          improvement
+pure            3rd             time            1.66e2          8.30e1          improvement
+pure            4th             time            1.25e2          4.20e1          improvement
+pure            average         time            1.85e2          8.29e1          improvement
+pure            best            time            1.31e2          6.37e1          improvement
+pure            median          time            1.63e2          7.79e1          improvement
+#+end_example
+
+** measurement context
+
+Exploration of how the code surrounding measurement effects performance.
+
+#+begin_src sh :results drawer :exports both
+perf-explore -n 1000 -l 1000 --ticks --nocheck
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   3.29e3 | 4.83e3 |    3.29e3 |        3.29e3 |   1.85e2 |   3.92e3 | 3.29e3 |
+| sumCata       |   5.86e3 | 5.61e3 |    6.00e3 |        6.12e3 |   1.85e2 |   5.78e3 | 5.86e3 |
+| sumCo         |   3.73e3 | 4.63e3 |    3.66e3 |        3.66e3 |   1.90e2 |   4.36e3 | 3.72e3 |
+| sumCoCase     |   5.08e3 | 5.10e3 |    4.96e3 |        4.95e3 |   1.85e2 |   5.12e3 | 5.11e3 |
+| sumCoGo       |   3.47e3 | 4.74e3 |    4.66e3 |        4.64e3 |   1.85e2 |   4.72e3 | 3.29e3 |
+| sumF          |   5.92e3 | 4.85e3 |    4.84e3 |        6.41e3 |   1.85e2 |   4.85e3 | 5.91e3 |
+| sumFlip       |   4.54e3 | 4.45e3 |    4.44e3 |        4.44e3 |   1.85e2 |   4.44e3 | 4.26e3 |
+| sumFlipLazy   |   4.52e3 | 4.51e3 |    4.47e3 |        4.47e3 |   1.85e2 |   4.49e3 | 4.50e3 |
+| sumFoldr      |   5.55e3 | 4.78e3 |    4.71e3 |        4.72e3 |   1.85e2 |   4.77e3 | 5.56e3 |
+| sumFuse       |   8.28e2 | 8.33e2 |    8.29e2 |        8.29e2 |   1.86e2 |   8.28e2 | 8.29e2 |
+| sumFuseFoldl' |   2.03e3 | 8.29e2 |    8.32e2 |        8.29e2 |   1.84e2 |   8.29e2 | 8.29e2 |
+| sumFuseFoldr  |   1.17e3 | 1.17e3 |    1.18e3 |        1.17e3 |   1.84e2 |   1.19e3 | 1.17e3 |
+| sumFusePoly   |   8.40e2 | 8.37e2 |    8.35e2 |        8.36e2 |   1.84e2 |   8.40e2 | 8.37e2 |
+| sumLambda     |   3.67e3 | 5.03e3 |    3.67e3 |        3.67e3 |   1.85e2 |   3.78e3 | 3.67e3 |
+| sumMono       |   3.66e3 | 5.13e3 |    5.12e3 |        7.20e3 |   1.84e2 |   5.13e3 | 3.66e3 |
+| sumPoly       |   4.83e3 | 4.85e3 |    4.83e3 |        4.84e3 |   1.86e2 |   4.84e3 | 4.84e3 |
+| sumSum        |   4.55e3 | 4.83e3 |    4.53e3 |        4.53e3 |   1.85e2 |   6.02e3 | 4.55e3 |
+| sumTail       |   4.54e3 | 7.07e3 |    5.81e3 |        4.96e3 |   3.27e2 |   6.49e3 | 4.43e3 |
+| sumTailLazy   |   6.24e3 | 4.41e3 |    6.47e3 |        6.23e3 |   2.03e2 |   5.49e3 | 6.24e3 |
+:end:
+
+*** short list
+#+begin_src sh :results drawer :exports both
+perf-explore -n 10000 -l 10 --median --ticks
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   2.17e2 | 2.21e2 |    2.18e2 |        2.19e2 |   1.85e2 |   2.17e2 | 2.18e2 |
+| sumCata       |   2.16e2 | 2.19e2 |    2.20e2 |        2.21e2 |   1.85e2 |   2.17e2 | 2.18e2 |
+| sumCo         |   2.22e2 | 2.34e2 |    2.17e2 |        2.18e2 |   1.85e2 |   2.17e2 | 2.21e2 |
+| sumCoCase     |   2.15e2 | 2.32e2 |    2.18e2 |        2.36e2 |   1.91e2 |   2.18e2 | 2.18e2 |
+| sumCoGo       |   2.16e2 | 2.23e2 |    2.18e2 |        2.31e2 |   1.87e2 |   2.16e2 | 2.18e2 |
+| sumF          |   2.19e2 | 2.30e2 |    2.19e2 |        2.20e2 |   1.86e2 |   2.19e2 | 2.20e2 |
+| sumFlip       |   2.16e2 | 2.34e2 |    2.17e2 |        2.16e2 |   1.85e2 |   2.17e2 | 2.17e2 |
+| sumFlipLazy   |   2.16e2 | 2.23e2 |    2.16e2 |        2.17e2 |   1.85e2 |   2.17e2 | 2.18e2 |
+| sumFoldr      |   2.14e2 | 2.31e2 |    2.17e2 |        2.17e2 |   1.85e2 |   2.17e2 | 2.18e2 |
+| sumFuse       |   2.02e2 | 2.03e2 |    2.03e2 |        2.03e2 |   1.85e2 |   2.03e2 | 2.03e2 |
+| sumFuseFoldl' |   2.02e2 | 2.03e2 |    2.03e2 |        2.03e2 |   1.85e2 |   2.03e2 | 2.03e2 |
+| sumFuseFoldr  |   2.04e2 | 2.04e2 |    2.07e2 |        2.04e2 |   1.94e2 |   2.05e2 | 2.04e2 |
+| sumFusePoly   |   2.05e2 | 2.05e2 |    2.05e2 |        2.05e2 |   1.85e2 |   2.05e2 | 2.05e2 |
+| sumLambda     |   2.18e2 | 2.39e2 |    2.18e2 |        2.19e2 |   1.84e2 |   2.20e2 | 2.19e2 |
+| sumMono       |   2.08e2 | 2.31e2 |    2.08e2 |        2.11e2 |   1.92e2 |   2.09e2 | 2.09e2 |
+| sumPoly       |   2.18e2 | 2.32e2 |    2.19e2 |        2.19e2 |   1.85e2 |   2.20e2 | 2.20e2 |
+| sumSum        |   2.18e2 | 2.33e2 |    2.19e2 |        2.19e2 |   1.85e2 |   2.20e2 | 2.19e2 |
+| sumTail       |   2.52e2 | 4.19e2 |    2.95e2 |        2.60e2 |   2.69e2 |   3.64e2 | 2.42e2 |
+| sumTailLazy   |   2.09e2 | 2.42e2 |    2.13e2 |        2.10e2 |   1.90e2 |   2.28e2 | 2.11e2 |
+:end:
+
+
+*** long list
+#+begin_src sh :results drawer :exports both
+perf-explore -n 100 -l 100000 --best --ticks
+#+end_src
+
+#+RESULTS:
+:results:
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   7.38e5 | 7.38e5 |    7.36e5 |        7.36e5 |   1.66e2 |   7.38e5 | 7.38e5 |
+| sumCata       |   7.40e5 | 7.40e5 |    7.38e5 |        7.39e5 |   1.66e2 |   7.40e5 | 7.40e5 |
+| sumCo         |   7.40e5 | 7.41e5 |    7.38e5 |        7.38e5 |   1.66e2 |   7.41e5 | 7.39e5 |
+| sumCoCase     |   7.39e5 | 7.39e5 |    7.36e5 |        7.36e5 |   1.66e2 |   7.40e5 | 7.38e5 |
+| sumCoGo       |   7.39e5 | 7.39e5 |    7.36e5 |        7.36e5 |   1.66e2 |   7.39e5 | 7.39e5 |
+| sumF          |   3.52e5 | 3.52e5 |    3.52e5 |        3.52e5 |   1.66e2 |   3.52e5 | 3.52e5 |
+| sumFlip       |   3.75e5 | 3.75e5 |    3.75e5 |        3.75e5 |   1.66e2 |   3.75e5 | 3.75e5 |
+| sumFlipLazy   |   3.65e5 | 3.65e5 |    3.65e5 |        3.65e5 |   1.66e2 |   3.65e5 | 3.65e5 |
+| sumFoldr      |   7.51e5 | 7.52e5 |    7.47e5 |        7.48e5 |   1.66e2 |   7.51e5 | 7.51e5 |
+| sumFuse       |   6.26e4 | 6.26e4 |    6.26e4 |        6.26e4 |   1.66e2 |   6.26e4 | 6.26e4 |
+| sumFuseFoldl' |   6.26e4 | 6.26e4 |    6.26e4 |        6.26e4 |   1.66e2 |   6.26e4 | 6.26e4 |
+| sumFuseFoldr  |   4.97e5 | 4.95e5 |    4.96e5 |        4.97e5 |   1.66e2 |   4.96e5 | 4.97e5 |
+| sumFusePoly   |   6.26e4 | 6.26e4 |    6.26e4 |        6.26e4 |   1.66e2 |   6.26e4 | 6.26e4 |
+| sumLambda     |   3.73e5 | 3.71e5 |    3.71e5 |        3.71e5 |   1.66e2 |   3.71e5 | 3.73e5 |
+| sumMono       |   3.95e5 | 3.95e5 |    3.95e5 |        3.95e5 |   1.66e2 |   3.95e5 | 3.95e5 |
+| sumPoly       |   3.85e5 | 3.85e5 |    3.84e5 |        3.84e5 |   1.66e2 |   3.85e5 | 3.85e5 |
+| sumSum        |   4.06e5 | 4.06e5 |    4.06e5 |        4.06e5 |   1.66e2 |   4.06e5 | 4.06e5 |
+| sumTail       |   3.06e5 | 3.53e5 |    3.06e5 |        3.06e5 |   1.66e2 |   3.08e5 | 3.06e5 |
+| sumTailLazy   |   3.01e5 | 3.01e5 |    3.01e5 |        3.01e5 |   1.66e2 |   3.01e5 | 3.01e5 |
+:end:
+
+** sums
+
+#+begin_src sh :output drawer :exports both
+perf-explore -n 1000 -l 1000 --sums
+#+end_src
+
+#+RESULTS:
+#+begin_example
+label1          label2          old result      new result      change
+
+sumAux          time            5.53e3          5.21e3          improvement
+sumCata         time            5.18e3          4.73e3          improvement
+sumCo           time            6.50e3          6.40e3
+sumCoCase       time            5.16e3          6.03e3          slightly-degraded
+sumCoGo         time            6.11e3          5.88e3
+sumF            time            5.44e3          4.16e3          improvement
+sumFlip         time            7.23e3          7.07e3
+sumFlipLazy     time            6.68e3          6.44e3
+sumFoldr        time            5.23e3          5.00e3
+sumFuse         time            6.85e2          6.81e2
+sumFuseFoldl'   time            6.94e2          6.78e2
+sumFuseFoldr    time            1.04e3          1.02e3
+sumFusePoly     time            6.96e2          6.84e2
+sumLambda       time            4.79e3          4.77e3
+sumMono         time            4.82e3          4.84e3
+sumPoly         time            4.77e3          4.81e3
+sumSum          time            4.95e3          5.05e3
+sumTail         time            7.32e3          7.10e3
+sumTailLazy     time            6.75e3          6.52e3
+#+end_example
+
+** lengths
+
+#+begin_src sh :exports both
+perf-explore -n 1000 -l 1000 --lengths
+#+end_src
+
+#+RESULTS:
+#+begin_example
+label1          label2          old result      new result      change          
+
+lengthAux       time            4.44e3          3.68e3          improvement     
+lengthCo        time            4.91e3          4.45e3          improvement     
+lengthCoCase    time            4.90e3          4.44e3          improvement
+lengthF         time            3.38e3          3.21e3
+lengthFMono     time            4.16e3          4.00e3
+lengthFlip      time            5.49e3          4.90e3          improvement
+lengthFlipLazy  time            5.32e3          4.77e3          improvement
+lengthFoldr     time            4.23e3          3.90e3          improvement
+lengthFoldrConsttime            3.98e3          3.74e3          improvement
+lengthTail      time            6.47e3          5.30e3          improvement
+lengthTailLazy  time            6.11e3          5.34e3          improvement
+#+end_example
+
+** Space
+
+Data is collected from GHCStats
+
+- allocated_bytes
+- gcs
+- gcdetails_live_bytes
+- max_live_bytes
+- max_mem_in_use_bytes
+
+#+begin_src sh :results ouput :exports both
+perf-explore -n 10 -l 100000 --space +RTS -T -RTS
+#+end_src
+
+#+RESULTS:
+: label1          label2          old result      new result      change
+:
+: sum             MaxMem          4.61e6          4.61e6
+: sum             allocated       4.20e5          4.20e5
+: sum             gcLiveBytes     2.15e5          2.17e5
+: sum             gcollects       1.00e-1         1.00e-1
+: sum             maxLiveBytes    0.00e0          0.00e0
+
+* Perf.BigO
+
+Perf.BigO represents functionality to determine the complexity order for a computation.
+
+We could do a regression and minimise the error term, but we know that the largest run contains the most information; we would need to weight the simulations according to some heuristic.
+
+Instead, we:
+
+- estimate the order factor for each possible Order, from N3 to N0, setting the highest n run constant factor to zero,
+- pick the order based on lowest absolute error result summed across all the runs,
+
+#+begin_src haskell-ng :results output :exports both
+import qualified Prelude as P
+import Data.List (nub)
+estOrder (\x -> sum $ nub [1..x]) 10 [1,10,100,1000]
+#+end_src
+
+#+RESULTS:
+: BigOrder {bigOrder = N2, bigFactor = 4.05725, bigConstant = 0.0}
+
+* References
+
+[[https://github.com/haskell-perf/checklist][The Haskell performance checklist]]
+
+[[https://github.com/ndmitchell/spaceleak][ndmitchell/spaceleak: Notes on space leaks]]
+
+** Core
+
+[[https://ghc.gitlab.haskell.org/ghc/doc/users_guide/debugging.html#options-debugging][5.13. Debugging the compiler]]
+
+#+begin_src sh
+ghc app/speed.hs -ddump-simpl -ddump-to-file -fforce-recomp -dlint -O
+#+end_src
+
+[[https://wiki.haskell.org/Performance/GHC#Looking_at_the_Core][haskell wiki: Looking at the Core]]
+
+[[https://godbolt.org/][godbolt]]
+
+[[https://gitlab.haskell.org/ghc/ghc/-/issues/15185][ghc issue 15185: Enum instance for IntX / WordX are inefficient]]
+
+[[https://fixpt.de/blog/2017-12-04-strictness-analysis-part-1.html][fixpt - All About Strictness Analysis (part 1)]]
+
+** Profiling
+*** setup
+[[https://ghc.gitlab.haskell.org/ghc/doc/users_guide/profiling.html#prof-heap][8. Profiling]]
+
+A typical configuration step for profiling:
+
+#+begin_src sh :results output
+cabal configure --enable-library-profiling --enable-executable-profiling -fprof-auto -fprof -write-ghc-environment-files=always
+#+end_src
+
+A cabal.project.local with profiling enabled:
+
+#+begin_quote
+write-ghc-environment-files: always
+ignore-project: False
+flags: +prof +prof-auto
+library-profiling: True
+executable-profiling: True
+#+end_quote
+
+Examples from markup-parse R&D:
+
+Executable compilation:
+
+#+begin_src sh :results output
+ghc -prof -fprof-auto -rtsopts app/speed0.hs -threaded -fforce-recomp
+#+end_src
+
+Executable run:
+
+#+begin_src sh :results output
+app/speed0 +RTS -s -p -hc -l -RTS
+#+end_src
+
+*** Space usage output (-s)
+
+#+begin_example
+885,263,472 bytes allocated in the heap
+       8,507,448 bytes copied during GC
+         163,200 bytes maximum residency (4 sample(s))
+          27,752 bytes maximum slop
+               6 MiB total memory in use (0 MiB lost due to fragmentation)
+
+                                     Tot time (elapsed)  Avg pause  Max pause
+  Gen  0       207 colls,     0 par    0.009s   0.010s     0.0001s    0.0002s
+  Gen  1         4 colls,     0 par    0.001s   0.001s     0.0004s    0.0005s
+
+  TASKS: 4 (1 bound, 3 peak workers (3 total), using -N1)
+
+  SPARKS: 0 (0 converted, 0 overflowed, 0 dud, 0 GC'd, 0 fizzled)
+
+  INIT    time    0.006s  (  0.006s elapsed)
+  MUT     time    0.367s  (  0.360s elapsed)
+  GC      time    0.010s  (  0.011s elapsed)
+  RP      time    0.000s  (  0.000s elapsed)
+  PROF    time    0.000s  (  0.000s elapsed)
+  EXIT    time    0.001s  (  0.001s elapsed)
+  Total   time    0.384s  (  0.380s elapsed)
+#+end_example
+
+*** Cost center profile (-p)
+
+Dumped to speed0.prof
+
+#+begin_example
+COST CENTRE MODULE                SRC                                            %time %alloc
+
+token       MarkupParse           src/MarkupParse.hs:(259,1)-(260,20)             50.2   50.4
+wrappedQ'   MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(215,1)-(217,78)   20.8   23.1
+ws_         MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:(135,1)-(146,4)    14.3    5.5
+eq          MarkupParse.FlatParse src/MarkupParse/FlatParse.hs:243:1-30           10.6   11.1
+gather      MarkupParse           src/MarkupParse.hs:(420,1)-(428,100)             2.4    3.7
+runParser   FlatParse.Basic       src/FlatParse/Basic.hs:(217,1)-(225,24)          1.0    6.0
+#+end_example
+
+*** heap analysis (-hc -l)
+
+#+begin_src sh :results output
+eventlog2html speed0.eventlog
+#+end_src
+
+Produces speed0.eventlog.html which contains heap charts.
+
+** Cache speed
+
+The average cycles per + operation can get down to about 0.7 cycles, and there are about 4 cache registers per cycle, so a sum pipeline uses 2.8 register instructions per +.
+
+| Cache             | nsecs | Cycles       |
+|-------------------+-------+--------------|
+| register          | 0.1   | 4 per cycle  |
+| L1 Cache access   | 1     | 3-4 cycles   |
+| L2 Cache access   | 4     | 11-12 cycles |
+| L3 unified access | 14    | 30 - 40      |
+| DRAM hit          | 80    | 195 cycles   |
+| L1 miss           | 16    | 40 cycles    |
+| L2 miss           | >250  | >600 cycles  |

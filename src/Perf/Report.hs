@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Reporting on performance, potentially checking versus a canned results.
@@ -43,6 +44,7 @@ import GHC.Generics
 import Options.Applicative
 import Perf.Measure
 import Perf.Stats
+import Perf.Time (defaultClock)
 import Perf.Types
 import System.Clock
 import System.Exit
@@ -83,7 +85,7 @@ defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
     1000
-    MonotonicRaw
+    defaultClock
     StatAverage
     MeasureTime
     defaultGolden
@@ -109,8 +111,12 @@ parseClock =
     <|> flag' Realtime (long "Realtime")
     <|> flag' ProcessCPUTime (long "ProcessCPUTime")
     <|> flag' ThreadCPUTime (long "ThreadCPUTime")
+#ifdef mingw32_HOST_OS
+    <|> pure ThreadCPUClock
+#else
     <|> flag' MonotonicRaw (long "MonotonicRaw")
     <|> pure MonotonicRaw
+#endif
 
 -- | Default command-line parser.
 infoReportOptions :: ParserInfo ReportOptions

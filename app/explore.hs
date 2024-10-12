@@ -14,7 +14,6 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Options.Applicative
 import Perf
-import System.Clock
 import Prelude
 
 data RunType = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)

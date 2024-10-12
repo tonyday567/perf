@@ -1,16 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Order of complexity calculations.
---
--- References
---
---  - <https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N))%20etc What is Order of Complexity> .
---
--- -  <https://donsbot.wordpress.com/2008/06/04/haskell-as-fast-as-c-working-at-a-high-altitude-for-low-level-performance/ Hskell as fast as C ~ donsbot blog>
---
--- - <https://www.fpcomplete.com/haskell/tutorial/profiling/ profiling ~ fpcomplete>
---
--- -  <https://www.reddit.com/r/haskell/comments/nl0rkl/looking_for_good_rules_of_thumbs_on_what_haskell/ rules of thumb ~ reddit>
+-- | [Order of complexity](https://en.wikibooks.org/wiki/Optimizing_Code_for_Speed/Order_of_Complexity_Optimizations#:~:text=of%2DComplexity%20Reduction-,What%20is%20order%20of%20complexity%3F,*log(N)) calculations.
 module Perf.BigO
   ( O (..),
     olist,

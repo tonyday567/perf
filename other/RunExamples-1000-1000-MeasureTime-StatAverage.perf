@@ -1,1 +1,1 @@
-fromList [(["constFuse","time"],851.874),(["lengthF","time"],11181.994),(["mapInc","time"],44.13),(["noop","time"],21.034),(["sum","time"],14183.148),(["sumFuse","time"],2068.295)]
+fromList [(["constFuse","time"],736.132),(["lengthF","time"],5132.127),(["mapInc","time"],125.111),(["noop","time"],110.868),(["sum","time"],10436.082),(["sumFuse","time"],1812.501)]

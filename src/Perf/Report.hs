@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Reporting on performance, potentially checking versus a canned results.
@@ -43,7 +44,9 @@ import GHC.Generics
 import Options.Applicative
 import Perf.Measure
 import Perf.Stats
+import Perf.Time (defaultClock)
 import Perf.Types
+import System.Clock
 import System.Exit
 import Text.Printf hiding (parseFormat)
 import Text.Read
@@ -65,6 +68,7 @@ parseHeader =
 data ReportOptions = ReportOptions
   { -- | Number of times to run a benchmark.
     reportN :: Int,
+    reportClock :: Clock,
     reportStatDType :: StatDType,
     reportMeasureType :: MeasureType,
     reportGolden :: Golden,
@@ -76,11 +80,12 @@ data ReportOptions = ReportOptions
 -- | Default options
 --
 -- >>> defaultReportOptions
--- ReportOptions {reportN = 1000, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
+-- ReportOptions {reportN = 1000, reportClock = MonotonicRaw, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
 defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
     1000
+    defaultClock
     StatAverage
     MeasureTime
     defaultGolden
@@ -92,11 +97,26 @@ parseReportOptions :: Parser ReportOptions
 parseReportOptions =
   ReportOptions
     <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
+    <*> parseClock
     <*> parseStatD
     <*> parseMeasure
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
+
+-- | Parse command-line 'Clock' options.
+parseClock :: Parser Clock
+parseClock =
+  flag' Monotonic (long "Monotonic")
+    <|> flag' Realtime (long "Realtime")
+    <|> flag' ProcessCPUTime (long "ProcessCPUTime")
+    <|> flag' ThreadCPUTime (long "ThreadCPUTime")
+#ifdef mingw32_HOST_OS
+    <|> pure ThreadCPUTime
+#else
+    <|> flag' MonotonicRaw (long "MonotonicRaw")
+    <|> pure MonotonicRaw
+#endif
 
 -- | Default command-line parser.
 infoReportOptions :: ParserInfo ReportOptions
@@ -126,9 +146,10 @@ reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
 reportMainWith o name t = do
   let !n = reportN o
   let s = reportStatDType o
+  let c = reportClock o
   let mt = reportMeasureType o
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
-  m <- execPerfT (measureDs mt n) t
+  m <- execPerfT (measureDs mt c n) t
   report o' (statify s m)
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
@@ -162,7 +183,7 @@ readResult f = do
 data CompareResult = CompareResult {oldResult :: Maybe Double, newResult :: Maybe Double, noteResult :: Text} deriving (Show, Eq)
 
 hasDegraded :: Map.Map a CompareResult -> Bool
-hasDegraded m = any ((== "degraded") . noteResult) $ fmap snd (Map.toList m)
+hasDegraded m = any (((== "degraded") . noteResult) . snd) (Map.toList m)
 
 -- | Compare two results and produce some notes given level triggers.
 compareNote :: (Ord a) => CompareLevels -> Map.Map a Double -> Map.Map a Double -> Map.Map a CompareResult

@@ -1,3 +1,7 @@
+0.13
+===
+* replaced rdtsc with clocks library.
+
 0.12.0.0
 ===
 * added reportMain and support for executable development.

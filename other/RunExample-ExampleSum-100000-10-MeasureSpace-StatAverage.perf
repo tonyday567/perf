@@ -1,0 +1,1 @@
+fromList [(["sum","MaxMem"],4613734.4),(["sum","allocated"],419616.0),(["sum","gcLiveBytes"],214844.0),(["sum","gcollects"],0.1),(["sum","maxLiveBytes"],0.0)]

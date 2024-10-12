@@ -6,7 +6,6 @@ module Perf.Stats
     median,
     tenth,
     averageI,
-    averageSecs,
     StatDType (..),
     statD,
     statDs,
@@ -42,26 +41,20 @@ tenth = quantile 0.1
 averageI :: (Integral a) => [a] -> Double
 averageI xs = sum (fromIntegral <$> xs) / (fromIntegral . length $ xs)
 
--- | Compute the average time in seconds.
-averageSecs :: [Double] -> Double
-averageSecs xs = sum xs / (fromIntegral . length $ xs) / 2.5e9
-
 -- | Command-line options for type of statistic.
-data StatDType = StatAverage | StatMedian | StatBest | StatSecs deriving (Eq, Show)
+data StatDType = StatAverage | StatMedian | StatBest deriving (Eq, Show)
 
 -- | Compute a statistic.
 statD :: StatDType -> [Double] -> Double
 statD StatBest = tenth
 statD StatMedian = median
 statD StatAverage = average
-statD StatSecs = averageSecs
 
 -- | Compute a list of statistics.
 statDs :: StatDType -> [[Double]] -> [Double]
 statDs StatBest = fmap tenth . List.transpose
 statDs StatMedian = fmap median . List.transpose
 statDs StatAverage = fmap average . List.transpose
-statDs StatSecs = fmap averageSecs . List.transpose
 
 -- | Parse command-line 'StatDType' options.
 parseStatD :: Parser StatDType
@@ -69,7 +62,6 @@ parseStatD =
   flag' StatBest (long "best" <> help "report upper decile")
     <|> flag' StatMedian (long "median" <> help "report median")
     <|> flag' StatAverage (long "average" <> help "report average")
-    <|> flag' StatSecs (long "averagesecs" <> help "report average in seconds")
     <|> pure StatAverage
 
 -- | Add a statistic to a State Map

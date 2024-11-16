@@ -253,7 +253,7 @@ estOs ns ms = go [] ns ms
 mcurve :: (Semigroup a) => Measure IO a -> (Int -> b) -> [Int] -> IO [a]
 mcurve m f ns = mapM (\n -> (Map.! "") <$> execPerfT m (f |$| n)) ns
 
--- | repetitive Double Meaure performance curve.
+-- | repetitive Double Measure performance curve.
 dcurve :: (Int -> Measure IO [Double]) -> StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]
 dcurve m s sims f ns = fmap getSum <$> mcurve (Sum . statD s <$> m sims) f ns
 
@@ -270,5 +270,21 @@ tcurve = dcurve (fmap (fmap fromIntegral) . times)
 -- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
 estOrder :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
 estOrder f sims ns = do
+  xs <- tcurve StatBest sims f ns
+  pure $ fromOrder $ fst $ estO (fromIntegral <$> ns) xs
+
+-- | time performance curve.
+tcurve' :: StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]
+tcurve' = dcurve (fmap (fmap fromIntegral) . times)
+
+-- | BigOrder estimate
+--
+-- > estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
+-- > BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
+--
+-- > estOrder (\x -> sum $ nub [1..x]) 100 [1,10,100,1000]
+-- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
+estOrder' :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
+estOrder' f sims ns = do
   xs <- tcurve StatBest sims f ns
   pure $ fromOrder $ fst $ estO (fromIntegral <$> ns) xs

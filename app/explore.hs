@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | basic measurement and callibration
@@ -12,21 +13,27 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import GHC.Exts
+import GHC.Generics
+import Optics.Core
 import Options.Applicative
 import Perf
 import Prelude
 
-data RunType = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
+data Run = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
-data ExploreOptions = ExploreOptions
-  { exploreReportOptions :: ReportOptions,
-    exploreRun :: RunType,
-    exploreLength :: Int,
-    exploreExample :: Example
+data AppConfig = AppConfig
+  { appReportOptions :: ReportOptions,
+    appRun :: Run,
+    appLength :: Int,
+    appExample :: Example
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
-parseRun :: Parser RunType
+defaultAppConfig :: AppConfig
+defaultAppConfig = AppConfig defaultReportOptions RunExample 1000 ExampleSum
+
+parseRun :: Parser Run
 parseRun =
   flag' RunSums (long "sums" <> help "run on sum algorithms")
     <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
@@ -39,25 +46,25 @@ parseRun =
     <|> flag' RunTicks (long "ticks" <> help "tick test")
     <|> pure RunExample
 
-exploreOptions :: Parser ExploreOptions
-exploreOptions =
-  ExploreOptions
-    <$> parseReportOptions
+appParser :: AppConfig -> Parser AppConfig
+appParser def =
+  AppConfig
+    <$> parseReportOptions (view #appReportOptions def)
     <*> parseRun
-    <*> option auto (value 1000 <> long "length" <> short 'l' <> help "length of list")
+    <*> option auto (value (view #appLength def) <> long "length" <> short 'l' <> help "length of list")
     <*> parseExample
 
-exploreOpts :: ParserInfo ExploreOptions
-exploreOpts =
+appConfig :: AppConfig -> ParserInfo AppConfig
+appConfig def =
   info
-    (exploreOptions <**> helper)
+    (appParser def <**> helper)
     (fullDesc <> progDesc "perf exploration" <> header "examples of perf usage")
 
 -- | * exampleIO
 exampleIO :: (Semigroup t) => PerfT IO t ()
 exampleIO = do
   txt <- fam "file-read" (Text.readFile "src/Perf.hs")
-  n <- fap "length" Text.length txt
+  n <- ffap "length" Text.length txt
   fam "print-result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n))
 
 -- | * sums
@@ -92,29 +99,29 @@ perfNoOps meas =
 
 main :: IO ()
 main = do
-  o <- execParser exploreOpts
-  let repOptions = exploreReportOptions o
+  o <- execParser (appConfig defaultAppConfig)
+  let repOptions = appReportOptions o
   let n = reportN repOptions
   let s = reportStatDType repOptions
   let mt = reportMeasureType repOptions
   let c = reportClock repOptions
-  let !l = exploreLength o
-  let a = exploreExample o
-  let r = exploreRun o
+  let !l = appLength o
+  let a = appExample o
+  let r = appRun o
 
   case r of
     RunNub -> do
-      reportMainWith repOptions (show r) (ffap "nub" nub [1 .. l])
+      reportMain repOptions (show r) (void $ ffap "nub" nub [1 .. l])
     RunExample -> do
-      reportMainWith repOptions (intercalate "-" [show r, show a, show l]) $
+      reportMain repOptions (intercalate "-" [show r, show a, show l]) $
         testExample (examplePattern a l)
     RunExamples -> do
-      reportMainWith
+      reportMain
         repOptions
         (intercalate "-" [show r, show l])
         (statExamples l)
     RunClocks -> do
-      reportMainWith
+      reportMain
         repOptions
         (intercalate "-" [show r, show a, show l, show c])
         (testExample (examplePattern a l))

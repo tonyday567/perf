@@ -61,7 +61,10 @@ library
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
         , numhask-space        >=0.10 && <0.12
+        , optics-core
         , optparse-applicative >=0.17 && <0.19
+        , chart-svg
+        , prettychart
         , recursion-schemes    >=5.2.2 && <5.3
         , text                 >=1.2 && <2.2
         , vector               >=0.12.3 && <0.14
@@ -91,9 +94,12 @@ executable perf-explore
         , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
+        , optics-core
         , optparse-applicative >=0.17 && <0.19
         , perf
         , text                 >=1.2 && <2.2
+        , prettychart
+        , chart-svg
     ghc-options: -O2
 
 benchmark perf-bench

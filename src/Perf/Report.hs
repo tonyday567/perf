@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Reporting on performance, potentially checking versus a canned results.
@@ -12,10 +13,8 @@ module Perf.Report
     ReportOptions (..),
     defaultReportOptions,
     parseReportOptions,
-    infoReportOptions,
     report,
     reportMain,
-    reportMainWith,
     writeResult,
     readResult,
     CompareResult (..),
@@ -25,6 +24,7 @@ module Perf.Report
     defaultGolden,
     parseGolden,
     replaceDefaultFilePath,
+    parseClock,
   )
 where
 
@@ -41,6 +41,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Generics
+import Optics.Core
 import Options.Applicative
 import Perf.Measure
 import Perf.Stats
@@ -73,7 +74,8 @@ data ReportOptions = ReportOptions
     reportMeasureType :: MeasureType,
     reportGolden :: Golden,
     reportHeader :: Header,
-    reportCompare :: CompareLevels
+    reportCompare :: CompareLevels,
+    reportChart :: Maybe FilePath
   }
   deriving (Eq, Show, Generic)
 
@@ -91,18 +93,23 @@ defaultReportOptions =
     defaultGolden
     Header
     defaultCompareLevels
+    Nothing
+
+defaultChartFilePath :: FilePath
+defaultChartFilePath = "other/perf.svg"
 
 -- | Command-line parser for 'ReportOptions'
-parseReportOptions :: Parser ReportOptions
-parseReportOptions =
+parseReportOptions :: ReportOptions -> Parser ReportOptions
+parseReportOptions def =
   ReportOptions
-    <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
+    <$> option auto (value (view #reportN def) <> long "runs" <> short 'n' <> help "number of runs to perform")
     <*> parseClock
     <*> parseStatD
     <*> parseMeasure
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
+    <*> parseChartOptions
 
 -- | Parse command-line 'Clock' options.
 parseClock :: Parser Clock
@@ -118,39 +125,24 @@ parseClock =
     <|> pure MonotonicRaw
 #endif
 
--- | Default command-line parser.
-infoReportOptions :: ParserInfo ReportOptions
-infoReportOptions =
-  info
-    (parseReportOptions <**> helper)
-    (fullDesc <> progDesc "perf benchmarking" <> header "reporting options")
+-- | Parse charting options.
+parseChartOptions :: Parser (Maybe FilePath)
+parseChartOptions =
+  bool Nothing . Just
+    <$> option str (value defaultChartFilePath <> long "chartpath" <> help "chart file name")
+    <*> switch (long "chart" <> short 'c' <> help "chart the raw the result to the chartpath")
 
--- | Run and report a benchmark to the console. For example,
---
--- @reportMain "foo" (fap "sum" sum [1..1000])@ would:
---
--- - run a benchmark for summing the numbers 1 to a thousand.
---
--- - look for saved performance data in other/foo-1000-MeasureTime-StatAverage.perf
---
--- - report on performance in isolation or versus the canned data file if it exists.
---
--- - exit with failure if the performace had degraded.
-reportMain :: Name -> PerfT IO [[Double]] a -> IO ()
-reportMain name t = do
-  o <- execParser infoReportOptions
-  reportMainWith o name t
-
--- | Run and report a benchmark to the console with the supplied options.
-reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
-reportMainWith o name t = do
+-- | Run and report a benchmark with the specified reporting options.
+reportMain :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO a
+reportMain o name t = do
   let !n = reportN o
   let s = reportStatDType o
   let c = reportClock o
   let mt = reportMeasureType o
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
-  m <- execPerfT (measureDs mt c n) t
+  (a, m) <- runPerfT (measureDs mt c n) t
   report o' (statify s m)
+  pure a
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
@@ -252,11 +244,17 @@ reportToConsole :: [Text] -> IO ()
 reportToConsole xs = traverse_ Text.putStrLn xs
 
 -- | Golden file options.
-data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
+data Golden = Golden {golden :: FilePath, check :: CheckGolden, record :: RecordGolden} deriving (Generic, Eq, Show)
 
--- | Default filepath is "other/bench.perf"
+-- | Whether to check against a golden file
+data CheckGolden = CheckGolden | NoCheckGolden deriving (Eq, Show, Generic)
+
+-- | Whether to overwrite a golden file
+data RecordGolden = RecordGolden | NoRecordGolden deriving (Eq, Show, Generic)
+
+-- | Default is Golden "other/bench.perf" CheckGolden NoRecordGolden
 defaultGolden :: Golden
-defaultGolden = Golden "other/bench.perf" True False
+defaultGolden = Golden "other/bench.perf" CheckGolden NoRecordGolden
 
 -- | Replace the golden file name stem if it's the default.
 replaceGoldenDefault :: FilePath -> Golden -> Golden
@@ -276,8 +274,8 @@ parseGolden =
   Golden
     <$> option str (Options.Applicative.value (golden defaultGolden) <> long "golden" <> short 'g' <> help "golden file name")
     -- True is the default for 'check'.
-    <*> flag True False (long "nocheck" <> help "do not check versus the golden file")
-    <*> switch (long "record" <> short 'r' <> help "record the result to the golden file")
+    <*> (bool NoCheckGolden CheckGolden <$> flag True False (long "nocheck" <> help "do not check versus the golden file"))
+    <*> (bool NoRecordGolden RecordGolden <$> switch (long "record" <> short 'r' <> help "record the result to the golden file"))
 
 reportConsoleNoCompare :: Header -> Map.Map [Text] Double -> IO ()
 reportConsoleNoCompare h m =
@@ -293,17 +291,17 @@ reportConsoleCompare h m =
 report :: ReportOptions -> Map.Map [Text] [Double] -> IO ()
 report o m = do
   when
-    (record (reportGolden o))
+    ((== RecordGolden) $ record (reportGolden o))
     (writeResult (golden (reportGolden o)) m')
   case check (reportGolden o) of
-    False -> reportConsoleNoCompare (reportHeader o) m'
-    True -> do
+    NoCheckGolden -> reportConsoleNoCompare (reportHeader o) m'
+    CheckGolden -> do
       mOrig <- readResult (golden (reportGolden o))
       case mOrig of
         Left _ -> do
           reportConsoleNoCompare (reportHeader o) m'
           unless
-            (record (reportGolden o))
+            ((RecordGolden ==) $ record (reportGolden o))
             (putStrLn "No golden file found. To create one, run with '-r'")
         Right orig -> do
           let n = compareNote (reportCompare o) orig m'

@@ -17,6 +17,7 @@ module Perf.Time
     tickForce,
     tickForceArgs,
     tickIO,
+    tickIOWith,
     ticks,
     ticksIO,
     time,
@@ -191,15 +192,15 @@ stepTime = StepMeasure start stop
 
 -- | tick as a 'Measure'
 time :: Measure IO Nanos
-time = Measure tick tickIO
+time = Measure tick
 {-# INLINEABLE time #-}
 
 -- | tick as a multi-Measure
 times :: Int -> Measure IO [Nanos]
-times n = Measure (ticks n) (ticksIO n)
+times n = Measure (ticks n)
 {-# INLINEABLE times #-}
 
 -- | tickWith as a multi-Measure
 timesWith :: Clock -> Int -> Measure IO [Nanos]
-timesWith c n = Measure (multi (tickWith c) n) (multiM (tickIOWith c) n)
+timesWith c n = repeated n (Measure (tickWith c))
 {-# INLINEABLE timesWith #-}

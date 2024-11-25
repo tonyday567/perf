@@ -1,3 +1,5 @@
 packages:
   perf.cabal
-
+  ../prettychart/prettychart.cabal
+  ../numhask-space/numhask-space.cabal
+  ../chart-svg/chart-svg.cabal

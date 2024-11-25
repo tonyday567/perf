@@ -16,7 +16,7 @@
 
 - can measure big O for algorithms that can be defined in terms of input size growth.
 
-* Setup
+* Imports
 
 Note that running this readme.org is very slow compared with an external process which accesses the compiled version of the library.
 
@@ -28,6 +28,7 @@ Note that running this readme.org is very slow compared with an external process
 :set -XOverloadedStrings
 :set -XOverloadedLabels
 import Perf
+import Perf.Report
 import Data.FormatN
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -35,19 +36,105 @@ import qualified Data.Map.Strict as Map
 import Control.Monad
 import Data.Bifunctor
 import System.Clock
+import Data.List qualified as List
+import Control.Category ((>>>))
+import Optics.Core
+import Data.Foldable
+import NumHask.Space
 putStrLn "ok"
+import Chart
+import Prettychart
+import Chart.Examples
+(disp,q) <- startChartServer Nothing
+disp lineExample
+#+end_src
+
+#+RESULTS:
+: Ok, 11 modules loaded.
+: ok
+: Setting phasers to stun..g.h c(ip>o rt 9160) (ctrl-c to quitT)r
+: ue
+
+* charting
+
+#+begin_src haskell-ng :results output
+import Perf.Chart
+cfg = defaultPerfChartOptions
+m <- fromDump defaultPerfDumpOptions
+mt = Just MeasureTime
+disp $ perfCharts cfg mt m
+#+end_src
+
+#+RESULTS:
+: True
+
+draft version
+
+#+begin_src haskell-ng :results output
+sframe b = [Priority 100 $ defaultFrameOptions & set #frame (Just $ border 0.002 (palette 12)) & set #buffer b]
+dframe b = [Priority 100 $ defaultFrameOptions & set #frame (Just $ border 0.002 (palette 12)) & set #buffer 0, Priority 101 $ defaultFrameOptions & set #frame (Just $ border 0.002 (palette 8)) & set #buffer b]
+addf b = over (#hudOptions % #frames) (<> dframe b)
+cfg = defaultPerfChartOptions
+m <- fromDump defaultPerfDumpOptions
+xss = mconcat (List.transpose <$> toList m)
+xss' = xss & fmap (xify >>> filter (_y >>> (<view #truncateAt cfg)))
+xssBig = xss & fmap (xify >>> filter (_y >>> (>=view #truncateAt cfg)))
+(Rect _ _ y w) = unsafeSpace1 (mconcat xssBig)
+xssRect = Rect 0 (fromIntegral $ length $ head xss) y w
+med = median <$> xss
+best = tenth <$> xss
+av = Perf.average <$> xss
+
+labels = ["average: " <> (Text.intercalate "," (comma (Just 3) <$> av)), "median: " <> (Text.intercalate "," (comma (Just 3) <$> med)), "best: " <> (Text.intercalate "," (comma (Just 3) <$> best))]
+
+glyphCT = named "averages" $ zipWith (\x i -> GlyphChart defaultGlyphStyle (Point 0 <$> x) & set (#chartStyle % #color) (palette i) & set (#chartStyle % #borderColor) (palette i) & set (#chartStyle % #glyphShape) (gpalette i)) [av,med,best] [2..]
+
+glegend = defaultLegendOptions & set #legendCharts (zipWith (\t c -> (t, [c])) labels (toListOf chart' glyphCT))
+
+scatChart = mempty @ChartOptions & set (#markupOptions % #chartAspect) (CanvasAspect 1.5) & set #hudOptions defaultHudOptions & set #chartTree (glyphCT <> (named "perf" $ zipWith (\c xs -> GlyphChart (view #chartScatterStyle cfg & set #size 0.01 & over #color (rgb (palette c)) & set (#color % opac') 0.3 & set (#borderColor % opac') 0.3 & set #glyphShape (gpalette c)) xs) [0..] xss'))
+
+truncChart = mempty @ChartOptions & set (#markupOptions % #chartAspect) (CanvasAspect 1.5) & set #hudOptions (defaultHudOptions & over #axes (drop 1) & set (#axes % each % #item % #ticks % #tick % numTicks') (Just 2) & set (#axes % each % #item % #ticks % #textTick %? #style % #size) (0.07)) & set #chartTree ((named "blankrect" [BlankChart defaultStyle [xssRect]]) <> (named "perf" $ zipWith (\c xs -> GlyphChart (view #chartTruncateStyle cfg & over #color (rgb (palette c)) & set #glyphShape (gpalette c)) xs) [0..] xssBig))
+
+
+rawY = fmap _y <$> xss'
+
+histTo  = maximum <$> rawY
+histc = (mconcat $ zipWith (\ht y -> hhistChart (Range 0 ht) 100 y) histTo rawY) & set (#markupOptions % #chartAspect) (CanvasAspect 0.5)
+hextra = mempty @ChartOptions & set #chartTree (unnamed [BlankChart defaultStyle [Rect 0 0 0 25000]])
+
+rawY' = fmap _y <$> xssBig
+histToMax'  = maximum <$> rawY'
+histToMin' = minimum <$> rawY'
+histc' = (mconcat $ zipWith (\r y -> hhistChart r 100 y) (unsafeSpace1 <$> rawY') rawY') & set (#markupOptions % #chartAspect) (CanvasAspect 0.5)
+hextra' = mempty @ChartOptions & set #chartTree (unnamed [BlankChart defaultStyle [Rect 0 0 500000 2000000]])
+
+-- disp $ vertCO NoAlign 0 [(horiCO NoAlign 0 [(histc <> hextra) & set (#markupOptions % #chartAspect) (CanvasAspect 0.3), scatChart]), truncChart]
+scatChart' = horiCO NoAlign 0 [(histc <> hextra) & set (#markupOptions % #chartAspect) (CanvasAspect 0.3), scatChart]
+truncChart' = horiCO NoAlign 0 [(histc' <> hextra') & set (#markupOptions % #chartAspect) (CanvasAspect 0.3), truncChart]
+scatCT = view #chartTree scatChart'
+truncCT = set styleBox' (Just (Rect (-2.01) 0.14 (-0.2) 0.2)) $ view #chartTree truncChart'
+tstyle = defaultTextStyle & set #textAnchor AnchorStart & set #size 0.02
+textCT = named "averages" [TextChart tstyle [("median: " <> (Text.intercalate "," (comma (Just 3) <$> med)), Point 0 0), ("best: " <> (Text.intercalate "," (comma (Just 3) <$> best)), Point 0 1), ("average: " <> (Text.intercalate "," (comma (Just 3) <$> av)), Point 0 2)]] & set styleBox' (Just (Rect (-2) (-1) (-0.2) 0.2))
+
+
+disp $ mempty @ChartOptions & set #chartTree (vert NoAlign 0.1 [scatCT, truncCT]) & set (#hudOptions % #legends) [Priority 10 $ glegend & set #place PlaceBottom & set #numStacks 3 & set #scaleChartsBy 0.2 & set #legendSize 0.3 & set #alignCharts AlignLeft & set #hgap (-0.2) & set #vgap (-0.1)]
 
 #+end_src
 
 #+RESULTS:
-: [ 1 of 10] Compiling Perf.Stats       ( src/Perf/Stats.hs, interpreted ) [Source file changed]
-: [ 3 of 10] Compiling Perf.Time        ( src/Perf/Time.hs, interpreted ) [Source file changed]
-: [ 6 of 10] Compiling Perf.Measure     ( src/Perf/Measure.hs, interpreted ) [Source file changed]
-: [ 7 of 10] Compiling Perf.Report      ( src/Perf/Report.hs, interpreted ) [Source file changed]
-: [ 8 of 10] Compiling Perf.BigO        ( src/Perf/BigO.hs, interpreted ) [Perf.Stats changed]
-: [10 of 10] Compiling Perf             ( src/Perf.hs, interpreted ) [Perf.BigO changed]
-: Ok, 10 modules reloaded.
-: ok
+: True
+: ob-haskell-ng-eoe
+
+#+begin_src haskell-ng :results output
+:t moveChart
+view (#chartTree % styleBox') scatChart'
+view (#chartTree % styleBox') truncChart''
+#+end_src
+
+#+RESULTS:
+: moveChart :: Point Double -> Chart -> Chart
+: Just Rect (-1.948513510080854) 0.15202822870661523 (-0.7473086578651016) 0.561
+: Just Rect (-2.2) 0.1476832143342945 (-0.2) 0.2
 
 * System.Clock
 
@@ -69,7 +156,6 @@ getRes MonotonicRaw
 : TimeSpec {sec = 0, nsec = 1000}
 : TimeSpec {sec = 0, nsec = 42}
 : TimeSpec {sec = 0, nsec = 42}
-
 
 
 

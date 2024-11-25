@@ -13,6 +13,10 @@ module Perf.Report
     ReportOptions (..),
     defaultReportOptions,
     parseReportOptions,
+    PerfDumpOptions (..),
+    defaultPerfDumpOptions,
+    parsePerfDumpOptions,
+    fromDump,
     report,
     reportMain,
     writeResult,
@@ -43,6 +47,7 @@ import Data.Text.IO qualified as Text
 import GHC.Generics
 import Optics.Core
 import Options.Applicative
+import Perf.Chart
 import Perf.Measure
 import Perf.Stats
 import Perf.Time (defaultClock)
@@ -51,6 +56,9 @@ import System.Clock
 import System.Exit
 import Text.Printf hiding (parseFormat)
 import Text.Read
+import Chart
+import Prettychart
+import Control.Category ((>>>))
 
 -- | Benchmark name
 type Name = String
@@ -75,7 +83,8 @@ data ReportOptions = ReportOptions
     reportGolden :: Golden,
     reportHeader :: Header,
     reportCompare :: CompareLevels,
-    reportChart :: Maybe FilePath
+    reportChart :: PerfChartOptions,
+    reportDump :: PerfDumpOptions
   }
   deriving (Eq, Show, Generic)
 
@@ -93,10 +102,8 @@ defaultReportOptions =
     defaultGolden
     Header
     defaultCompareLevels
-    Nothing
-
-defaultChartFilePath :: FilePath
-defaultChartFilePath = "other/perf.svg"
+    defaultPerfChartOptions
+    defaultPerfDumpOptions
 
 -- | Command-line parser for 'ReportOptions'
 parseReportOptions :: ReportOptions -> Parser ReportOptions
@@ -109,7 +116,8 @@ parseReportOptions def =
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
-    <*> parseChartOptions
+    <*> parsePerfChartOptions defaultPerfChartOptions
+    <*> parsePerfDumpOptions defaultPerfDumpOptions
 
 -- | Parse command-line 'Clock' options.
 parseClock :: Parser Clock
@@ -125,12 +133,20 @@ parseClock =
     <|> pure MonotonicRaw
 #endif
 
+data PerfDumpOptions = PerfDumpOptions { dumpFilepath :: FilePath, doDump :: Bool } deriving (Eq, Show, Generic)
+
+defaultPerfDumpOptions :: PerfDumpOptions
+defaultPerfDumpOptions = PerfDumpOptions "other/perf.map" False
+
 -- | Parse charting options.
-parseChartOptions :: Parser (Maybe FilePath)
-parseChartOptions =
-  bool Nothing . Just
-    <$> option str (value defaultChartFilePath <> long "chartpath" <> help "chart file name")
-    <*> switch (long "chart" <> short 'c' <> help "chart the raw the result to the chartpath")
+parsePerfDumpOptions :: PerfDumpOptions -> Parser PerfDumpOptions
+parsePerfDumpOptions def =
+  PerfDumpOptions <$>
+    option str (value (view #dumpFilepath def) <> long "dumppath" <> help "dump file name") <*>
+    switch (long "dump" <> help "dump raw performance data as a Map Text [[Double]]")
+
+fromDump :: PerfDumpOptions -> IO (Map.Map Text [[Double]])
+fromDump cfg = read <$> readFile (view #dumpFilepath cfg)
 
 -- | Run and report a benchmark with the specified reporting options.
 reportMain :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO a
@@ -142,6 +158,8 @@ reportMain o name t = do
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
   (a, m) <- runPerfT (measureDs mt c n) t
   report o' (statify s m)
+  (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just mt) m))) (reportChart o)
+  (\cfg -> when (view #doDump cfg) (writeFile (view #dumpFilepath cfg) (show m))) (reportDump o)
   pure a
 
 -- | Levels of geometric difference in compared performance that triggers reporting.

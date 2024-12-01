@@ -23,6 +23,7 @@ module Perf.Time
     time,
     times,
     timesWith,
+    timesNWith,
     stepTime,
   )
 where
@@ -204,3 +205,16 @@ times n = Measure (ticks n)
 timesWith :: Clock -> Int -> Measure IO [Nanos]
 timesWith c n = repeated n (Measure (tickWith c))
 {-# INLINEABLE timesWith #-}
+
+-- | tickWith for n repeated applications
+timesNWith :: Clock -> Int -> Measure IO Nanos
+timesNWith c n = Measure (tickNWith c n)
+{-# INLINEABLE timesNWith #-}
+
+tickNWith :: Clock -> Int -> (a -> b) -> a -> IO (Nanos, b)
+tickNWith c n !f !a = do
+  !t <- nanosWith c
+  !a' <- multiN id f a n
+  !t' <- nanosWith c
+  pure (floor @Double (fromIntegral (t' - t) / fromIntegral n), a')
+{-# INLINEABLE tickNWith #-}

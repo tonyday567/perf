@@ -25,6 +25,8 @@ module Perf.BigO
     estO,
     estOs,
     estOrder,
+    tcurve',
+    estOrder',
   )
 where
 

@@ -114,3 +114,19 @@ benchmark perf-bench
         , perf
     ghc-options: -O2
     type: exitcode-stdio-1.0
+
+executable perf-tasty
+    import: ghc-options-exe-stanza
+    import: ghc-options-stanza
+    import: ghc2021-stanza
+    main-is: tasty.hs
+    hs-source-dirs: app
+    build-depends:
+        , base >=4.7 && <5
+        , perf
+        , optparse-applicative >=0.17 && <0.19
+        , optics-core
+        , tasty
+        , tasty-bench
+    ghc-options: -O2
+    type: exitcode-stdio-1.0

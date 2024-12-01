@@ -54,11 +54,10 @@ import Perf.Time (defaultClock)
 import Perf.Types
 import System.Clock
 import System.Exit
+import System.Mem
 import Text.Printf hiding (parseFormat)
 import Text.Read
 import Chart
-import Prettychart
-import Control.Category ((>>>))
 
 -- | Benchmark name
 type Name = String
@@ -84,7 +83,8 @@ data ReportOptions = ReportOptions
     reportHeader :: Header,
     reportCompare :: CompareLevels,
     reportChart :: PerfChartOptions,
-    reportDump :: PerfDumpOptions
+    reportDump :: PerfDumpOptions,
+    reportGC :: Bool
   }
   deriving (Eq, Show, Generic)
 
@@ -104,6 +104,7 @@ defaultReportOptions =
     defaultCompareLevels
     defaultPerfChartOptions
     defaultPerfDumpOptions
+    False
 
 -- | Command-line parser for 'ReportOptions'
 parseReportOptions :: ReportOptions -> Parser ReportOptions
@@ -118,6 +119,7 @@ parseReportOptions def =
     <*> parseCompareLevels defaultCompareLevels
     <*> parsePerfChartOptions defaultPerfChartOptions
     <*> parsePerfDumpOptions defaultPerfDumpOptions
+    <*> switch (long "gc" <> help "run the GC prior to measurement")
 
 -- | Parse command-line 'Clock' options.
 parseClock :: Parser Clock
@@ -156,6 +158,7 @@ reportMain o name t = do
   let c = reportClock o
   let mt = reportMeasureType o
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
+  when (reportGC o) performGC
   (a, m) <- runPerfT (measureDs mt c n) t
   report o' (statify s m)
   (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just mt) m))) (reportChart o)

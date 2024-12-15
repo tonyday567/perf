@@ -42,6 +42,7 @@ main = do
   reportMain repOptions (intercalate "-" ["fib",show (reportN repOptions), show (reportMeasureType repOptions)]) (void $ fap "fib" fibo n)
   print =<< measureCpuTime (mkTimeout 1000000) (RelStDev 0.05) (nf fibo 5)
 
+
 {-
   defaultMain
    [ bgroup "Fibonacci numbers"

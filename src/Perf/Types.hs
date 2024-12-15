@@ -131,7 +131,6 @@ multiM action n a =
   fmap (\xs -> (fmap fst xs, head $! fmap snd xs)) (replicateM n (action a))
 {-# INLINEABLE multiM #-}
 
-
 multiN :: (b -> t) -> (a -> b) -> a -> Int -> IO t
 multiN frc = multiNLoop SPEC
   where

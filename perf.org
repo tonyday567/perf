@@ -52,8 +52,8 @@ disp lineExample
 #+RESULTS:
 : Ok, 11 modules loaded.
 : ok
-: Setting phasers to stun..g.h c(ip>o rt 9160) (ctrl-c to quitT)r
-: ue
+: Setting phasers to stun... (porgth c9i1>6 0) (ctrl-c to quit)
+: True
 
 * charting
 
@@ -63,10 +63,96 @@ cfg = defaultPerfChartOptions
 m <- fromDump defaultPerfDumpOptions
 mt = Just MeasureTime
 disp $ perfCharts cfg mt m
+c = perfCharts cfg mt m
+xs = mconcat $ mconcat $ snd <$> Map.toList m
+med = median xs
+best = tenth xs
+av = Perf.average xs
+upperCutoff = view #truncateAt cfg * med
+xsSmall = xs & xify & filter (_y >>> (<upperCutoff))
+xsBig = xs & xify & filter (_y >>> (>=upperCutoff))
+xsBig
+bigChart = dotHistChart (view #histGrain cfg) (view #bigStyle cfg) (mempty @ChartOptions & set #hudOptions (view #bigHud cfg)) xsBig
+-- disp $ mempty @ChartOptions & set #chartTree bigChart
 #+end_src
 
 #+RESULTS:
 : True
+: [Point 8343.0 917167.0]
+
+#+begin_src haskell-ng :results output
+import Data.Maybe
+import Data.Bool
+xs = xsBig
+
+bigChart = dotHistChart (view #histGrain cfg) (view #bigStyle cfg) (mempty @ChartOptions & set #hudOptions (view #bigHud cfg) & set #chartTree (named "xrange" [BlankChart defaultStyle [Rect 0 10000 0 (minimum (_y <$> xsBig))]])) xsBig
+
+disp $ mempty @ChartOptions & set #chartTree bigChart
+#+end_src
+
+#+RESULTS:
+: True
+
+#+begin_src haskell-ng :results output
+x = head $ _y <$> xsBig
+toSigFig (Just 2) x
+x
+#+end_src
+
+#+RESULTS:
+: SigFig {sfSign = SigFigPos, sfFigures = 92, sfExponent = 4}
+: 917167.0
+
+
+The y-axis tick settings
+
+#+begin_src haskell-ng :results output
+:t defaultHudOptions & preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+<interactive>:1:70: error: [GHC-64725]
+    • Data constructor ‘TickRound’ doesn't have a field named ‘tickStyle’
+    • In the second argument of ‘(%)’, namely ‘#tickStyle’
+      In the first argument of ‘preview’, namely
+        ‘(#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+      In the second argument of ‘(&)’, namely
+        ‘preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+
+<interactive>:1:70: error: [GHC-64725]
+    • Data constructor ‘TickPlaced’ doesn't have a field named ‘tickStyle’
+    • In the second argument of ‘(%)’, namely ‘#tickStyle’
+      In the first argument of ‘preview’, namely
+        ‘(#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+      In the second argument of ‘(&)’, namely
+        ‘preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+
+<interactive>:1:70: error: [GHC-64725]
+    • Data constructor ‘TickNone’ doesn't have a field named ‘tickStyle’
+    • In the second argument of ‘(%)’, namely ‘#tickStyle’
+      In the first argument of ‘preview’, namely
+        ‘(#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+      In the second argument of ‘(&)’, namely
+        ‘preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+
+<interactive>:1:70: error: [GHC-64725]
+    • Data constructor ‘TickLabels’ doesn't have a field named ‘tickStyle’
+    • In the second argument of ‘(%)’, namely ‘#tickStyle’
+      In the first argument of ‘preview’, namely
+        ‘(#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+      In the second argument of ‘(&)’, namely
+        ‘preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+
+<interactive>:1:70: error: [GHC-64725]
+    • Data constructor ‘TickExact’ doesn't have a field named ‘tickStyle’
+    • In the second argument of ‘(%)’, namely ‘#tickStyle’
+      In the first argument of ‘preview’, namely
+        ‘(#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+      In the second argument of ‘(&)’, namely
+        ‘preview (#axes % ix 1 % #item % #ticks % #tick % #tickStyle)’
+#+end_example
+
 
 draft version
 
@@ -158,6 +244,59 @@ getRes MonotonicRaw
 : TimeSpec {sec = 0, nsec = 42}
 
 
+
+
+* ticks
+
+#+begin_src sh :results output
+perf-explore -n 20000 --best --ticks
+#+end_src
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times | timesn |
+| sumAux        |   3.11e3 | 4.47e3 |    3.10e3 |        3.10e3 |   5.18e0 |   3.11e3 | 3.11e3 | 3.08e3 |
+| sumCata       |   3.11e3 | 5.00e3 |    3.11e3 |        3.11e3 |   5.14e0 |   3.11e3 | 3.11e3 | 3.08e3 |
+| sumCo         |   3.11e3 | 4.59e3 |    3.10e3 |        3.10e3 |   5.35e0 |   3.11e3 | 3.11e3 | 3.07e3 |
+| sumCoCase     |   3.11e3 | 4.48e3 |    3.10e3 |        3.10e3 |   4.94e0 |   3.11e3 | 3.11e3 | 3.08e3 |
+| sumCoGo       |   3.11e3 | 4.54e3 |    3.09e3 |        3.10e3 |   4.75e0 |   3.11e3 | 3.11e3 | 3.08e3 |
+| sumF          |   4.63e3 | 4.63e3 |    4.62e3 |        4.62e3 |   4.87e0 |   4.64e3 | 4.63e3 | 4.75e3 |
+| sumFlip       |   4.03e3 | 4.27e3 |    3.94e3 |        3.94e3 |   5.11e0 |   4.27e3 | 4.05e3 | 4.00e3 |
+| sumFlipLazy   |   3.48e3 | 4.25e3 |    4.24e3 |        4.24e3 |   4.87e0 |   4.25e3 | 3.48e3 | 3.46e3 |
+| sumFoldr      |   3.11e3 | 4.67e3 |    3.10e3 |        3.10e3 |   4.88e0 |   3.11e3 | 3.11e3 | 3.09e3 |
+| sumFuse       |   6.54e2 | 6.54e2 |    6.54e2 |        6.54e2 |   4.87e0 |   6.56e2 | 6.54e2 | 6.38e2 |
+| sumFuseFoldl' |   6.54e2 | 6.66e2 |    6.54e2 |        6.54e2 |   4.90e0 |   6.54e2 | 6.54e2 | 6.38e2 |
+| sumFuseFoldr  |   9.89e2 | 9.88e2 |    9.89e2 |        9.89e2 |   4.90e0 |   9.90e2 | 9.89e2 | 9.57e2 |
+| sumFusePoly   |   6.56e2 | 6.56e2 |    6.58e2 |        6.66e2 |   5.24e0 |   6.55e2 | 6.56e2 | 6.41e2 |
+| sumLambda     |   5.08e3 | 5.04e3 |    5.05e3 |        5.06e3 |   5.10e0 |   5.05e3 | 3.48e3 | 3.46e3 |
+| sumMono       |   3.48e3 | 4.62e3 |    3.46e3 |        3.46e3 |   5.31e0 |   3.50e3 | 3.48e3 | 3.45e3 |
+| sumPoly       |   3.48e3 | 4.63e3 |    4.61e3 |        3.48e3 |   5.02e0 |   4.63e3 | 3.48e3 | 3.48e3 |
+| sumSum        |   4.65e3 | 4.65e3 |    4.62e3 |        4.62e3 |   5.00e0 |   4.65e3 | 4.65e3 | 4.75e3 |
+| sumTail       |   5.29e3 | 9.13e3 |    6.98e3 |        5.72e3 |   4.12e1 |   7.93e3 | 5.27e3 | 5.11e3 |
+| sumTailLazy   |   3.55e3 | 3.76e3 |    3.70e3 |        3.57e3 |   5.68e0 |   3.73e3 | 3.54e3 | 3.54e3 |
+
+#+begin_src sh :results output
+perf-explore -n 20000 --average --ticks
+#+end_src
+
+|               | stepTime |   tick | tickForce | tickForceArgs | tickLazy | tickWHNF |  times |
+| sumAux        |   6.46e3 | 8.02e3 |    6.56e3 |        6.48e3 |   3.11e1 |   6.45e3 | 6.50e3 |
+| sumCata       |   6.48e3 | 6.63e3 |    6.56e3 |        6.71e3 |   3.15e1 |   6.47e3 | 6.52e3 |
+| sumCo         |   6.52e3 | 7.58e3 |    6.60e3 |        6.47e3 |   3.10e1 |   6.80e3 | 6.49e3 |
+| sumCoCase     |   6.56e3 | 6.54e3 |    6.52e3 |        6.47e3 |   3.07e1 |   6.46e3 | 6.67e3 |
+| sumCoGo       |   6.47e3 | 6.52e3 |    6.53e3 |        6.47e3 |   3.09e1 |   6.47e3 | 6.52e3 |
+| sumF          |   3.62e3 | 4.14e3 |    3.56e3 |        3.61e3 |   9.12e1 |   3.69e3 | 3.54e3 |
+| sumFlip       |   3.72e3 | 3.73e3 |    3.68e3 |        3.68e3 |   2.93e1 |   3.77e3 | 3.67e3 |
+| sumFlipLazy   |   3.58e3 | 3.65e3 |    3.61e3 |        3.61e3 |   2.94e1 |   3.53e3 | 3.53e3 |
+| sumFoldr      |   6.49e3 | 6.54e3 |    6.54e3 |        6.49e3 |   3.11e1 |   6.47e3 | 6.52e3 |
+| sumFuse       |   7.38e2 | 6.91e2 |    8.02e2 |        8.04e2 |   8.67e1 |   7.97e2 | 6.87e2 |
+| sumFuseFoldl' |   7.26e2 | 7.90e2 |    6.87e2 |        7.93e2 |   3.09e1 |   7.82e2 | 7.79e2 |
+| sumFuseFoldr  |   4.34e3 | 4.39e3 |    4.42e3 |        4.34e3 |   3.10e1 |   4.39e3 | 4.37e3 |
+| sumFusePoly   |   7.34e2 | 8.01e2 |    7.37e2 |        7.97e2 |   8.74e1 |   8.19e2 | 6.90e2 |
+| sumLambda     |   3.61e3 | 4.26e3 |    3.54e3 |        3.59e3 |   7.70e1 |   5.99e3 | 3.56e3 |
+| sumMono       |   3.61e3 | 4.01e3 |    3.64e3 |        3.67e3 |   8.80e1 |   3.57e3 | 3.64e3 |
+| sumPoly       |   3.62e3 | 4.03e3 |    3.73e3 |        3.70e3 |   8.78e1 |   3.55e3 | 3.64e3 |
+| sumSum        |   3.65e3 | 3.98e3 |    3.53e3 |        3.56e3 |   8.38e1 |   3.64e3 | 3.67e3 |
+| sumTail       |   3.57e3 | 4.67e3 |    3.51e3 |        3.53e3 |   2.22e2 |   3.64e3 | 3.54e3 |
+| sumTailLazy   |   3.56e3 | 4.50e3 |    3.63e3 |        3.60e3 |   7.76e1 |   3.62e3 | 3.60e3 |
+#+end_example
 
 
 * Time

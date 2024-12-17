@@ -161,7 +161,7 @@ reportMain o name t = do
   when (reportGC o) performGC
   (a, m) <- runPerfT (measureDs mt c n) t
   report o' (statify s m)
-  (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just mt) m))) (reportChart o)
+  (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just (measureLabels mt)) m))) (reportChart o)
   (\cfg -> when (view #doDump cfg) (writeFile (view #dumpFilepath cfg) (show m))) (reportDump o)
   pure a
 

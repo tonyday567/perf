@@ -121,25 +121,3 @@ benchmark perf-bench
     ghc-options: -O2
     type: exitcode-stdio-1.0
 
-executable perf-unsnoc
-    import: ghc-options-exe-stanza
-    import: ghc-options-stanza
-    import: ghc2021-stanza
-    main-is: perf-unsnoc.hs
-    hs-source-dirs: app
-    build-depends:
-        , base                 >=4.7 && <5
-        , clock                >=0.8 && <0.9
-        , containers           >=0.6 && <0.8
-        , deepseq              >=1.4.4 && <1.6
-        , formatn              >=0.2.1 && <0.4
-        , mtl                  >=2.2.2 && <2.4
-        , optics-core
-        , optparse-applicative >=0.17 && <0.20
-        , perf
-        , text                 >=1.2 && <2.2
-        , prettychart
-        , chart-svg
-        , tasty
-        , tasty-bench
-    ghc-options: -O2

@@ -18,7 +18,6 @@ The library:
 
 - includes live charting of raw performance results via chart-svg and prettychart
 
-
 * Usage
 
 Probably the best introduction to ~perf~ is via the perf-explore executable:
@@ -30,7 +29,7 @@ perf-explore
 #+RESULTS:
 : label1          label2          old result      new result      change
 :
-: sum             time            9.93e3          8.62e3          improvement
+: sum             time            9.93e3          7.57e3          improvement
 
 Summing [1..1000] took 9,930 nanoseconds, an improvement versus the on file performance previously measured.
 
@@ -72,7 +71,7 @@ Improvements seem to continue as n increases before stabilising (after a GC perh
  : sum             time            3.51e3
  :
  : sum:time 3.5 * O(N1)
- : tasty:time: 3590
+ : tasty:time: 3510
  
  The order of the computation (=\l -> fap sum [1 .. l]=) is O(N1) and the results are very close to the tasty-bench result.
 
@@ -92,14 +91,13 @@ perf-explore --nocheck --sumFuse -n 100000 --order
 #+RESULTS:
 : label1          label2          results
 :
-: sumFuse         time            6.64e2
+: sumFuse         time            6.78e2
 :
 : sumFuse:time 0.66 * O(N1)
 
 ... is much faster. Hooray for list fusion!
 
-
-* issues
+* Issues
 
 ** fragility
 
@@ -211,7 +209,7 @@ median . fmap fromIntegral <$> m
 : m :: Map.Map Text.Text [Nanos]
 : fromList [("sum",21978.1),("sumfuse",26710.18)]
 
-* details
+* Details
 
 ** System.Clock
 

@@ -17,30 +17,27 @@ module Perf.BigO
     fromOrder,
     toOrder,
     order,
-    mcurve,
-    dcurve,
-    tcurve,
     diffs,
     bestO,
     estO,
     estOs,
-    estOrder,
-    tcurve',
-    estOrder',
+    makeNs,
+    OrderOptions (..),
+    defaultOrderOptions,
+    parseOrderOptions,
   )
 where
 
 import Data.Bool
 import Data.List qualified as List
-import Data.Map.Strict qualified as Map
 import Data.Maybe
 import Data.Monoid
 import Data.Vector qualified as V
 import GHC.Generics
-import Perf.Stats
-import Perf.Time
-import Perf.Types
 import Prelude
+import Prettyprinter
+import Data.FormatN
+import Options.Applicative
 
 -- $setup
 -- >>> import qualified Data.List as List
@@ -183,26 +180,29 @@ instance (Num a) => Num (Order a) where
   fromInteger x = Order $ replicate 9 (fromInteger x)
 
 -- | A set of factors consisting of the dominant order, the dominant order factor and a constant factor
-data BigOrder a = BigOrder {bigOrder :: O, bigFactor :: a, bigConstant :: a} deriving (Eq, Ord, Show, Generic, Functor)
+data BigOrder a = BigOrder {bigOrder :: O, bigFactor :: a} deriving (Eq, Ord, Show, Generic, Functor)
+
+instance Pretty (BigOrder Double)
+  where
+    pretty (BigOrder o f) = pretty (decimal (Just 2) f) <> " * O(" <> viaShow o <> ")"
 
 -- | compute the BigOrder
 --
 -- >>> fromOrder o
--- BigOrder {bigOrder = N2, bigFactor = 1.0, bigConstant = 100.0}
+-- BigOrder {bigOrder = N2, bigFactor = 1.0}
 fromOrder :: Order Double -> BigOrder Double
-fromOrder o' = BigOrder o f r
+fromOrder o' = BigOrder o f
   where
     (o, f) = bigO o'
-    r = runtime o'
 
 -- | convert a BigOrder to an Order.
 --
 -- toOrder . fromOrder is not a round trip iso.
 --
 -- >>> toOrder (fromOrder o)
--- Order {factors = [0.0,1.0,0.0,0.0,0.0,0.0,0.0,100.0]}
+-- Order {factors = [0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0]}
 toOrder :: BigOrder Double -> Order Double
-toOrder (BigOrder o f r) = order o f + order N0 r
+toOrder (BigOrder o f) = order o f
 
 -- | The factor for each O given an n, and a measurement.
 --
@@ -251,42 +251,28 @@ estOs ns ms = go [] ns ms
     go os _ [m] = os <> [order N0 m]
     go os ns' ms' = let (o', res) = estO ns' ms' in go (os <> [o']) (List.init ns') (List.init res)
 
--- | performance curve for a Measure.
-mcurve :: (Semigroup a) => Measure IO a -> (Int -> b) -> [Int] -> IO [a]
-mcurve m f ns = mapM (\n -> (Map.! "") <$> execPerfT m (f |$| n)) ns
+makeNs :: Int -> Double -> Int -> [Int]
+makeNs n0 d low = reverse $ go (next n0) [n0]
+  where
+    next n = floor (fromIntegral n/ d)
+    go :: Int -> [Int] -> [Int]
+    go n acc = bool (go (next n) (acc <> [n])) acc (low >= n)
 
--- | repetitive Double Measure performance curve.
-dcurve :: (Int -> Measure IO [Double]) -> StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]
-dcurve m s sims f ns = fmap getSum <$> mcurve (Sum . statD s <$> m sims) f ns
+data OrderOptions = OrderOptions
+  {
+    doOrder :: Bool,
+    orderLow :: Int,
+    orderDivisor :: Double
 
--- | time performance curve.
-tcurve :: StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]
-tcurve = dcurve (fmap (fmap fromIntegral) . times)
+} deriving (Eq, Show, Generic)
 
--- | BigOrder estimate
---
--- > estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
--- > BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
---
--- > estOrder (\x -> sum $ nub [1..x]) 100 [1,10,100,1000]
--- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
-estOrder :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
-estOrder f sims ns = do
-  xs <- tcurve StatBest sims f ns
-  pure $ fromOrder $ fst $ estO (fromIntegral <$> ns) xs
+defaultOrderOptions :: OrderOptions
+defaultOrderOptions = OrderOptions False 10 9
 
--- | time performance curve.
-tcurve' :: StatDType -> Int -> (Int -> a) -> [Int] -> IO [Double]
-tcurve' = dcurve (fmap (fmap fromIntegral) . times)
+parseOrderOptions :: OrderOptions -> Parser OrderOptions
+parseOrderOptions def =
+  OrderOptions
+  <$> switch (long "order" <> short 'o' <> help "calculate order")
+    <*> option auto (value (orderLow def) <> long "orderlowest" <> showDefaultWith show <> metavar "DOUBLE" <> help "smallest order test")
+    <*> option auto (value (orderDivisor def) <> long "orderdivisor" <> showDefaultWith show <> metavar "DOUBLE" <> help "divisor for order computation")
 
--- | BigOrder estimate
---
--- > estOrder (\x -> sum [1..x]) 100 [1,10,100,1000,10000]
--- > BigOrder {bigOrder = N1, bigFactor = 76.27652961460446, bigConstant = 0.0}
---
--- > estOrder (\x -> sum $ nub [1..x]) 100 [1,10,100,1000]
--- > BigOrder {bigOrder = N2, bigFactor = 13.485763594353541, bigConstant = 0.0}
-estOrder' :: (Int -> b) -> Int -> [Int] -> IO (BigOrder Double)
-estOrder' f sims ns = do
-  xs <- tcurve StatBest sims f ns
-  pure $ fromOrder $ fst $ estO (fromIntegral <$> ns) xs

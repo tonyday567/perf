@@ -19,6 +19,7 @@ import Perf.Time
 import Perf.Types
 import System.Clock
 import Prelude hiding (cycle)
+import Options.Applicative.Help.Pretty qualified as OA
 
 -- | Command-line measurement options.
 data MeasureType = MeasureTime | MeasureNTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation | MeasureCount deriving (Eq, Show)
@@ -26,7 +27,7 @@ data MeasureType = MeasureTime | MeasureNTime | MeasureSpace | MeasureSpaceTime 
 -- | Parse command-line 'MeasureType' options.
 parseMeasure :: Parser MeasureType
 parseMeasure =
-  flag' MeasureTime (long "time" <> help "measure time performance")
+  flag' MeasureTime (long "time" <> style (OA.annotate OA.bold) <> help "measure time performance")
     <|> flag' MeasureNTime (long "ntime" <> help "measure n*time performance")
     <|> flag' MeasureSpace (long "space" <> help "measure space performance")
     <|> flag' MeasureSpaceTime (long "spacetime" <> help "measure both space and time performance")

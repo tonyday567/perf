@@ -12,13 +12,12 @@
 module Perf.Algos
   ( -- * command-line options
     Example (..),
-    allExamples,
     parseExample,
     ExamplePattern (..),
     examplePattern,
     exampleLabel,
     testExample,
-    statExamples,
+    tastyExample,
 
     -- * sum algorithms
     SumPattern (..),
@@ -89,30 +88,24 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Options.Applicative
 import Perf.Types
+import Options.Applicative.Help.Pretty
+import Data.List qualified as List
+import Test.Tasty.Bench
 
 -- | Algorithm examples for testing
-data Example = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc | ExampleNoOp deriving (Eq, Show)
-
--- | All the example algorithms.
-allExamples :: [Example]
-allExamples =
-  [ ExampleSumFuse,
-    ExampleSum,
-    ExampleLengthF,
-    ExampleConstFuse,
-    ExampleMapInc,
-    ExampleNoOp
-  ]
+data Example = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc | ExampleNoOp | ExampleNub | ExampleFib deriving (Eq, Show)
 
 -- | Parse command-line options for algorithm examples.
 parseExample :: Parser Example
 parseExample =
   flag' ExampleSumFuse (long "sumFuse" <> help "fused sum pipeline")
-    <|> flag' ExampleSum (long "sum" <> help "sum")
+    <|> flag' ExampleSum (long "sum" <> style (annotate bold) <> help "sum")
     <|> flag' ExampleLengthF (long "lengthF" <> help "foldr id length")
     <|> flag' ExampleConstFuse (long "constFuse" <> help "fused const pipeline")
     <|> flag' ExampleMapInc (long "mapInc" <> help "fmap (+1)")
     <|> flag' ExampleNoOp (long "noOp" <> help "const ()")
+    <|> flag' ExampleFib (long "fib" <> help "fibonacci")
+    <|> flag' ExampleNub (long "nub" <> help "List.nub")
     <|> pure ExampleSum
 
 -- | Unification of example function applications
@@ -123,6 +116,8 @@ data ExamplePattern a
   | PatternConstFuse Text (Int -> ()) Int
   | PatternMapInc Text ([Int] -> [Int]) [Int]
   | PatternNoOp Text (() -> ()) ()
+  | PatternNub Text ([Int] -> [Int]) [Int]
+  | PatternFib Text (Int -> Integer) Int
 
 -- | Labels
 exampleLabel :: ExamplePattern a -> Text
@@ -132,6 +127,8 @@ exampleLabel (PatternLengthF l _ _) = l
 exampleLabel (PatternConstFuse l _ _) = l
 exampleLabel (PatternMapInc l _ _) = l
 exampleLabel (PatternNoOp l _ _) = l
+exampleLabel (PatternNub l _ _) = l
+exampleLabel (PatternFib l _ _) = l
 
 -- | Convert an 'Example' to an 'ExamplePattern'.
 examplePattern :: Example -> Int -> ExamplePattern Int
@@ -141,19 +138,30 @@ examplePattern ExampleLengthF l = PatternLengthF "lengthF" lengthF [1 .. l]
 examplePattern ExampleConstFuse l = PatternConstFuse "constFuse" constFuse l
 examplePattern ExampleMapInc l = PatternMapInc "mapInc" mapInc [1 .. l]
 examplePattern ExampleNoOp _ = PatternNoOp "noop" (const ()) ()
+examplePattern ExampleNub l = PatternNub "nub" List.nub [1 .. l]
+examplePattern ExampleFib l = PatternFib "fib" fib l
 
 -- | Convert an 'ExamplePattern' to a 'PerfT'.
 testExample :: (Semigroup a, MonadIO m) => ExamplePattern Int -> PerfT m a ()
-testExample (PatternSumFuse label f a) = void $ fap label f a
-testExample (PatternSum label f a) = void $ fap label f a
-testExample (PatternLengthF label f a) = void $ fap label f a
-testExample (PatternConstFuse label f a) = void $ fap label f a
-testExample (PatternMapInc label f a) = void $ fap label f a
-testExample (PatternNoOp label f a) = void $ fap label f a
+testExample (PatternSumFuse label f a) = void $ ffap label f a
+testExample (PatternSum label f a) = void $ ffap label f a
+testExample (PatternLengthF label f a) = void $ ffap label f a
+testExample (PatternConstFuse label f a) = void $ ffap label f a
+testExample (PatternMapInc label f a) = void $ ffap label f a
+testExample (PatternNoOp label f a) = void $ ffap label f a
+testExample (PatternNub label f a) = void $ ffap label f a
+testExample (PatternFib label f a) = void $ ffap label f a
 
--- | run an example measurement.
-statExamples :: (Semigroup a, MonadIO m) => Int -> PerfT m a ()
-statExamples l = mapM_ testExample ((`examplePattern` l) <$> allExamples)
+-- | Convert an 'ExamplePattern' to a tasty-bench run.
+tastyExample :: ExamplePattern Int -> Benchmarkable
+tastyExample (PatternSumFuse _ f a) = nf f a
+tastyExample (PatternSum _ f a) = nf f a
+tastyExample (PatternLengthF _ f a) = nf f a
+tastyExample (PatternConstFuse _ f a) = nf f a
+tastyExample (PatternMapInc _ f a) = nf f a
+tastyExample (PatternNoOp _ f a) = nf f a
+tastyExample (PatternNub _ f a) = nf f a
+tastyExample (PatternFib _ f a) = nf f a
 
 -- | Unification of sum function applications
 data SumPattern a
@@ -477,3 +485,7 @@ splitHalf xs = go xs xs
   where
     go (y : ys) (_ : _ : zs) = first (y :) (go ys zs)
     go ys _ = ([], ys)
+
+-- | Fibonnacci
+fib :: Int -> Integer
+fib n = if n < 2 then toInteger n else fib (n - 1) + fib (n - 2)

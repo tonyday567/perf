@@ -49,8 +49,8 @@ parsePerfChartOptions :: PerfChartOptions -> Parser PerfChartOptions
 parsePerfChartOptions def =
   (\c fp trunAt small big hist avs -> PerfChartOptions c fp trunAt small big hist avs (view #averagesStyle def) (view #averagesPaletteStart def) (view #averagesLegend def) (view #smallStyle def) (view #smallHud def) (view #bigStyle def) (view #bigHud def) (view #titleSize def) (view #histGrain def) (view #bigWidth def) (view #excludeZeros def))
   <$> switch (long "chart" <> short 'c' <> help "chart the result")
-    <*> option str (value (view #chartFilepath def) <> long "chartpath" <> help "chart file name")
-    <*> option auto (value (view #truncateAt def) <> long "truncateat" <> help "truncate chart data (multiple of median)")
+    <*> option str (value (view #chartFilepath def) <> showDefault <> long "chartpath" <> metavar "FILE" <> help "chart file name")
+    <*> option auto (value (view #truncateAt def) <> showDefaultWith show <> long "truncateat" <> help "truncate chart data (multiple of median)")
     <*> switch (long "small")
     <*> switch (long "big")
     <*> switch (long "histogram")
@@ -78,9 +78,9 @@ perfChart cfg t xs = finalChart
       [ "average: " <> comma (Just 3) av
       , "median: " <> comma (Just 3) med
       , "best: " <> comma (Just 3) best]
-
+    (Rect _ _ y' w') = fromMaybe one $ space1 xsSmall
     (Range x' z') = Range zero (fromIntegral $ length xs)
-    rectx = BlankChart defaultStyle [Rect x' z' zero zero]
+    rectx = BlankChart defaultStyle [Rect x' z' y' w']
     averagesCT = named "averages" $ zipWith (\x i -> GlyphChart (view #averagesStyle cfg & set #color (palette i) & set #borderColor (palette i) & set #glyphShape (gpalette i)) [Point zero x]) [av,med,best] [(view #averagesPaletteStart cfg)..]
 
     (smallDot, smallHist) = dotHistChart (view #histGrain cfg) (view #smallStyle cfg) (mempty @ChartOptions & set #chartTree (averagesCT <> named "xrange" [rectx]) & set #hudOptions (view #smallHud cfg)) xsSmall

@@ -24,6 +24,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text, pack)
 import NumHask.Space (quantile)
 import Options.Applicative
+import Options.Applicative.Help.Pretty
 
 -- | Compute the median
 median :: [Double] -> Double
@@ -59,10 +60,10 @@ statDs StatAverage = fmap average . List.transpose
 -- | Parse command-line 'StatDType' options.
 parseStatD :: Parser StatDType
 parseStatD =
-  flag' StatBest (long "best" <> help "report upper decile")
+  flag' StatBest (long "best" <> style (annotate bold) <> help "report upper decile")
     <|> flag' StatMedian (long "median" <> help "report median")
     <|> flag' StatAverage (long "average" <> help "report average")
-    <|> pure StatAverage
+    <|> pure StatBest
 
 -- | Add a statistic to a State Map
 addStat :: (Ord k, Monad m) => k -> s -> StateT (Map.Map k s) m ()

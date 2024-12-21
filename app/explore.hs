@@ -7,8 +7,7 @@ module Main where
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.State.Lazy
-import Data.FormatN
-import Data.List (intercalate, nub)
+import Data.List (intercalate)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -19,28 +18,26 @@ import Optics.Core
 import Options.Applicative
 import Perf
 import Prelude
+import Options.Applicative.Help.Pretty
 
-data Run = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
+data Run = RunExample | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
 data AppConfig = AppConfig
-  { appReportOptions :: ReportOptions,
+  {
     appRun :: Run,
-    appLength :: Int,
-    appExample :: Example
+    appExample :: Example,
+    appReportOptions :: ReportOptions
   }
   deriving (Eq, Show, Generic)
 
 defaultAppConfig :: AppConfig
-defaultAppConfig = AppConfig defaultReportOptions RunExample 1000 ExampleSum
+defaultAppConfig = AppConfig RunExample ExampleSum defaultReportOptions
 
 parseRun :: Parser Run
 parseRun =
   flag' RunSums (long "sums" <> help "run on sum algorithms")
     <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
-    <|> flag' RunNub (long "nub" <> help "nub test")
-    <|> flag' RunClocks (long "clocks" <> help "clock test")
-    <|> flag' RunExamples (long "examples" <> help "run on example algorithms")
-    <|> flag' RunExample (long "example" <> help "run on the example algorithm")
+    <|> flag' RunExample (long "example" <> help "run on the example algorithm" <> style (annotate bold))
     <|> flag' RunExampleIO (long "exampleIO" <> help "exampleIO test")
     <|> flag' RunNoOps (long "noops" <> help "noops test")
     <|> flag' RunTicks (long "ticks" <> help "tick test")
@@ -49,16 +46,15 @@ parseRun =
 appParser :: AppConfig -> Parser AppConfig
 appParser def =
   AppConfig
-    <$> parseReportOptions (view #appReportOptions def)
-    <*> parseRun
-    <*> option auto (value (view #appLength def) <> long "length" <> short 'l' <> help "length of list")
+    <$> parseRun
     <*> parseExample
+    <*> parseReportOptions (view #appReportOptions def)
 
 appConfig :: AppConfig -> ParserInfo AppConfig
 appConfig def =
   info
     (appParser def <**> helper)
-    (fullDesc <> progDesc "perf exploration" <> header "examples of perf usage")
+    (fullDesc <> header "Examples of perf usage (defaults in bold)")
 
 -- | * exampleIO
 exampleIO :: (Semigroup t) => PerfT IO t ()
@@ -106,26 +102,14 @@ main = do
   let s = reportStatDType repOptions
   let mt = reportMeasureType repOptions
   let c = reportClock repOptions
-  let !l = appLength o
+  let !l = reportLength repOptions
   let a = appExample o
   let r = appRun o
 
   case r of
-    RunNub -> do
-      reportMain repOptions (show r) (void $ ffap "nub" nub [1 .. l])
     RunExample -> do
-      reportMain repOptions (intercalate "-" [show r, show a, show l]) $
-        testExample (examplePattern a l)
-    RunExamples -> do
-      reportMain
-        repOptions
-        (intercalate "-" [show r, show l])
-        (statExamples l)
-    RunClocks -> do
-      reportMain
-        repOptions
-        (intercalate "-" [show r, show a, show l, show c])
-        (testExample (examplePattern a l))
+      reportMain a repOptions (intercalate "-" [show r, show a, show l])
+        (testExample . examplePattern a)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt c 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt c 1) (measureDs mt c 1) exampleIO
@@ -147,4 +131,4 @@ main = do
       report o' (allStats 4 (Map.mapKeys (: []) m))
     RunTicks -> do
       m <- statTicksSums n l s
-      reportOrg2D (fmap (expt (Just 3)) m)
+      report2D m

@@ -45,7 +45,7 @@ common ghc-options-stanza
         -Wincomplete-uni-patterns
         -Wpartial-fields
         -Wredundant-constraints
-
+        -fproc-alignment=64
 common ghc2021-stanza
     default-language: GHC2021
 
@@ -55,6 +55,7 @@ library
     hs-source-dirs: src
     build-depends:
         , base                 >=4.7 && <5
+        , boxes
         , clock                >=0.8 && <0.9
         , containers           >=0.6 && <0.8
         , deepseq              >=1.4.4 && <1.6
@@ -62,12 +63,15 @@ library
         , mtl                  >=2.2.2 && <2.4
         , numhask-space        >=0.10 && <0.12
         , optics-core
-        , optparse-applicative >=0.17 && <0.19
+        , optparse-applicative >=0.17 && <0.20
         , chart-svg
         , prettychart
+        , prettyprinter
         , recursion-schemes    >=5.2.2 && <5.3
         , text                 >=1.2 && <2.2
         , vector               >=0.12.3 && <0.14
+        , tasty
+        , tasty-bench
     exposed-modules:
         Perf
         Perf.Algos
@@ -96,11 +100,13 @@ executable perf-explore
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
         , optics-core
-        , optparse-applicative >=0.17 && <0.19
+        , optparse-applicative >=0.17 && <0.20
         , perf
         , text                 >=1.2 && <2.2
         , prettychart
         , chart-svg
+        , tasty
+        , tasty-bench
     ghc-options: -O2
 
 benchmark perf-bench
@@ -115,18 +121,25 @@ benchmark perf-bench
     ghc-options: -O2
     type: exitcode-stdio-1.0
 
-executable perf-tasty
+executable perf-unsnoc
     import: ghc-options-exe-stanza
     import: ghc-options-stanza
     import: ghc2021-stanza
-    main-is: tasty.hs
+    main-is: perf-unsnoc.hs
     hs-source-dirs: app
     build-depends:
-        , base >=4.7 && <5
-        , perf
-        , optparse-applicative >=0.17 && <0.19
+        , base                 >=4.7 && <5
+        , clock                >=0.8 && <0.9
+        , containers           >=0.6 && <0.8
+        , deepseq              >=1.4.4 && <1.6
+        , formatn              >=0.2.1 && <0.4
+        , mtl                  >=2.2.2 && <2.4
         , optics-core
+        , optparse-applicative >=0.17 && <0.20
+        , perf
+        , text                 >=1.2 && <2.2
+        , prettychart
+        , chart-svg
         , tasty
         , tasty-bench
     ghc-options: -O2
-    type: exitcode-stdio-1.0

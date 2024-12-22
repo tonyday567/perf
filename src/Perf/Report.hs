@@ -38,7 +38,6 @@ import Control.Exception
 import Control.Monad
 import Data.Bool
 import Data.Foldable
-import Data.FormatN hiding (format)
 import Data.List (intercalate)
 import Data.List qualified as List
 import Data.Map.Merge.Strict

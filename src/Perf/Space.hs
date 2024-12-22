@@ -20,7 +20,7 @@ import System.Mem
 import Prelude hiding (cycle)
 
 -- | GHC allocation statistics.
-data SpaceStats = SpaceStats {allocatedBytes :: Word64, gcollects :: Word32, maxLiveBytes :: Word64, gcLiveBytes :: Word64, maxMem :: Word64} deriving (Read, Show, Eq)
+data SpaceStats = SpaceStats {allocated :: Word64, copied :: Word64, maxmem :: Word64, minorgcs :: Word32, majorgcs :: Word32} deriving (Read, Show, Eq)
 
 -- | Convert 'SpaceStats' to a list of numbers.
 ssToList :: (Num a) => SpaceStats -> [a]
@@ -47,11 +47,11 @@ addSpace :: SpaceStats -> SpaceStats -> SpaceStats
 addSpace (SpaceStats x1 x2 x3 x4 x5) (SpaceStats x1' x2' x3' x4' x5') = SpaceStats (x1' + x1) (x2' + x2) (x3' + x3) (x4' + x4) (x5' + x5)
 
 getSpace :: RTSStats -> SpaceStats
-getSpace s = SpaceStats (allocated_bytes s) (gcs s) (max_live_bytes s) (gcdetails_live_bytes (gc s)) (max_mem_in_use_bytes s)
+getSpace s = SpaceStats (allocated_bytes s) (copied_bytes s) (max_mem_in_use_bytes s) (gcs s) (major_gcs s)
 
 -- | Labels for 'SpaceStats'.
 spaceLabels :: [Text]
-spaceLabels = ["allocated", "gcollects", "maxLiveBytes", "gcLiveBytes", "MaxMem"]
+spaceLabels = ["allocated", "copied", "maxmem", "minorgcs", "majorgcs"]
 
 -- | A allocation 'StepMeasure' with a flag to determine if 'performGC' should run prior to the measurement.
 space :: Bool -> StepMeasure IO SpaceStats

@@ -9,4 +9,4 @@ main :: IO ()
 main = do
   let l = 1000
   let a = ExampleSum
-  reportMain (List.intercalate "-" [show a, show l]) $ testExample (examplePattern a l)
+  reportMain a defaultReportOptions (List.intercalate "-" [show a, show @Int l]) $ (testExample . examplePattern a)

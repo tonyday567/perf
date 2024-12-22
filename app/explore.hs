@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | basic measurement and callibration
@@ -6,58 +7,59 @@ module Main where
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.State.Lazy
-import Data.FormatN
-import Data.List (intercalate, nub)
+import Data.List (intercalate)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import GHC.Exts
+import GHC.Generics
+import Optics.Core
 import Options.Applicative
+import Options.Applicative.Help.Pretty
 import Perf
 import Prelude
 
-data RunType = RunExample | RunExamples | RunClocks | RunNub | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
+data Run = RunExample | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
-data ExploreOptions = ExploreOptions
-  { exploreReportOptions :: ReportOptions,
-    exploreRun :: RunType,
-    exploreLength :: Int,
-    exploreExample :: Example
+data AppConfig = AppConfig
+  { appRun :: Run,
+    appExample :: Example,
+    appReportOptions :: ReportOptions
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
-parseRun :: Parser RunType
+defaultAppConfig :: AppConfig
+defaultAppConfig = AppConfig RunExample ExampleSum defaultReportOptions
+
+parseRun :: Parser Run
 parseRun =
   flag' RunSums (long "sums" <> help "run on sum algorithms")
     <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
-    <|> flag' RunNub (long "nub" <> help "nub test")
-    <|> flag' RunClocks (long "clocks" <> help "clock test")
-    <|> flag' RunExamples (long "examples" <> help "run on example algorithms")
-    <|> flag' RunExample (long "example" <> help "run on the example algorithm")
+    <|> flag' RunExample (long "example" <> help "run on the example algorithm" <> style (annotate bold))
     <|> flag' RunExampleIO (long "exampleIO" <> help "exampleIO test")
     <|> flag' RunNoOps (long "noops" <> help "noops test")
     <|> flag' RunTicks (long "ticks" <> help "tick test")
     <|> pure RunExample
 
-exploreOptions :: Parser ExploreOptions
-exploreOptions =
-  ExploreOptions
-    <$> parseReportOptions
-    <*> parseRun
-    <*> option auto (value 1000 <> long "length" <> short 'l' <> help "length of list")
+appParser :: AppConfig -> Parser AppConfig
+appParser def =
+  AppConfig
+    <$> parseRun
     <*> parseExample
+    <*> parseReportOptions (view #appReportOptions def)
 
-exploreOpts :: ParserInfo ExploreOptions
-exploreOpts =
+appConfig :: AppConfig -> ParserInfo AppConfig
+appConfig def =
   info
-    (exploreOptions <**> helper)
-    (fullDesc <> progDesc "perf exploration" <> header "examples of perf usage")
+    (appParser def <**> helper)
+    (fullDesc <> header "Examples of perf usage (defaults in bold)")
 
 -- | * exampleIO
 exampleIO :: (Semigroup t) => PerfT IO t ()
 exampleIO = do
   txt <- fam "file-read" (Text.readFile "src/Perf.hs")
-  n <- fap "length" Text.length txt
+  n <- ffap "length" Text.length txt
   fam "print-result" (Text.putStrLn $ "length of file is: " <> Text.pack (show n))
 
 -- | * sums
@@ -71,6 +73,7 @@ statTicks l f a n s = do
   addStat [l, "tickForceArgs"] . statD s . fmap fromIntegral =<< lift (fst <$> multi tickForceArgs n f a)
   addStat [l, "stepTime"] . statD s . fmap fromIntegral =<< lift (mconcat . fmap snd . take 1 . Map.toList <$> execPerfT (toMeasureN n stepTime) (f |$| a))
   addStat [l, "times"] . statD s . fmap fromIntegral =<< lift (mconcat . fmap snd . take 1 . Map.toList <$> execPerfT (times n) (f |$| a))
+  addStat [l, "timesn"] . statD s . fmap fromIntegral =<< lift (mconcat . fmap snd . Map.toList <$> execPerfT (pure <$> timesN n) (f |$| a))
 
 statTicksSum :: (NFData b, Enum b, Num b) => SumPattern b -> Int -> StatDType -> StateT (Map.Map [Text] Double) IO ()
 statTicksSum (SumFuse label f a) n s = statTicks label f a n s
@@ -92,32 +95,23 @@ perfNoOps meas =
 
 main :: IO ()
 main = do
-  o <- execParser exploreOpts
-  let repOptions = exploreReportOptions o
+  o <- execParser (appConfig defaultAppConfig)
+  let repOptions = appReportOptions o
   let n = reportN repOptions
   let s = reportStatDType repOptions
   let mt = reportMeasureType repOptions
   let c = reportClock repOptions
-  let !l = exploreLength o
-  let a = exploreExample o
-  let r = exploreRun o
+  let !l = reportLength repOptions
+  let a = appExample o
+  let r = appRun o
 
   case r of
-    RunNub -> do
-      reportMainWith repOptions (show r) (ffap "nub" nub [1 .. l])
     RunExample -> do
-      reportMainWith repOptions (intercalate "-" [show r, show a, show l]) $
-        testExample (examplePattern a l)
-    RunExamples -> do
-      reportMainWith
+      reportMain
+        a
         repOptions
-        (intercalate "-" [show r, show l])
-        (statExamples l)
-    RunClocks -> do
-      reportMainWith
-        repOptions
-        (intercalate "-" [show r, show a, show l, show c])
-        (testExample (examplePattern a l))
+        (intercalate "-" [show r, show a, show l])
+        (testExample . examplePattern a)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt c 1) exampleIO
       (_, (m', m2)) <- outer "outer-total" (measureDs mt c 1) (measureDs mt c 1) exampleIO
@@ -139,4 +133,4 @@ main = do
       report o' (allStats 4 (Map.mapKeys (: []) m))
     RunTicks -> do
       m <- statTicksSums n l s
-      reportOrg2D (fmap (expt (Just 3)) m)
+      report2D m

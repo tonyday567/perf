@@ -13,6 +13,7 @@ module Perf.Types
     stepM,
     multi,
     multiM,
+    multiN,
 
     -- * function application
     fap,
@@ -43,37 +44,35 @@ import Data.Bifunctor
 import Data.Functor.Identity
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
+import GHC.Exts
+import GHC.IO hiding (liftIO)
 import Prelude
 
 -- | Abstraction of a performance measurement within a monadic context.
 --
 -- - measure applies a function to a value, returning a tuple of the performance measure, and the computation result.
 -- - measureM evaluates a monadic value and returns a performance-result tuple.
-data Measure m t = Measure
-  { measure :: forall a b. (a -> b) -> a -> m (t, b),
-    measureM :: forall a. m a -> m (t, a)
+newtype Measure m t = Measure
+  { measure :: forall a b. (a -> b) -> a -> m (t, b)
   }
 
 instance (Functor m) => Functor (Measure m) where
-  fmap f (Measure m n) =
+  fmap f (Measure m) =
     Measure
       (\f' a' -> fmap (first f) (m f' a'))
-      (fmap (first f) . n)
 
 -- | An inefficient application that runs the inner action twice.
 instance (Applicative m) => Applicative (Measure m) where
-  pure t = Measure (\f a -> pure (t, f a)) (\a -> (t,) <$> a)
-  (Measure mf nf) <*> (Measure mt nt) =
+  pure t = Measure (\f a -> pure (t, f a))
+  (Measure mf) <*> (Measure mt) =
     Measure
       (\f a -> (\(nf', fa') (t', _) -> (nf' t', fa')) <$> mf f a <*> mt f a)
-      (\a -> (\(nf', a') (t', _) -> (nf' t', a')) <$> nf a <*> nt a)
 
 -- | Convert a Measure into a multi measure.
 repeated :: (Applicative m) => Int -> Measure m t -> Measure m [t]
-repeated n (Measure p m) =
+repeated n (Measure p) =
   Measure
     (\f a -> fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (p f a)))
-    (fmap (\xs -> (fmap fst xs, snd (head xs))) . replicateM n . m)
 {-# INLINEABLE repeated #-}
 
 -- | Abstraction of a performance measurement with a pre and a post step wrapping the computation.
@@ -89,12 +88,12 @@ instance (Applicative m) => Applicative (StepMeasure m) where
 
 -- | Convert a StepMeasure into a Measure
 toMeasure :: (Monad m) => StepMeasure m t -> Measure m t
-toMeasure (StepMeasure pre' post') = Measure (step pre' post') (stepM pre' post')
+toMeasure (StepMeasure pre' post') = Measure (step pre' post')
 {-# INLINEABLE toMeasure #-}
 
 -- | Convert a StepMeasure into a Measure running the computation multiple times.
 toMeasureN :: (Monad m) => Int -> StepMeasure m t -> Measure m [t]
-toMeasureN n (StepMeasure pre' post') = Measure (multi (step pre' post') n) (multiM (stepM pre' post') n)
+toMeasureN n (StepMeasure pre' post') = Measure (multi (step pre' post') n)
 {-# INLINEABLE toMeasureN #-}
 
 -- | A single step measurement.
@@ -115,17 +114,32 @@ stepM pre' post' a = do
   pure (t, ma)
 {-# INLINEABLE stepM #-}
 
--- | Multiple measurement
+multi1 :: (Monad m) => ((a -> b) -> a -> m (t, b)) -> Int -> (a -> b) -> a -> m [(t, b)]
+multi1 action n !f !a = sequence $ replicate n $! action f a
+{-# INLINEABLE multi1 #-}
+
+-- | Return one result but multiple measurements.
 multi :: (Monad m) => ((a -> b) -> a -> m (t, b)) -> Int -> (a -> b) -> a -> m ([t], b)
-multi action n !f !a =
-  fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action f a))
+multi action n !f !a = do
+  xs <- multi1 action n f a
+  pure (fmap fst xs, snd (head xs))
 {-# INLINEABLE multi #-}
 
 -- | Multiple measurements
 multiM :: (Monad m) => (m a -> m (t, a)) -> Int -> m a -> m ([t], a)
 multiM action n a =
-  fmap (\xs -> (fmap fst xs, snd (head xs))) (replicateM n (action a))
+  fmap (\xs -> (fmap fst xs, head $! fmap snd xs)) (replicateM n (action a))
 {-# INLINEABLE multiM #-}
+
+multiN :: (b -> t) -> (a -> b) -> a -> Int -> IO t
+multiN frc = multiNLoop SPEC
+  where
+    multiNLoop !_ f x n
+      | n == 1 = evaluate (frc (f x))
+      | otherwise = do
+          _ <- evaluate (frc (f x))
+          multiNLoop SPEC f x (n - 1)
+{-# INLINE multiN #-}
 
 -- | Performance measurement transformer storing a 'Measure' and a map of named results.
 newtype PerfT m t a = PerfT
@@ -180,9 +194,9 @@ fam :: (MonadIO m, Semigroup t) => Text -> m a -> PerfT m t a
 fam label a =
   PerfT $ do
     m <- fst <$> get
-    (t, ma) <- lift $ measureM m a
+    (t, !ma) <- lift $ measure m (const a) ()
     modify $ second (Map.insertWith (<>) label t)
-    return ma
+    lift ma
 {-# INLINEABLE fam #-}
 
 -- | lift a pure, unnamed function application to PerfT

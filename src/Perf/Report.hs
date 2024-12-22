@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Reporting on performance, potentially checking versus a canned results.
@@ -12,27 +13,31 @@ module Perf.Report
     ReportOptions (..),
     defaultReportOptions,
     parseReportOptions,
-    infoReportOptions,
+    PerfDumpOptions (..),
+    defaultPerfDumpOptions,
+    parsePerfDumpOptions,
+    fromDump,
     report,
     reportMain,
-    reportMainWith,
     writeResult,
     readResult,
     CompareResult (..),
     compareNote,
-    reportOrg2D,
+    report2D,
     Golden (..),
     defaultGolden,
     parseGolden,
     replaceDefaultFilePath,
+    parseClock,
+    reportToConsole,
   )
 where
 
+import Chart
 import Control.Exception
 import Control.Monad
 import Data.Bool
 import Data.Foldable
-import Data.FormatN hiding (format)
 import Data.List (intercalate)
 import Data.List qualified as List
 import Data.Map.Merge.Strict
@@ -41,13 +46,23 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Generics
-import Options.Applicative
+import Optics.Core
+import Options.Applicative as OA
+import Options.Applicative.Help.Pretty
+import Perf.Algos
+import Perf.BigO
+import Perf.Chart
 import Perf.Measure
 import Perf.Stats
 import Perf.Time (defaultClock)
 import Perf.Types
+import Prettyprinter.Render.Text qualified as PP
 import System.Clock
 import System.Exit
+import System.Mem
+import Test.Tasty
+import Test.Tasty.Bench
+import Text.PrettyPrint.Boxes qualified as B
 import Text.Printf hiding (parseFormat)
 import Text.Read
 
@@ -60,30 +75,34 @@ data Header = Header | NoHeader deriving (Eq, Show, Generic)
 -- | Command-line parser for 'Header'
 parseHeader :: Parser Header
 parseHeader =
-  flag' Header (long "header" <> help "include headers")
-    <|> flag' NoHeader (long "noheader" <> help "dont include headers")
+  flag' Header (long "header" <> help "include headers in reporting")
+    <|> flag' NoHeader (long "noheader" <> help "dont include headers in reporting")
     <|> pure Header
 
 -- | Options for production of a performance report.
 data ReportOptions = ReportOptions
   { -- | Number of times to run a benchmark.
     reportN :: Int,
+    reportLength :: Int,
     reportClock :: Clock,
     reportStatDType :: StatDType,
     reportMeasureType :: MeasureType,
     reportGolden :: Golden,
     reportHeader :: Header,
-    reportCompare :: CompareLevels
+    reportCompare :: CompareLevels,
+    reportChart :: PerfChartOptions,
+    reportDump :: PerfDumpOptions,
+    reportGC :: Bool,
+    reportOrder :: OrderOptions,
+    reportTasty :: Bool
   }
   deriving (Eq, Show, Generic)
 
--- | Default options
---
--- >>> defaultReportOptions
--- ReportOptions {reportN = 1000, reportClock = MonotonicRaw, reportStatDType = StatAverage, reportMeasureType = MeasureTime, reportGolden = Golden {golden = "other/bench.perf", check = True, record = False}, reportHeader = Header, reportCompare = CompareLevels {errorLevel = 0.2, warningLevel = 5.0e-2, improvedLevel = 5.0e-2}}
+-- | Default reporting options
 defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
+    1000
     1000
     defaultClock
     StatAverage
@@ -91,66 +110,76 @@ defaultReportOptions =
     defaultGolden
     Header
     defaultCompareLevels
+    defaultPerfChartOptions
+    defaultPerfDumpOptions
+    False
+    defaultOrderOptions
+    False
 
 -- | Command-line parser for 'ReportOptions'
-parseReportOptions :: Parser ReportOptions
-parseReportOptions =
+parseReportOptions :: ReportOptions -> Parser ReportOptions
+parseReportOptions def =
   ReportOptions
-    <$> option auto (value 1000 <> long "runs" <> short 'n' <> help "number of runs to perform")
+    <$> option auto (value (view #reportN def) <> showDefaultWith show <> long "runs" <> short 'n' <> metavar "INT" <> help "number of runs to perform")
+    <*> option auto (value (view #reportLength def) <> long "length" <> showDefaultWith show <> short 'l' <> metavar "INT" <> help "length-like variable eg, used to alter list length and compute order")
     <*> parseClock
     <*> parseStatD
     <*> parseMeasure
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
+    <*> parsePerfChartOptions defaultPerfChartOptions
+    <*> parsePerfDumpOptions defaultPerfDumpOptions
+    <*> switch (long "gc" <> help "run the GC prior to measurement")
+    <*> parseOrderOptions defaultOrderOptions
+    <*> switch (long "tasty" <> help "run tasty-bench")
 
 -- | Parse command-line 'Clock' options.
 parseClock :: Parser Clock
 parseClock =
-  flag' Monotonic (long "Monotonic")
-    <|> flag' Realtime (long "Realtime")
-    <|> flag' ProcessCPUTime (long "ProcessCPUTime")
-    <|> flag' ThreadCPUTime (long "ThreadCPUTime")
+  flag' Monotonic (long "Monotonic" <> OA.style (annotate bold) <> help "use Monotonic clock")
+    <|> flag' Realtime (long "Realtime" <> help "use Realtime clock")
+    <|> flag' ProcessCPUTime (long "ProcessCPUTime" <> help "use ProcessCPUTime clock")
+    <|> flag' ThreadCPUTime (long "ThreadCPUTime" <> help "use ThreadCPUTime clock")
 #ifdef mingw32_HOST_OS
     <|> pure ThreadCPUTime
 #else
-    <|> flag' MonotonicRaw (long "MonotonicRaw")
+    <|> flag' MonotonicRaw (long "MonotonicRaw" <> help "use MonotonicRaw clock")
     <|> pure MonotonicRaw
 #endif
 
--- | Default command-line parser.
-infoReportOptions :: ParserInfo ReportOptions
-infoReportOptions =
-  info
-    (parseReportOptions <**> helper)
-    (fullDesc <> progDesc "perf benchmarking" <> header "reporting options")
+data PerfDumpOptions = PerfDumpOptions {dumpFilepath :: FilePath, doDump :: Bool} deriving (Eq, Show, Generic)
 
--- | Run and report a benchmark to the console. For example,
---
--- @reportMain "foo" (fap "sum" sum [1..1000])@ would:
---
--- - run a benchmark for summing the numbers 1 to a thousand.
---
--- - look for saved performance data in other/foo-1000-MeasureTime-StatAverage.perf
---
--- - report on performance in isolation or versus the canned data file if it exists.
---
--- - exit with failure if the performace had degraded.
-reportMain :: Name -> PerfT IO [[Double]] a -> IO ()
-reportMain name t = do
-  o <- execParser infoReportOptions
-  reportMainWith o name t
+defaultPerfDumpOptions :: PerfDumpOptions
+defaultPerfDumpOptions = PerfDumpOptions "other/perf.map" False
 
--- | Run and report a benchmark to the console with the supplied options.
-reportMainWith :: ReportOptions -> Name -> PerfT IO [[Double]] a -> IO ()
-reportMainWith o name t = do
+-- | Parse charting options.
+parsePerfDumpOptions :: PerfDumpOptions -> Parser PerfDumpOptions
+parsePerfDumpOptions def =
+  PerfDumpOptions
+    <$> option str (value (view #dumpFilepath def) <> showDefaultWith show <> long "dumppath" <> metavar "FILE" <> help "dump file name")
+    <*> switch (long "dump" <> help "dump raw performance data as a Map Text [[Double]]")
+
+fromDump :: PerfDumpOptions -> IO (Map.Map Text [[Double]])
+fromDump cfg = read <$> readFile (view #dumpFilepath cfg)
+
+-- | Run and report a benchmark with the specified reporting options.
+reportMain :: Example -> ReportOptions -> Name -> (Int -> PerfT IO [[Double]] a) -> IO a
+reportMain ex o name t = do
   let !n = reportN o
+  let l = reportLength o
   let s = reportStatDType o
   let c = reportClock o
   let mt = reportMeasureType o
   let o' = replaceDefaultFilePath (intercalate "-" [name, show n, show mt, show s]) o
-  m <- execPerfT (measureDs mt c n) t
+  when (reportGC o) performGC
+  (a, m) <- runPerfT (measureDs mt c n) (t l)
   report o' (statify s m)
+  (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just (measureLabels mt)) m))) (reportChart o)
+  (\cfg -> when (view #doDump cfg) (writeFile (view #dumpFilepath cfg) (show m))) (reportDump o)
+  when (view (#reportOrder % #doOrder) o) (reportBigO o t)
+  when (view #reportTasty o) (reportTasty' ex o)
+  pure a
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
 data CompareLevels = CompareLevels {errorLevel :: Double, warningLevel :: Double, improvedLevel :: Double} deriving (Eq, Show)
@@ -165,9 +194,9 @@ defaultCompareLevels = CompareLevels 0.2 0.05 0.05
 parseCompareLevels :: CompareLevels -> Parser CompareLevels
 parseCompareLevels c =
   CompareLevels
-    <$> option auto (value (errorLevel c) <> long "error" <> help "error level")
-    <*> option auto (value (warningLevel c) <> long "warning" <> help "warning level")
-    <*> option auto (value (improvedLevel c) <> long "improved" <> help "improved level")
+    <$> option auto (value (errorLevel c) <> showDefaultWith show <> long "error" <> metavar "DOUBLE" <> help "report an error if performance degrades by more than this")
+    <*> option auto (value (warningLevel c) <> showDefaultWith show <> long "warning" <> metavar "DOUBLE" <> help "report a warning if performance degrades by more than this")
+    <*> option auto (value (improvedLevel c) <> showDefaultWith show <> long "improved" <> metavar "DOUBLE" <> help "report if performance improves by more than this")
 
 -- | Write results to file
 writeResult :: FilePath -> Map.Map [Text] Double -> IO ()
@@ -231,32 +260,32 @@ formatText h m =
     <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> [a])) m)
 
 -- | Format a result as a table.
-reportOrg2D :: Map.Map [Text] Text -> IO ()
-reportOrg2D m = do
-  let rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
-  let cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
-  Text.putStrLn ("||" <> Text.intercalate "|" rs <> "|")
-  mapM_
-    ( \c ->
-        Text.putStrLn
-          ( "|"
-              <> c
-              <> "|"
-              <> Text.intercalate "|" ((\r -> m Map.! [c, r]) <$> rs)
-              <> "|"
-          )
-    )
-    cs
+report2D :: Map.Map [Text] Double -> IO ()
+report2D m = putStrLn $ B.render $ B.hsep 1 B.left $ cs' : rs'
+  where
+    rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
+    cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
+    bx = B.text . Text.unpack
+    xs = (\c -> (\r -> m Map.! [c, r]) <$> rs) <$> cs
+    xs' = fmap (fmap (bx . expt (Just 3))) xs
+    cs' = B.vcat B.left (bx <$> ("algo" : cs))
+    rs' = B.vcat B.right <$> zipWith (:) (bx <$> rs) (List.transpose xs')
 
 reportToConsole :: [Text] -> IO ()
 reportToConsole xs = traverse_ Text.putStrLn xs
 
 -- | Golden file options.
-data Golden = Golden {golden :: FilePath, check :: Bool, record :: Bool} deriving (Generic, Eq, Show)
+data Golden = Golden {golden :: FilePath, check :: CheckGolden, record :: RecordGolden} deriving (Generic, Eq, Show)
 
--- | Default filepath is "other/bench.perf"
+-- | Whether to check against a golden file
+data CheckGolden = CheckGolden | NoCheckGolden deriving (Eq, Show, Generic)
+
+-- | Whether to overwrite a golden file
+data RecordGolden = RecordGolden | NoRecordGolden deriving (Eq, Show, Generic)
+
+-- | Default is Golden "other/bench.perf" CheckGolden NoRecordGolden
 defaultGolden :: Golden
-defaultGolden = Golden "other/bench.perf" True False
+defaultGolden = Golden "other/bench.perf" CheckGolden NoRecordGolden
 
 -- | Replace the golden file name stem if it's the default.
 replaceGoldenDefault :: FilePath -> Golden -> Golden
@@ -274,10 +303,10 @@ replaceDefaultFilePath fp o =
 parseGolden :: Parser Golden
 parseGolden =
   Golden
-    <$> option str (Options.Applicative.value (golden defaultGolden) <> long "golden" <> short 'g' <> help "golden file name")
+    <$> option str (value (golden defaultGolden) <> showDefaultWith show <> long "golden" <> short 'g' <> metavar "FILE" <> help "golden file name")
     -- True is the default for 'check'.
-    <*> flag True False (long "nocheck" <> help "do not check versus the golden file")
-    <*> switch (long "record" <> short 'r' <> help "record the result to the golden file")
+    <*> (bool NoCheckGolden CheckGolden <$> flag True False (long "nocheck" <> help "do not check versus the golden file"))
+    <*> (bool NoRecordGolden RecordGolden <$> switch (long "record" <> short 'r' <> help "record the result to the golden file"))
 
 reportConsoleNoCompare :: Header -> Map.Map [Text] Double -> IO ()
 reportConsoleNoCompare h m =
@@ -293,17 +322,17 @@ reportConsoleCompare h m =
 report :: ReportOptions -> Map.Map [Text] [Double] -> IO ()
 report o m = do
   when
-    (record (reportGolden o))
+    ((== RecordGolden) $ record (reportGolden o))
     (writeResult (golden (reportGolden o)) m')
   case check (reportGolden o) of
-    False -> reportConsoleNoCompare (reportHeader o) m'
-    True -> do
+    NoCheckGolden -> reportConsoleNoCompare (reportHeader o) m'
+    CheckGolden -> do
       mOrig <- readResult (golden (reportGolden o))
       case mOrig of
         Left _ -> do
           reportConsoleNoCompare (reportHeader o) m'
           unless
-            (record (reportGolden o))
+            ((RecordGolden ==) $ record (reportGolden o))
             (putStrLn "No golden file found. To create one, run with '-r'")
         Right orig -> do
           let n = compareNote (reportCompare o) orig m'
@@ -311,3 +340,22 @@ report o m = do
           when (hasDegraded n) (exitWith $ ExitFailure 1)
   where
     m' = Map.fromList $ mconcat $ (\(ks, xss) -> zipWith (\x l -> (ks <> [l], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList m
+
+reportBigO :: ReportOptions -> (Int -> PerfT IO [[Double]] a) -> IO ()
+reportBigO o p = do
+  m <- mapM (execPerfT (measureDs (view #reportMeasureType o) (view #reportClock o) (view #reportN o)) . p) ns
+  putStrLn mempty
+  reportToConsole $ PP.renderStrict . layoutPretty defaultLayoutOptions <$> os'' m
+  pure ()
+  where
+    l = view #reportLength o
+    ns = makeNs l (view (#reportOrder % #orderDivisor) o) (view (#reportOrder % #orderLow) o)
+    ms m' = fmap (fmap (statD (view #reportStatDType o)) . List.transpose) <$> m'
+    os m' = fmap (fmap (pretty . fromOrder . fst . estO (fromIntegral <$> ns)) . List.transpose) (Map.unionsWith (<>) (fmap (fmap (: [])) (ms m')))
+    os' m' = mconcat $ (\(ks, xss) -> zipWith (\x l' -> ([ks] <> [l'], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList (os m')
+    os'' m' = (\(k, v) -> (pretty . Text.intercalate ":") k <> " " <> v) <$> os' m'
+
+reportTasty' :: Example -> ReportOptions -> IO ()
+reportTasty' ex o = do
+  t <- measureCpuTime (mkTimeout 1000000) (RelStDev 0.05) (tastyExample (examplePattern ex (view #reportLength o)))
+  Text.putStrLn $ "tasty:time: " <> decimal (Just 3) (t * 1e9)

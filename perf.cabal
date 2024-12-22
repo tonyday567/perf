@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.13.0.0
+version: 0.14.0.0
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -17,9 +17,8 @@ description:
 build-type: Simple
 tested-with:
     , GHC == 9.10.1
-    , GHC == 9.8.2
     , GHC == 9.6.5
-
+    , GHC == 9.8.2
 extra-doc-files:
     ChangeLog.md
     readme.md
@@ -45,6 +44,7 @@ common ghc-options-stanza
         -Wincomplete-uni-patterns
         -Wpartial-fields
         -Wredundant-constraints
+        -fproc-alignment=64
 
 common ghc2021-stanza
     default-language: GHC2021
@@ -54,21 +54,29 @@ library
     import: ghc2021-stanza
     hs-source-dirs: src
     build-depends:
-        , base                 >=4.7 && <5
+        , base                 >=4.14 && <5
+        , boxes                >=0.1.5 && <0.2
+        , chart-svg            >=0.7 && <0.9
         , clock                >=0.8 && <0.9
         , containers           >=0.6 && <0.8
         , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
-        , numhask-space        >=0.10 && <0.12
-        , optparse-applicative >=0.17 && <0.19
+        , numhask-space        >=0.10 && <0.13
+        , optics-core          >=0.4.1 && <0.5
+        , optparse-applicative >=0.17 && <0.20
+        , prettychart          >=0.3 && <0.4
+        , prettyprinter        >=1.7.1 && <1.8
         , recursion-schemes    >=5.2.2 && <5.3
+        , tasty                >=1.5.2 && <1.6
+        , tasty-bench          >=0.4 && <0.5
         , text                 >=1.2 && <2.2
         , vector               >=0.12.3 && <0.14
     exposed-modules:
         Perf
         Perf.Algos
         Perf.BigO
+        Perf.Chart
         Perf.Count
         Perf.Measure
         Perf.Report
@@ -85,13 +93,12 @@ executable perf-explore
     main-is: explore.hs
     hs-source-dirs: app
     build-depends:
-        , base                 >=4.7 && <5
-        , clock                >=0.8 && <0.9
+        , base                 >=4.14 && <5
         , containers           >=0.6 && <0.8
         , deepseq              >=1.4.4 && <1.6
-        , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
-        , optparse-applicative >=0.17 && <0.19
+        , optics-core          >=0.4.1 && <0.5
+        , optparse-applicative >=0.17 && <0.20
         , perf
         , text                 >=1.2 && <2.2
     ghc-options: -O2
@@ -103,7 +110,7 @@ benchmark perf-bench
     main-is: bench.hs
     hs-source-dirs: app
     build-depends:
-        , base >=4.7 && <5
+        , base >=4.14 && <5
         , perf
     ghc-options: -O2
     type: exitcode-stdio-1.0

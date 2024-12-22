@@ -17,11 +17,14 @@ module Perf.Time
     tickForce,
     tickForceArgs,
     tickIO,
+    tickIOWith,
     ticks,
     ticksIO,
     time,
     times,
     timesWith,
+    timesN,
+    timesNWith,
     stepTime,
   )
 where
@@ -191,15 +194,33 @@ stepTime = StepMeasure start stop
 
 -- | tick as a 'Measure'
 time :: Measure IO Nanos
-time = Measure tick tickIO
+time = Measure tick
 {-# INLINEABLE time #-}
 
 -- | tick as a multi-Measure
 times :: Int -> Measure IO [Nanos]
-times n = Measure (ticks n) (ticksIO n)
+times n = Measure (ticks n)
 {-# INLINEABLE times #-}
 
 -- | tickWith as a multi-Measure
 timesWith :: Clock -> Int -> Measure IO [Nanos]
-timesWith c n = Measure (multi (tickWith c) n) (multiM (tickIOWith c) n)
+timesWith c n = repeated n (Measure (tickWith c))
 {-# INLINEABLE timesWith #-}
+
+-- | tickWith for n repeated applications
+timesN :: Int -> Measure IO Nanos
+timesN n = Measure (tickNWith defaultClock n)
+{-# INLINEABLE timesN #-}
+
+-- | tickWith for n repeated applications
+timesNWith :: Clock -> Int -> Measure IO Nanos
+timesNWith c n = Measure (tickNWith c n)
+{-# INLINEABLE timesNWith #-}
+
+tickNWith :: Clock -> Int -> (a -> b) -> a -> IO (Nanos, b)
+tickNWith c n !f !a = do
+  !t <- nanosWith c
+  !a' <- multiN id f a n
+  !t' <- nanosWith c
+  pure (floor @Double (fromIntegral (t' - t) / fromIntegral n), a')
+{-# INLINEABLE tickNWith #-}

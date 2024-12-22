@@ -16,15 +16,14 @@ import GHC.Exts
 import GHC.Generics
 import Optics.Core
 import Options.Applicative
+import Options.Applicative.Help.Pretty
 import Perf
 import Prelude
-import Options.Applicative.Help.Pretty
 
 data Run = RunExample | RunExampleIO | RunSums | RunLengths | RunNoOps | RunTicks deriving (Eq, Show)
 
 data AppConfig = AppConfig
-  {
-    appRun :: Run,
+  { appRun :: Run,
     appExample :: Example,
     appReportOptions :: ReportOptions
   }
@@ -108,7 +107,10 @@ main = do
 
   case r of
     RunExample -> do
-      reportMain a repOptions (intercalate "-" [show r, show a, show l])
+      reportMain
+        a
+        repOptions
+        (intercalate "-" [show r, show a, show l])
         (testExample . examplePattern a)
     RunExampleIO -> do
       m1 <- execPerfT (measureDs mt c 1) exampleIO

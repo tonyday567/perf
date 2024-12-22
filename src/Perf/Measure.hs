@@ -12,6 +12,7 @@ where
 
 import Data.Text (Text)
 import Options.Applicative
+import Options.Applicative.Help.Pretty qualified as OA
 import Perf.Count
 import Perf.Space
 import Perf.Stats
@@ -19,7 +20,6 @@ import Perf.Time
 import Perf.Types
 import System.Clock
 import Prelude hiding (cycle)
-import Options.Applicative.Help.Pretty qualified as OA
 
 -- | Command-line measurement options.
 data MeasureType = MeasureTime | MeasureNTime | MeasureSpace | MeasureSpaceTime | MeasureAllocation | MeasureCount deriving (Eq, Show)
@@ -62,7 +62,7 @@ measureFinalStat :: MeasureType -> Int -> [Double] -> Double
 measureFinalStat mt n =
   case mt of
     MeasureTime -> average
-    MeasureNTime -> (/fromIntegral n) . sum
+    MeasureNTime -> (/ fromIntegral n) . sum
     MeasureSpace -> average
     MeasureSpaceTime -> average
     MeasureAllocation -> average

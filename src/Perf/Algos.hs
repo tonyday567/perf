@@ -84,12 +84,12 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bifunctor
 import Data.Foldable
 import Data.Functor.Foldable
+import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Options.Applicative
-import Perf.Types
 import Options.Applicative.Help.Pretty
-import Data.List qualified as List
+import Perf.Types
 import Test.Tasty.Bench
 
 -- | Algorithm examples for testing

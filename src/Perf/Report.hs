@@ -33,6 +33,7 @@ module Perf.Report
   )
 where
 
+import Chart
 import Control.Exception
 import Control.Monad
 import Data.Bool
@@ -49,23 +50,22 @@ import GHC.Generics
 import Optics.Core
 import Options.Applicative as OA
 import Options.Applicative.Help.Pretty
-import Perf.Chart
 import Perf.Algos
+import Perf.BigO
+import Perf.Chart
 import Perf.Measure
 import Perf.Stats
 import Perf.Time (defaultClock)
 import Perf.Types
-import Perf.BigO
+import Prettyprinter.Render.Text qualified as PP
 import System.Clock
 import System.Exit
 import System.Mem
+import Test.Tasty
+import Test.Tasty.Bench
+import Text.PrettyPrint.Boxes qualified as B
 import Text.Printf hiding (parseFormat)
 import Text.Read
-import Chart
-import Prettyprinter.Render.Text qualified as PP
-import Test.Tasty.Bench
-import Test.Tasty
-import Text.PrettyPrint.Boxes qualified as B
 
 -- | Benchmark name
 type Name = String
@@ -100,7 +100,6 @@ data ReportOptions = ReportOptions
   deriving (Eq, Show, Generic)
 
 -- | Default reporting options
---
 defaultReportOptions :: ReportOptions
 defaultReportOptions =
   ReportOptions
@@ -140,17 +139,13 @@ parseReportOptions def =
 parseClock :: Parser Clock
 parseClock =
   flag' Monotonic (long "Monotonic" <> OA.style (annotate bold) <> help "use Monotonic clock")
-    <|> flag' Realtime (long "Realtime"<> help "use Realtime clock")
-    <|> flag' ProcessCPUTime (long "ProcessCPUTime"<> help "use ProcessCPUTime clock")
-    <|> flag' ThreadCPUTime (long "ThreadCPUTime"<> help "use ThreadCPUTime clock")
-
-
-
-    <|> flag' MonotonicRaw (long "MonotonicRaw"<> help "use MonotonicRaw clock")
+    <|> flag' Realtime (long "Realtime" <> help "use Realtime clock")
+    <|> flag' ProcessCPUTime (long "ProcessCPUTime" <> help "use ProcessCPUTime clock")
+    <|> flag' ThreadCPUTime (long "ThreadCPUTime" <> help "use ThreadCPUTime clock")
+    <|> flag' MonotonicRaw (long "MonotonicRaw" <> help "use MonotonicRaw clock")
     <|> pure MonotonicRaw
 
-
-data PerfDumpOptions = PerfDumpOptions { dumpFilepath :: FilePath, doDump :: Bool } deriving (Eq, Show, Generic)
+data PerfDumpOptions = PerfDumpOptions {dumpFilepath :: FilePath, doDump :: Bool} deriving (Eq, Show, Generic)
 
 defaultPerfDumpOptions :: PerfDumpOptions
 defaultPerfDumpOptions = PerfDumpOptions "other/perf.map" False
@@ -158,9 +153,9 @@ defaultPerfDumpOptions = PerfDumpOptions "other/perf.map" False
 -- | Parse charting options.
 parsePerfDumpOptions :: PerfDumpOptions -> Parser PerfDumpOptions
 parsePerfDumpOptions def =
-  PerfDumpOptions <$>
-    option str (value (view #dumpFilepath def) <> showDefaultWith show <> long "dumppath" <> metavar "FILE" <> help "dump file name") <*>
-    switch (long "dump" <> help "dump raw performance data as a Map Text [[Double]]")
+  PerfDumpOptions
+    <$> option str (value (view #dumpFilepath def) <> showDefaultWith show <> long "dumppath" <> metavar "FILE" <> help "dump file name")
+    <*> switch (long "dump" <> help "dump raw performance data as a Map Text [[Double]]")
 
 fromDump :: PerfDumpOptions -> IO (Map.Map Text [[Double]])
 fromDump cfg = read <$> readFile (view #dumpFilepath cfg)
@@ -263,16 +258,15 @@ formatText h m =
 
 -- | Format a result as a table.
 report2D :: Map.Map [Text] Double -> IO ()
-report2D m = putStrLn $ B.render $ B.hsep 1 B.left $ cs':rs'
+report2D m = putStrLn $ B.render $ B.hsep 1 B.left $ cs' : rs'
   where
     rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
     cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
     bx = B.text . Text.unpack
-    xs = (\c -> (\r -> m Map.! [c,r]) <$> rs) <$> cs
+    xs = (\c -> (\r -> m Map.! [c, r]) <$> rs) <$> cs
     xs' = fmap (fmap (bx . expt (Just 3))) xs
-    cs' = B.vcat B.left (bx <$> ("algo":cs))
+    cs' = B.vcat B.left (bx <$> ("algo" : cs))
     rs' = B.vcat B.right <$> zipWith (:) (bx <$> rs) (List.transpose xs')
-
 
 reportToConsole :: [Text] -> IO ()
 reportToConsole xs = traverse_ Text.putStrLn xs
@@ -354,9 +348,9 @@ reportBigO o p = do
     l = view #reportLength o
     ns = makeNs l (view (#reportOrder % #orderDivisor) o) (view (#reportOrder % #orderLow) o)
     ms m' = fmap (fmap (statD (view #reportStatDType o)) . List.transpose) <$> m'
-    os m' = fmap (fmap (pretty . fromOrder . fst . estO (fromIntegral <$> ns)) . List.transpose) (Map.unionsWith (<>) (fmap (fmap (:[])) (ms m')))
+    os m' = fmap (fmap (pretty . fromOrder . fst . estO (fromIntegral <$> ns)) . List.transpose) (Map.unionsWith (<>) (fmap (fmap (: [])) (ms m')))
     os' m' = mconcat $ (\(ks, xss) -> zipWith (\x l' -> ([ks] <> [l'], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList (os m')
-    os'' m' = (\(k,v) -> (pretty . Text.intercalate ":") k <> " " <> v) <$> os' m'
+    os'' m' = (\(k, v) -> (pretty . Text.intercalate ":") k <> " " <> v) <$> os' m'
 
 reportTasty' :: Example -> ReportOptions -> IO ()
 reportTasty' ex o = do

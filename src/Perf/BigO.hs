@@ -29,15 +29,15 @@ module Perf.BigO
 where
 
 import Data.Bool
+import Data.FormatN
 import Data.List qualified as List
 import Data.Maybe
 import Data.Monoid
 import Data.Vector qualified as V
 import GHC.Generics
-import Prelude
-import Prettyprinter
-import Data.FormatN
 import Options.Applicative
+import Prettyprinter
+import Prelude
 
 -- $setup
 -- >>> import qualified Data.List as List
@@ -182,9 +182,8 @@ instance (Num a) => Num (Order a) where
 -- | A set of factors consisting of the dominant order, the dominant order factor and a constant factor
 data BigOrder a = BigOrder {bigOrder :: O, bigFactor :: a} deriving (Eq, Ord, Show, Generic, Functor)
 
-instance Pretty (BigOrder Double)
-  where
-    pretty (BigOrder o f) = pretty (decimal (Just 2) f) <> " * O(" <> viaShow o <> ")"
+instance Pretty (BigOrder Double) where
+  pretty (BigOrder o f) = pretty (decimal (Just 2) f) <> " * O(" <> viaShow o <> ")"
 
 -- | compute the BigOrder
 --
@@ -254,17 +253,16 @@ estOs ns ms = go [] ns ms
 makeNs :: Int -> Double -> Int -> [Int]
 makeNs n0 d low = reverse $ go (next n0) [n0]
   where
-    next n = floor (fromIntegral n/ d)
+    next n = floor (fromIntegral n / d)
     go :: Int -> [Int] -> [Int]
     go n acc = bool (go (next n) (acc <> [n])) acc (low >= n)
 
 data OrderOptions = OrderOptions
-  {
-    doOrder :: Bool,
+  { doOrder :: Bool,
     orderLow :: Int,
     orderDivisor :: Double
-
-} deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
 defaultOrderOptions :: OrderOptions
 defaultOrderOptions = OrderOptions False 10 9
@@ -272,7 +270,6 @@ defaultOrderOptions = OrderOptions False 10 9
 parseOrderOptions :: OrderOptions -> Parser OrderOptions
 parseOrderOptions def =
   OrderOptions
-  <$> switch (long "order" <> short 'o' <> help "calculate order")
+    <$> switch (long "order" <> short 'o' <> help "calculate order")
     <*> option auto (value (orderLow def) <> long "orderlowest" <> showDefaultWith show <> metavar "DOUBLE" <> help "smallest order test")
     <*> option auto (value (orderDivisor def) <> long "orderdivisor" <> showDefaultWith show <> metavar "DOUBLE" <> help "divisor for order computation")
-

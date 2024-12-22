@@ -156,8 +156,8 @@ multiN frc = multiNLoop SPEC
     multiNLoop !_ f x n
       | n == 1 = evaluate (frc (f x))
       | otherwise = do
-        _ <- evaluate (frc (f x))
-        multiNLoop SPEC f x (n - 1)
+          _ <- evaluate (frc (f x))
+          multiNLoop SPEC f x (n - 1)
 {-# INLINE multiN #-}
 
 -- | Performance measurement transformer storing a 'Measure' and a map of named results.

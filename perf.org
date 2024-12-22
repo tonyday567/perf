@@ -2,7 +2,7 @@
 #+PROPERTY: header-args :exports both
 #+PROPERTY: header-args :eval no-export
 
-[[https://hackage.haskell.org/package/perf][file:https://img.shields.io/hackage/v/perf.svg]] [[https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci][file:https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg]]
+[[https://hackage.haskell.org/package/perf][file:https://img.shields.io/hackage/v/perf.svg]] [[https://github.com/tonyday567/perf/actions][file:https://github.com/tonyday567/perf/workflows/haskell-ci.yml/badge.svg]]
 
 * Features
 

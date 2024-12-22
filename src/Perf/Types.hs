@@ -134,25 +134,6 @@ multiM action n a =
 multiN :: (b -> t) -> (a -> b) -> a -> Int -> IO t
 multiN frc = multiNLoop SPEC
   where
-    -- Here we rely on the fact that GHC (unless spurred by
-    -- -fstatic-argument-transformation) is not smart enough:
-    -- it does not notice that `f` and `x` arguments are loop invariant
-    -- and could be floated, and the whole `f x` expression shared.
-    -- If we create a closure with `f` and `x` bound in the environment,
-    -- then GHC is smart enough to share computation of `f x`.
-    --
-    -- For perspective, gauge and criterion < 1.4 mark similar functions as INLINE,
-    -- while criterion >= 1.4 switches to NOINLINE.
-    -- If we mark `funcToBenchLoop` NOINLINE then benchmark results are slightly larger
-    -- (noticeable in bench-fibo), because the loop body is slightly bigger,
-    -- since GHC does not unbox numbers or inline `Eq @Word64` dictionary.
-    --
-    -- This function is called `funcToBenchLoop` instead of, say, `go`,
-    -- so it is easier to spot in Core dumps.
-    --
-    -- Forcing SpecConst optimization with SPEC makes the behaviour of benchmarks
-    -- independent of -fspec-constr-count.
-    -- multiNLoop :: SPEC -> (a -> b) -> a -> Word64 -> IO t
     multiNLoop !_ f x n
       | n == 1 = evaluate (frc (f x))
       | otherwise = do

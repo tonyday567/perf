@@ -141,8 +141,12 @@ parseClock =
     <|> flag' Realtime (long "Realtime" <> help "use Realtime clock")
     <|> flag' ProcessCPUTime (long "ProcessCPUTime" <> help "use ProcessCPUTime clock")
     <|> flag' ThreadCPUTime (long "ThreadCPUTime" <> help "use ThreadCPUTime clock")
+#ifdef mingw32_HOST_OS
+    <|> pure ThreadCPUTime
+#else
     <|> flag' MonotonicRaw (long "MonotonicRaw" <> help "use MonotonicRaw clock")
     <|> pure MonotonicRaw
+#endif
 
 data PerfDumpOptions = PerfDumpOptions {dumpFilepath :: FilePath, doDump :: Bool} deriving (Eq, Show, Generic)
 

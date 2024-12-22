@@ -1,3 +1,22 @@
+0.14
+===
+* Added charting
+* Added Perf.Chart
+* refactored reportMain
+* expanded ReportOptions
+* added more algorithms to Example
+* refactored Perf.BigO
+* added PerfDumpOptions
+* reportOrg2D ==> report2D
+* added reportBigO
+* added reportTasty'
+* added reportToConsole & parseClock
+* refactored SpaceStats
+* added tickIOWith, timesN & timesNWith
+* removed measureM from Measure
+* added multiN
+
+
 0.13
 ===
 * replaced rdtsc with clocks library.

@@ -1,37 +1,7 @@
 
-# Table of Contents
+# perf
 
-1.  [Introduction](#orga196864)
-2.  [Setup](#orgfd30244)
-3.  [System.Clock](#orgb51effe)
-    1.  [resolution](#org7dcd69d)
-4.  [Time](#org6c19f0f)
-    1.  [What is a tick?](#org49fb855)
-    2.  [tick\_](#org1de7ebb)
-    3.  [multiple ticks](#org27958a7)
-    4.  [tickIO](#orga206cb6)
-    5.  [sum example](#orgd6c8625)
-5.  [PerfT](#org0974e4d)
-6.  [perf-explore](#org216f105)
-    1.  [noops](#org2d42223)
-    2.  [measurement context](#org95a9062)
-        1.  [short list](#orgdb37d7c)
-        2.  [long list](#org56b0098)
-    3.  [sums](#orgff01033)
-    4.  [lengths](#org5abd0c1)
-    5.  [Space](#org01bde6f)
-7.  [Perf.BigO](#org753786d)
-8.  [References](#org47311bd)
-    1.  [Core](#orgadd7f60)
-    2.  [Profiling](#org31e588b)
-        1.  [setup](#orgf72792c)
-        2.  [Space usage output (-s)](#org1d9ca37)
-        3.  [Cost center profile (-p)](#orgeb93acc)
-        4.  [heap analysis (-hc -l)](#org76c2a10)
-    3.  [Cache speed](#org3a53ed0)
-
-[![img](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![img](https://github.com/tonyday567/perf/workflows/haskell-ci/badge.svg)](https://github.com/tonyday567/perf/actions?query=workflow%3Ahaskell-ci)
-
+[![img](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![img](https://github.com/tonyday567/perf/workflows/haskell-ci.yml/badge.svg)](https://github.com/tonyday567/perf/actions)
 
 <a id="orga196864"></a>
 

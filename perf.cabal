@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.14.0.1
+version: 0.14.0.2
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -62,7 +62,7 @@ library
         , deepseq              >=1.4.4 && <1.6
         , formatn              >=0.2.1 && <0.4
         , mtl                  >=2.2.2 && <2.4
-        , numhask-space        >=0.10 && <0.13
+        , numhask-space        >=0.10 && <0.14
         , optics-core          >=0.4.1 && <0.5
         , optparse-applicative >=0.17 && <0.20
         , prettychart          >=0.3 && <0.4

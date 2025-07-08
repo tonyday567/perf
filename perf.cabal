@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.14.0.2
+version: 0.14.0.3
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -11,106 +11,129 @@ homepage: https://github.com/tonyday567/perf#readme
 bug-reports: https://github.com/tonyday567/perf/issues
 synopsis: Performance methods and monad.
 description:
-    A set of tools to measure performance of Haskell programs.
-    See the Perf module and readme for an example and full API documentation.
+  A set of tools to measure performance of Haskell programs.
+  See the Perf module and readme for an example and full API documentation.
 
 build-type: Simple
 tested-with:
-    , GHC == 9.10.1
-    , GHC == 9.6.5
-    , GHC == 9.8.2
+  ghc ==9.6.7
+  ghc ==9.8.4
+  ghc ==9.10.2
+  ghc ==9.12.2
+
 extra-doc-files:
-    ChangeLog.md
-    readme.md
+  ChangeLog.md
+  readme.md
 
 source-repository head
-    type: git
-    location: https://github.com/tonyday567/perf
+  type: git
+  location: https://github.com/tonyday567/perf
 
 common ghc-options-exe-stanza
-    ghc-options:
-        -fforce-recomp
-        -funbox-strict-fields
-        -rtsopts
-        -threaded
-        -with-rtsopts=-N
+  ghc-options:
+    -fforce-recomp
+    -funbox-strict-fields
+    -rtsopts
+    -threaded
+    -with-rtsopts=-N
 
 common ghc-options-stanza
-    ghc-options:
-        -Wall
-        -Wcompat
-        -Widentities
-        -Wincomplete-record-updates
-        -Wincomplete-uni-patterns
-        -Wpartial-fields
-        -Wredundant-constraints
-        -fproc-alignment=64
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fproc-alignment=64
 
-common ghc2021-stanza
-    default-language: GHC2021
+common ghc2024-additions
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    DisambiguateRecordFields
+    ExplicitNamespaces
+    GADTs
+    LambdaCase
+    MonoLocalBinds
+    RoleAnnotations
+
+common ghc2024-stanza
+  if impl(ghc >=9.10)
+    default-language:
+      GHC2024
+  else
+    import: ghc2024-additions
+    default-language:
+      GHC2021
 
 library
-    import: ghc-options-stanza
-    import: ghc2021-stanza
-    hs-source-dirs: src
-    build-depends:
-        , base                 >=4.14 && <5
-        , boxes                >=0.1.5 && <0.2
-        , chart-svg            >=0.7 && <0.9
-        , clock                >=0.8 && <0.9
-        , containers           >=0.6 && <0.8
-        , deepseq              >=1.4.4 && <1.6
-        , formatn              >=0.2.1 && <0.4
-        , mtl                  >=2.2.2 && <2.4
-        , numhask-space        >=0.10 && <0.14
-        , optics-core          >=0.4.1 && <0.5
-        , optparse-applicative >=0.17 && <0.20
-        , prettychart          >=0.3 && <0.4
-        , prettyprinter        >=1.7.1 && <1.8
-        , recursion-schemes    >=5.2.2 && <5.3
-        , tasty                >=1.5.2 && <1.6
-        , tasty-bench          >=0.4 && <0.5
-        , text                 >=1.2 && <2.2
-        , vector               >=0.12.3 && <0.14
-    exposed-modules:
-        Perf
-        Perf.Algos
-        Perf.BigO
-        Perf.Chart
-        Perf.Count
-        Perf.Measure
-        Perf.Report
-        Perf.Space
-        Perf.Stats
-        Perf.Time
-        Perf.Types
-    ghc-options: -O2
+  import: ghc-options-stanza
+  import: ghc2024-stanza
+  hs-source-dirs: src
+  build-depends:
+    base >=4.14 && <5,
+    boxes >=0.1.5 && <0.2,
+    chart-svg >=0.7 && <0.9,
+    clock >=0.8 && <0.9,
+    containers >=0.6 && <0.9,
+    deepseq >=1.4.4 && <1.6,
+    formatn >=0.2.1 && <0.4,
+    mtl >=2.2.2 && <2.4,
+    numhask-space >=0.10 && <0.14,
+    optics-core >=0.4.1 && <0.5,
+    optparse-applicative >=0.17 && <0.20,
+    prettychart >=0.3 && <0.4,
+    prettyprinter >=1.7.1 && <1.8,
+    recursion-schemes >=5.2.2 && <5.3,
+    tasty >=1.5.2 && <1.6,
+    tasty-bench >=0.4 && <0.5,
+    text >=1.2 && <2.2,
+    vector >=0.12.3 && <0.14,
+
+  exposed-modules:
+    Perf
+    Perf.Algos
+    Perf.BigO
+    Perf.Chart
+    Perf.Count
+    Perf.Measure
+    Perf.Report
+    Perf.Space
+    Perf.Stats
+    Perf.Time
+    Perf.Types
+
+  ghc-options: -O2
 
 executable perf-explore
-    import: ghc-options-exe-stanza
-    import: ghc-options-stanza
-    import: ghc2021-stanza
-    main-is: explore.hs
-    hs-source-dirs: app
-    build-depends:
-        , base                 >=4.14 && <5
-        , containers           >=0.6 && <0.8
-        , deepseq              >=1.4.4 && <1.6
-        , mtl                  >=2.2.2 && <2.4
-        , optics-core          >=0.4.1 && <0.5
-        , optparse-applicative >=0.17 && <0.20
-        , perf
-        , text                 >=1.2 && <2.2
-    ghc-options: -O2
+  import: ghc-options-exe-stanza
+  import: ghc-options-stanza
+  import: ghc2024-stanza
+  main-is: explore.hs
+  hs-source-dirs: app
+  build-depends:
+    base >=4.14 && <5,
+    containers >=0.6 && <0.9,
+    deepseq >=1.4.4 && <1.6,
+    mtl >=2.2.2 && <2.4,
+    optics-core >=0.4.1 && <0.5,
+    optparse-applicative >=0.17 && <0.20,
+    perf,
+    text >=1.2 && <2.2,
+
+  ghc-options: -O2
 
 benchmark perf-bench
-    import: ghc-options-exe-stanza
-    import: ghc-options-stanza
-    import: ghc2021-stanza
-    main-is: bench.hs
-    hs-source-dirs: app
-    build-depends:
-        , base >=4.14 && <5
-        , perf
-    ghc-options: -O2
-    type: exitcode-stdio-1.0
+  import: ghc-options-exe-stanza
+  import: ghc-options-stanza
+  import: ghc2024-stanza
+  main-is: bench.hs
+  hs-source-dirs: app
+  build-depends:
+    base >=4.14 && <5,
+    perf,
+
+  ghc-options: -O2
+  type: exitcode-stdio-1.0

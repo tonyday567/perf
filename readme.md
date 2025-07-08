@@ -1,4 +1,4 @@
-[![img](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![img](https://github.com/tonyday567/perf/workflows/haskell-ci.yml/badge.svg)](https://github.com/tonyday567/perf/actions)
+[![img](https://img.shields.io/hackage/v/perf.svg)](https://hackage.haskell.org/package/perf) [![img](https://github.com/tonyday567/perf/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/tonyday567/perf/actions/workflows/haskell-ci.yml)
 
 
 # Features

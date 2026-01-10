@@ -141,7 +141,7 @@ compareCharts xs = finalChart
     cfg' = xs & fmap (\(x, _, _) -> x)
     t' = xs & fmap (\(_, x, _) -> x)
     cfg = case cfg' of
-      (c:_) -> c
+      (c : _) -> c
       [] -> defaultPerfChartOptions
     xsSmall = xs' & fmap (xify >>> filter (_y >>> (< upperCutoff)) >>> filter (\x -> view #excludeZeros cfg && (_y x > 0)))
     xsBig = xs' & fmap (xify >>> filter (_y >>> (>= upperCutoff)))

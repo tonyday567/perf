@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.14.0.3
+version: 0.14.1.0
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -9,7 +9,7 @@ author: Tony Day, Marco Zocca
 maintainer: tonyday567@gmail.com
 homepage: https://github.com/tonyday567/perf#readme
 bug-reports: https://github.com/tonyday567/perf/issues
-synopsis: Performance methods and monad.
+synopsis: Performance tools
 description:
   A set of tools to measure performance of Haskell programs.
   See the Perf module and readme for an example and full API documentation.
@@ -87,8 +87,6 @@ library
     prettychart >=0.3 && <0.4,
     prettyprinter >=1.7.1 && <1.8,
     recursion-schemes >=5.2.2 && <5.3,
-    tasty >=1.5.2 && <1.6,
-    tasty-bench >=0.4 && <0.5,
     text >=1.2 && <2.2,
     vector >=0.12.3 && <0.14,
 

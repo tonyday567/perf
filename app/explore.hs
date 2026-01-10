@@ -108,7 +108,6 @@ main = do
   case r of
     RunExample -> do
       reportMain
-        a
         repOptions
         (intercalate "-" [show r, show a, show l])
         (testExample . examplePattern a)

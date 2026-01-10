@@ -49,7 +49,6 @@ import GHC.Generics
 import Optics.Core
 import Options.Applicative as OA
 import Options.Applicative.Help.Pretty
-import Perf.Algos
 import Perf.BigO
 import Perf.Chart
 import Perf.Measure
@@ -60,8 +59,6 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Clock
 import System.Exit
 import System.Mem
-import Test.Tasty
-import Test.Tasty.Bench
 import Text.PrettyPrint.Boxes qualified as B
 import Text.Printf hiding (parseFormat)
 import Text.Read
@@ -93,8 +90,7 @@ data ReportOptions = ReportOptions
     reportChart :: PerfChartOptions,
     reportDump :: PerfDumpOptions,
     reportGC :: Bool,
-    reportOrder :: OrderOptions,
-    reportTasty :: Bool
+    reportOrder :: OrderOptions
   }
   deriving (Eq, Show, Generic)
 
@@ -114,7 +110,6 @@ defaultReportOptions =
     defaultPerfDumpOptions
     False
     defaultOrderOptions
-    False
 
 -- | Command-line parser for 'ReportOptions'
 parseReportOptions :: ReportOptions -> Parser ReportOptions
@@ -132,7 +127,6 @@ parseReportOptions def =
     <*> parsePerfDumpOptions defaultPerfDumpOptions
     <*> switch (long "gc" <> help "run the GC prior to measurement")
     <*> parseOrderOptions defaultOrderOptions
-    <*> switch (long "tasty" <> help "run tasty-bench")
 
 -- | Parse command-line 'Clock' options.
 parseClock :: Parser Clock
@@ -164,8 +158,8 @@ fromDump :: PerfDumpOptions -> IO (Map.Map Text [[Double]])
 fromDump cfg = read <$> readFile (view #dumpFilepath cfg)
 
 -- | Run and report a benchmark with the specified reporting options.
-reportMain :: Example -> ReportOptions -> Name -> (Int -> PerfT IO [[Double]] a) -> IO a
-reportMain ex o name t = do
+reportMain :: ReportOptions -> Name -> (Int -> PerfT IO [[Double]] a) -> IO a
+reportMain o name t = do
   let !n = reportN o
   let l = reportLength o
   let s = reportStatDType o
@@ -178,7 +172,6 @@ reportMain ex o name t = do
   (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just (measureLabels mt)) m))) (reportChart o)
   (\cfg -> when (view #doDump cfg) (writeFile (view #dumpFilepath cfg) (show m))) (reportDump o)
   when (view (#reportOrder % #doOrder) o) (reportBigO o t)
-  when (view #reportTasty o) (reportTasty' ex o)
   pure a
 
 -- | Levels of geometric difference in compared performance that triggers reporting.
@@ -354,8 +347,3 @@ reportBigO o p = do
     os m' = fmap (fmap (pretty . fromOrder . fst . estO (fromIntegral <$> ns)) . List.transpose) (Map.unionsWith (<>) (fmap (fmap (: [])) (ms m')))
     os' m' = mconcat $ (\(ks, xss) -> zipWith (\x l' -> ([ks] <> [l'], x)) xss (measureLabels (reportMeasureType o))) <$> Map.toList (os m')
     os'' m' = (\(k, v) -> (pretty . Text.intercalate ":") k <> " " <> v) <$> os' m'
-
-reportTasty' :: Example -> ReportOptions -> IO ()
-reportTasty' ex o = do
-  t <- measureCpuTime (mkTimeout 1000000) (RelStDev 0.05) (tastyExample (examplePattern ex (view #reportLength o)))
-  Text.putStrLn $ "tasty:time: " <> decimal (Just 3) (t * 1e9)

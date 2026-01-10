@@ -58,7 +58,9 @@ parsePerfChartOptions def =
     <*> switch (long "averages")
 
 perfCharts :: PerfChartOptions -> Maybe [Text] -> Map.Map Text [[Double]] -> ChartOptions
-perfCharts cfg labels m = bool (stackCO stackn AlignLeft NoAlign 0.1 cs) (head cs) (length cs == 1)
+perfCharts cfg labels m = case cs of
+  [c] -> c
+  _ -> stackCO stackn AlignLeft NoAlign 0.1 cs
   where
     stackn = length cs & fromIntegral & sqrt @Double & ceiling
     cs = uncurry (perfChart cfg) <$> ps'
@@ -138,7 +140,9 @@ compareCharts xs = finalChart
     xs' = xs & fmap (\(_, _, x) -> x)
     cfg' = xs & fmap (\(x, _, _) -> x)
     t' = xs & fmap (\(_, x, _) -> x)
-    cfg = head cfg'
+    cfg = case cfg' of
+      (c:_) -> c
+      [] -> defaultPerfChartOptions
     xsSmall = xs' & fmap (xify >>> filter (_y >>> (< upperCutoff)) >>> filter (\x -> view #excludeZeros cfg && (_y x > 0)))
     xsBig = xs' & fmap (xify >>> filter (_y >>> (>= upperCutoff)))
     med = median <$> xs'

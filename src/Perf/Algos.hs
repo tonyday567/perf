@@ -17,7 +17,6 @@ module Perf.Algos
     examplePattern,
     exampleLabel,
     testExample,
-    tastyExample,
 
     -- * sum algorithms
     SumPattern (..),
@@ -82,7 +81,6 @@ where
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bifunctor
-import Data.Foldable
 import Data.Functor.Foldable
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
@@ -90,7 +88,6 @@ import Data.Text (Text)
 import Options.Applicative
 import Options.Applicative.Help.Pretty
 import Perf.Types
-import Test.Tasty.Bench
 
 -- | Algorithm examples for testing
 data Example = ExampleSumFuse | ExampleSum | ExampleLengthF | ExampleConstFuse | ExampleMapInc | ExampleNoOp | ExampleNub | ExampleFib deriving (Eq, Show)
@@ -151,17 +148,6 @@ testExample (PatternMapInc label f a) = void $ ffap label f a
 testExample (PatternNoOp label f a) = void $ ffap label f a
 testExample (PatternNub label f a) = void $ ffap label f a
 testExample (PatternFib label f a) = void $ ffap label f a
-
--- | Convert an 'ExamplePattern' to a tasty-bench run.
-tastyExample :: ExamplePattern Int -> Benchmarkable
-tastyExample (PatternSumFuse _ f a) = nf f a
-tastyExample (PatternSum _ f a) = nf f a
-tastyExample (PatternLengthF _ f a) = nf f a
-tastyExample (PatternConstFuse _ f a) = nf f a
-tastyExample (PatternMapInc _ f a) = nf f a
-tastyExample (PatternNoOp _ f a) = nf f a
-tastyExample (PatternNub _ f a) = nf f a
-tastyExample (PatternFib _ f a) = nf f a
 
 -- | Unification of sum function applications
 data SumPattern a

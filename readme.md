@@ -29,7 +29,8 @@ Probably the best introduction to `perf` is via the perf-explore executable:
 Summing [1..1000] took 9,930 nanoseconds, an improvement versus the on file performance previously measured.
 
 Live charts of raw performance measurement can be obtained via the prettychart library with:
-
+    
+    cabal install prettychart
     prettychart-watch --watch --filepath other --port 3566
 
 &#x2026; and pointer your browser at localhost:3566

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: haskell-actions/run-ormolu@v16
+      - uses: haskell-actions/run-ormolu@v17
   build:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -30,13 +30,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        ghc-version: ['9.10', '9.8', '9.6']
+        ghc-version: ['9.14', '9.12', '9.10']
 
         include:
           - os: windows-latest
-            ghc-version: '9.8'
+            ghc-version: '9.14'
           - os: macos-latest
-            ghc-version: '9.8'
+            ghc-version: '9.14'
 
     steps:
       - uses: actions/checkout@v4
@@ -82,3 +82,15 @@ jobs:
 
       - name: Check cabal file
         run: cabal check
+
+      - name: cabal-docspec
+        if: matrix.os == 'ubuntu-latest' && matrix.ghc-version == '9.14'
+        run: |
+          mkdir -p $HOME/.cabal/bin
+          echo "$HOME/.cabal/bin" >> $GITHUB_PATH
+          curl -sL https://github.com/phadej/cabal-extras/releases/download/cabal-docspec-0.0.0.20250606/cabal-docspec-0.0.0.20250606-x86_64-linux.xz > cabal-docspec.xz
+          xz -d < cabal-docspec.xz > $HOME/.cabal/bin/cabal-docspec
+          rm -f cabal-docspec.xz
+          chmod a+x $HOME/.cabal/bin/cabal-docspec
+          $HOME/.cabal/bin/cabal-docspec --version
+          cabal-docspec

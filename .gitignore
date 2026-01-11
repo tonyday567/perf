@@ -8,3 +8,4 @@
 /.hkgr/
 /checklist.org
 /other/*.perf
+.ghc.environment.*

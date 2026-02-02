@@ -1,3 +1,9 @@
+0.15
+===
+
+* Removed Perf.Chart
+
+
 0.14
 ===
 * Added charting

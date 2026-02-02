@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: perf
-version: 0.14.2.1
+version: 0.15.0.0
 license: BSD-3-Clause
 license-file: LICENSE
 copyright: Tony Day (c) 2018
@@ -47,34 +47,14 @@ common ghc-options-stanza
     -Wredundant-constraints
     -fproc-alignment=64
 
-common ghc2024-additions
-  default-extensions:
-    DataKinds
-    DerivingStrategies
-    DisambiguateRecordFields
-    ExplicitNamespaces
-    GADTs
-    LambdaCase
-    MonoLocalBinds
-    RoleAnnotations
-
-common ghc2024-stanza
-  if impl(ghc >=9.10)
-    default-language:
-      GHC2024
-  else
-    import: ghc2024-additions
-    default-language:
-      GHC2021
 
 library
   import: ghc-options-stanza
-  import: ghc2024-stanza
+  default-language: GHC2024
   hs-source-dirs: src
   build-depends:
     base >=4.14 && <5,
     boxes >=0.1.5 && <0.2,
-    chart-svg >=0.7 && <0.9,
     clock >=0.8 && <0.9,
     containers >=0.6 && <0.9,
     deepseq >=1.4.4 && <1.6,
@@ -83,9 +63,7 @@ library
     numhask-space >=0.10 && <0.14,
     optics-core >=0.4.1 && <0.5,
     optparse-applicative >=0.17 && <0.20,
-    prettychart >=0.3 && <0.4,
     prettyprinter >=1.7.1 && <1.8,
-    recursion-schemes >=5.2.2 && <5.3,
     text >=1.2 && <2.2,
     vector >=0.12.3 && <0.14,
 
@@ -93,7 +71,6 @@ library
     Perf
     Perf.Algos
     Perf.BigO
-    Perf.Chart
     Perf.Count
     Perf.Measure
     Perf.Report
@@ -107,7 +84,7 @@ library
 executable perf-explore
   import: ghc-options-exe-stanza
   import: ghc-options-stanza
-  import: ghc2024-stanza
+  default-language: GHC2024
   main-is: explore.hs
   hs-source-dirs: app
   build-depends:
@@ -125,7 +102,7 @@ executable perf-explore
 benchmark perf-bench
   import: ghc-options-exe-stanza
   import: ghc-options-stanza
-  import: ghc2024-stanza
+  default-language: GHC2024
   main-is: bench.hs
   hs-source-dirs: app
   build-depends:

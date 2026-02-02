@@ -33,11 +33,11 @@ module Perf.Report
   )
 where
 
-import Chart
 import Control.Exception
 import Control.Monad
 import Data.Bool
 import Data.Foldable
+import Data.FormatN
 import Data.List (intercalate)
 import Data.List qualified as List
 import Data.Map.Merge.Strict
@@ -50,7 +50,6 @@ import Optics.Core
 import Options.Applicative as OA
 import Options.Applicative.Help.Pretty
 import Perf.BigO
-import Perf.Chart
 import Perf.Measure
 import Perf.Stats
 import Perf.Time (defaultClock)
@@ -87,7 +86,6 @@ data ReportOptions = ReportOptions
     reportGolden :: Golden,
     reportHeader :: Header,
     reportCompare :: CompareLevels,
-    reportChart :: PerfChartOptions,
     reportDump :: PerfDumpOptions,
     reportGC :: Bool,
     reportOrder :: OrderOptions
@@ -106,7 +104,6 @@ defaultReportOptions =
     defaultGolden
     Header
     defaultCompareLevels
-    defaultPerfChartOptions
     defaultPerfDumpOptions
     False
     defaultOrderOptions
@@ -123,7 +120,6 @@ parseReportOptions def =
     <*> parseGolden
     <*> parseHeader
     <*> parseCompareLevels defaultCompareLevels
-    <*> parsePerfChartOptions defaultPerfChartOptions
     <*> parsePerfDumpOptions defaultPerfDumpOptions
     <*> switch (long "gc" <> help "run the GC prior to measurement")
     <*> parseOrderOptions defaultOrderOptions
@@ -169,7 +165,6 @@ reportMain o name t = do
   when (reportGC o) performGC
   (a, m) <- runPerfT (measureDs mt c n) (t l)
   report o' (statify s m)
-  (\cfg -> when (view #doChart cfg) (writeChartOptions (view #chartFilepath cfg) (perfCharts cfg (Just (measureLabels mt)) m))) (reportChart o)
   (\cfg -> when (view #doDump cfg) (writeFile (view #dumpFilepath cfg) (show m))) (reportDump o)
   when (view (#reportOrder % #doOrder) o) (reportBigO o t)
   pure a

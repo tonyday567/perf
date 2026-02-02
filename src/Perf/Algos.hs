@@ -32,7 +32,6 @@ module Perf.Algos
     sumCoCase,
     sumAux,
     sumFoldr,
-    sumCata,
     sumSum,
     sumMono,
     sumPoly,
@@ -69,7 +68,6 @@ module Perf.Algos
     recurseFlipLazy,
     recurseCo,
     recurseCoLazy,
-    recurseCata,
 
     -- * miscellaneous
     mapInc,
@@ -81,7 +79,6 @@ where
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bifunctor
-import Data.Functor.Foldable
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -168,7 +165,6 @@ allSums l =
     SumPoly "sumCoCase" sumCoCase [1 .. l],
     SumPoly "sumAux" sumAux [1 .. l],
     SumPoly "sumFoldr" sumFoldr [1 .. l],
-    SumPoly "sumCata" sumCata [1 .. l],
     SumPoly "sumSum" sumSum [1 .. l],
     SumMono "sumMono" sumMono [1 .. l],
     SumPoly "sumPoly" sumPoly [1 .. l],
@@ -249,12 +245,6 @@ sumAux = \case
 -- | foldr style
 sumFoldr :: (Num a) => [a] -> a
 sumFoldr xs = foldr (+) 0 xs
-
--- | cata style
-sumCata :: (Num a) => [a] -> a
-sumCata = cata $ \case
-  Nil -> 0
-  Cons x acc -> x + acc
 
 -- | sum
 sumSum :: (Num a) => [a] -> a
@@ -448,12 +438,6 @@ recurseCoLazy f s0 = go
   where
     go [] = s0
     go (x : xs) = f x $ go xs
-
--- | Cata style
-recurseCata :: (a -> b -> b) -> b -> [a] -> b
-recurseCata f s0 = cata $ \case
-  Nil -> s0
-  Cons x acc -> f x acc
 
 -- * miscellaneous
 

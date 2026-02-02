@@ -141,15 +141,8 @@ This org file has been used to develop and document library innovation and testi
     import Data.Foldable
     import NumHask.Space
     putStrLn "ok"
-    import Chart hiding (tick)
-    import Prettychart
-    import Chart.Examples
-    import Perf.Chart
-    (disp,q) <- startChartServer Nothing
-    disp lineExample
     import Prettyprinter
     import Control.Monad.State.Lazy
-    import Text.PrettyPrint.Boxes
 
     Ok, 11 modules loaded.
     ok

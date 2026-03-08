@@ -22,8 +22,6 @@ module Perf
     module Perf.Space,
     -- | Simple loop counter
     module Perf.Count,
-    -- | Various (fast loop) algorithms that have been used for testing perf functionality.
-    module Perf.Algos,
     -- | Order of complexity computations
     module Perf.BigO,
     -- | Reporting
@@ -33,7 +31,6 @@ module Perf
   )
 where
 
-import Perf.Algos
 import Perf.BigO
 import Perf.Count
 import Perf.Measure

@@ -23,7 +23,6 @@ module Perf.Report
     readResult,
     CompareResult (..),
     compareNote,
-    report2D,
     Golden (..),
     defaultGolden,
     parseGolden,
@@ -58,7 +57,6 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Clock
 import System.Exit
 import System.Mem
-import Text.PrettyPrint.Boxes qualified as B
 import Text.Printf hiding (parseFormat)
 import Text.Read
 
@@ -246,18 +244,6 @@ formatText :: Header -> Map.Map [Text] Text -> [Text]
 formatText h m =
   bool [] (formatHeader m ["results"]) (h == Header)
     <> Map.elems (Map.mapWithKey (\k a -> Text.pack . mconcat $ printf "%-16s" <$> (k <> [a])) m)
-
--- | Format a result as a table.
-report2D :: Map.Map [Text] Double -> IO ()
-report2D m = putStrLn $ B.render $ B.hsep 1 B.left $ cs' : rs'
-  where
-    rs = List.nub ((List.!! 1) . fst <$> Map.toList m)
-    cs = List.nub ((List.!! 0) . fst <$> Map.toList m)
-    bx = B.text . Text.unpack
-    xs = (\c -> (\r -> m Map.! [c, r]) <$> rs) <$> cs
-    xs' = fmap (fmap (bx . expt (Just 3))) xs
-    cs' = B.vcat B.left (bx <$> ("algo" : cs))
-    rs' = B.vcat B.right <$> zipWith (:) (bx <$> rs) (List.transpose xs')
 
 reportToConsole :: [Text] -> IO ()
 reportToConsole xs = traverse_ Text.putStrLn xs

@@ -54,7 +54,6 @@ library
   hs-source-dirs: src
   build-depends:
     base >=4.14 && <5,
-    boxes >=0.1.5 && <0.2,
     clock >=0.8 && <0.9,
     containers >=0.6 && <0.9,
     deepseq >=1.4.4 && <1.6,
@@ -69,7 +68,6 @@ library
 
   exposed-modules:
     Perf
-    Perf.Algos
     Perf.BigO
     Perf.Count
     Perf.Measure
@@ -89,25 +87,9 @@ executable perf-explore
   hs-source-dirs: app
   build-depends:
     base >=4.14 && <5,
-    containers >=0.6 && <0.9,
-    deepseq >=1.4.4 && <1.6,
-    mtl >=2.2.2 && <2.4,
     optics-core >=0.4.1 && <0.5,
     optparse-applicative >=0.17 && <0.20,
     perf,
-    text >=1.2 && <2.2,
 
   ghc-options: -O2
 
-benchmark perf-bench
-  import: ghc-options-exe-stanza
-  import: ghc-options-stanza
-  default-language: GHC2024
-  main-is: bench.hs
-  hs-source-dirs: app
-  build-depends:
-    base >=4.14 && <5,
-    perf,
-
-  ghc-options: -O2
-  type: exitcode-stdio-1.0

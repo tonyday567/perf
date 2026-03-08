@@ -4,38 +4,36 @@
 -- | basic measurement and callibration
 module Main where
 
-import Data.List (intercalate)
+import Data.List (intercalate, nub)
 import GHC.Generics
 import Optics.Core
 import Options.Applicative
 import Options.Applicative.Help.Pretty
 import Perf
 import Prelude
+import Control.Monad
 
-data Run = RunExample | RunSums | RunLengths deriving (Eq, Show)
+data Run = RunSum | RunNub deriving (Eq, Show)
 
 data AppConfig = AppConfig
   { appRun :: Run,
-    appExample :: Example,
     appReportOptions :: ReportOptions
   }
   deriving (Eq, Show, Generic)
 
 defaultAppConfig :: AppConfig
-defaultAppConfig = AppConfig RunExample ExampleSum defaultReportOptions
+defaultAppConfig = AppConfig RunSum defaultReportOptions
 
 parseRun :: Parser Run
 parseRun =
-  flag' RunSums (long "sums" <> help "run on sum algorithms")
-    <|> flag' RunLengths (long "lengths" <> help "run on length algorithms")
-    <|> flag' RunExample (long "example" <> help "run on the example algorithm" <> style (annotate bold))
-    <|> pure RunExample
+  flag' RunSum (long "sum" <> help "measure sum performance")
+  <|> flag' RunNub (long "nub" <> help "measure nub performance")
+    <|> pure RunNub
 
 appParser :: AppConfig -> Parser AppConfig
 appParser def =
   AppConfig
     <$> parseRun
-    <*> parseExample
     <*> parseReportOptions (view #appReportOptions def)
 
 appConfig :: AppConfig -> ParserInfo AppConfig
@@ -48,25 +46,9 @@ main :: IO ()
 main = do
   o <- execParser (appConfig defaultAppConfig)
   let repOptions = appReportOptions o
-  let n = reportN repOptions
-  let s = reportStatDType repOptions
-  let mt = reportMeasureType repOptions
-  let c = reportClock repOptions
   let !l = reportLength repOptions
-  let a = appExample o
   let r = appRun o
 
   case r of
-    RunExample -> do
-      reportMain
-        repOptions
-        (intercalate "-" [show r, show a, show l])
-        (testExample . examplePattern a)
-    RunSums -> do
-      m <- statSums n l (measureDs mt c)
-      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
-      report o' (statify s m)
-    RunLengths -> do
-      m <- statLengths n l (measureDs mt c)
-      let o' = replaceDefaultFilePath (intercalate "-" [show r, show mt, show n, show l, show s]) repOptions
-      report o' (statify s m)
+    RunSum -> do reportMain repOptions (intercalate "-" ["sum", show r, show l]) (\l' ->  void $ ffap "sum" sum [1..l'::Int])
+    RunNub -> do reportMain repOptions (intercalate "-" ["nub", show r, show l]) (\l' ->  void $ ffap "nub" nub [1..l'::Int])

@@ -7,5 +7,3 @@ allow-newer:
   *:template-haskell,
   *:base
 
-package recursion-schemes
-  flags: -template-haskell

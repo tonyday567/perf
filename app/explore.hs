@@ -4,6 +4,7 @@
 -- | basic measurement and callibration
 module Main where
 
+import Control.Monad
 import Data.List (intercalate, nub)
 import GHC.Generics
 import Optics.Core
@@ -11,7 +12,6 @@ import Options.Applicative
 import Options.Applicative.Help.Pretty
 import Perf
 import Prelude
-import Control.Monad
 
 data Run = RunSum | RunNub deriving (Eq, Show)
 
@@ -27,7 +27,7 @@ defaultAppConfig = AppConfig RunSum defaultReportOptions
 parseRun :: Parser Run
 parseRun =
   flag' RunSum (long "sum" <> help "measure sum performance")
-  <|> flag' RunNub (long "nub" <> help "measure nub performance")
+    <|> flag' RunNub (long "nub" <> help "measure nub performance")
     <|> pure RunNub
 
 appParser :: AppConfig -> Parser AppConfig
@@ -50,5 +50,5 @@ main = do
   let r = appRun o
 
   case r of
-    RunSum -> do reportMain repOptions (intercalate "-" ["sum", show r, show l]) (\l' ->  void $ ffap "sum" sum [1..l'::Int])
-    RunNub -> do reportMain repOptions (intercalate "-" ["nub", show r, show l]) (\l' ->  void $ ffap "nub" nub [1..l'::Int])
+    RunSum -> do reportMain repOptions (intercalate "-" ["sum", show r, show l]) (\l' -> void $ ffap "sum" sum [1 .. l' :: Int])
+    RunNub -> do reportMain repOptions (intercalate "-" ["nub", show r, show l]) (\l' -> void $ ffap "nub" nub [1 .. l' :: Int])

@@ -1,5 +1,6 @@
 packages:
   perf.cabal
+  ../numhask-space/numhask-space.cabal
 
 write-ghc-environment-files: always
 
